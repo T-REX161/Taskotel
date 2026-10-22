@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <title>EquiFlow</title>
+  <defs>
+    <linearGradient id="equiflow-logo-bg" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#047857"/>
+    </linearGradient>
+  </defs>
+  <rect width="48" height="48" rx="13.5" fill="url(#equiflow-logo-bg)"/>
+  <path d="M14.5 24H22.5C25.5 24 27.5 22.8 30.5 22.8" stroke="#6ee7b7" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M34.5 12.6C32.6 13.6 31 14 28.5 14H20.5C16.9 14 14 16.9 14 20.5V27.5C14 31.1 16.9 34 20.5 34H28.5C31 34 32.6 34.4 34.5 35.4" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

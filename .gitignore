@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+backend/target/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local environment files (secrets are supplied via environment variables, never committed)
+.env
+.env.*
+!.env.example
+
+# IDE / editor settings
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini

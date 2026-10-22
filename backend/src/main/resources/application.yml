@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: workload-balancer
+  profiles:
+    group:
+      production:
+        - prod
+  # Flyway is OFF unless WB_FLYWAY_ENABLED=true is set explicitly (approved rehearsal / go-live only).
+  # An existing database without history is baselined at version 2, so V1/V2 never run on it and only V3+ apply.
+  # A fresh, empty database runs V1, V2, V3 in order.
+  flyway:
+    enabled: ${WB_FLYWAY_ENABLED:false}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 2
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:workload_balancer}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: true
+
+server:
+  port: 8080
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000
+
+sendgrid:
+  api-key: ${SENDGRID_API_KEY:}
+  from-email: ${SENDGRID_FROM_EMAIL:noreply@hotelwb.com}
+  from-name: ${SENDGRID_FROM_NAME:EquiFlow}

@@ -1,0 +1,27 @@
+spring:
+  # Never baseline an unknown production schema automatically: a non-empty database without
+  # Flyway history makes startup fail instead. Whether Flyway runs at all still comes from
+  # spring.flyway.enabled in application.yml (WB_FLYWAY_ENABLED, default false).
+  flyway:
+    baseline-on-migrate: false
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:workload_balancer}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+    show-sql: false
+
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: ${JWT_EXPIRATION:86400000}
+
+sendgrid:
+  api-key: ${SENDGRID_API_KEY}
+  from-email: ${SENDGRID_FROM_EMAIL}
+  from-name: ${SENDGRID_FROM_NAME:EquiFlow}

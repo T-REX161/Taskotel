@@ -1,0 +1,59 @@
+/*
+ * Login result indicators (green ✓ on success, red ✕ on invalid credentials): the circle scales and
+ * fades in, then the white strokes draw themselves. Pure CSS, so each indicator plays once when its
+ * alert mounts and never repeats on re-render. Total duration about 520ms for both icons.
+ */
+.login-result-icon {
+  animation: login-result-circle-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Each path uses pathLength="1", so a dash of 1 covers the whole stroke. At rest it is fully drawn. */
+.login-result-icon__stroke {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: login-result-stroke-draw 300ms cubic-bezier(0.65, 0, 0.35, 1) 220ms both;
+}
+
+/* The ✕ draws its two strokes slightly staggered, finishing at the same time as the ✓ (520ms) */
+.login-result-icon__stroke--first {
+  animation-duration: 200ms;
+  animation-delay: 220ms;
+}
+
+.login-result-icon__stroke--second {
+  animation-duration: 200ms;
+  animation-delay: 320ms;
+}
+
+@keyframes login-result-circle-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes login-result-stroke-draw {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 0; /* hides the round line cap that would otherwise show as a dot before drawing starts */
+  }
+  10% {
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+/* Reduced motion: show the completed icons immediately */
+@media (prefers-reduced-motion: reduce) {
+  .login-result-icon,
+  .login-result-icon__stroke {
+    animation: none;
+  }
+}

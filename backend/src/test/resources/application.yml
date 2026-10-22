@@ -1,0 +1,30 @@
+spring:
+  profiles:
+    group:
+      production:
+        - prod
+  # Tests use H2 with create-drop; Flyway must never run here (V3 is PostgreSQL-only SQL).
+  flyway:
+    enabled: false
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+    show-sql: true
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000
+
+sendgrid:
+  api-key: ${SENDGRID_API_KEY:test-sendgrid-api-key}
+  from-email: ${SENDGRID_FROM_EMAIL:noreply@hotelwb.com}
+  from-name: ${SENDGRID_FROM_NAME:EquiFlow}
+
