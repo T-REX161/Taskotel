@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LockIcon, EyeIcon, EyeOffIcon } from '../components/icons/Icons';
-import EquiFlowLogo from '../components/brand/EquiFlowLogo';
+import TaskotelLogo from '../components/brand/TaskotelLogo';
 import { requestPasswordReset, confirmPasswordReset } from '../services/api';
 
 export default function ForgotPasswordPage() {
@@ -72,11 +72,11 @@ export default function ForgotPasswordPage() {
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/80 shadow-xl shadow-emerald-950/5 p-7 sm:p-10">
           
           <div className="flex flex-col items-center text-center mb-8">
-            <EquiFlowLogo className="w-14 h-14 rounded-[20%] shadow-lg shadow-emerald-600/25 mb-4 transform transition-transform hover:scale-105 duration-200" />
+            <TaskotelLogo className="w-16 h-16 mb-3 transform transition-transform hover:scale-105 duration-200" />
 
             <div className="flex items-center gap-1.5">
-              <span className="text-xl font-extrabold tracking-tight text-gray-900">
-                Equi<span className="text-emerald-600">Flow</span>
+              <span className="text-xl font-extrabold tracking-tight text-[#04302a]">
+                Task<span className="text-[#0f9874]">otel</span>
               </span>
             </div>
 

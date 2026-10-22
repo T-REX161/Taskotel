@@ -9,13 +9,13 @@ export default function DashboardPlaceholder() {
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 mb-2">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Hospitality Workforce Operations
+            Hotel Operations, Simplified
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight">
-            EquiFlow
+            Taskotel
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Balanced workloads. Smarter operations.
+            Hotel operations, simplified. Balanced workloads.
           </p>
         </div>
 

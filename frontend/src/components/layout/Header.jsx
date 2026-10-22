@@ -1,5 +1,5 @@
 import React from 'react';
-import EquiFlowLogo from '../brand/EquiFlowLogo';
+import TaskotelLogo from '../brand/TaskotelLogo';
 import {
   SearchIcon,
   MessageIcon,
@@ -32,7 +32,7 @@ export default function Header({
 
   return (
     <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-white flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">
-      {/* Left: Mobile menu toggle + EquiFlow Logo Branding */}
+      {/* Left: Mobile menu toggle + Taskotel Logo Branding */}
       <div className="flex items-center gap-3 sm:gap-5 shrink-0">
         {/* Mobile menu trigger */}
         <button
@@ -44,19 +44,19 @@ export default function Header({
           <MenuIcon className="w-5 h-5" />
         </button>
 
-        {/* EquiFlow Logo & Branding */}
+        {/* Taskotel Logo & Branding */}
         <div
           onClick={onLogoClick}
           className="flex items-center gap-3 cursor-pointer select-none group"
-          title="EquiFlow — Hospitality Workforce Operations"
+          title="Taskotel — Hotel Operations, Simplified"
         >
-          <EquiFlowLogo className="w-9 h-9 shrink-0 rounded-[20%] shadow-sm transition group-hover:brightness-95" />
+          <TaskotelLogo className="w-10 h-10 shrink-0 transition group-hover:brightness-95" />
           <div className="flex flex-col justify-center">
-            <span className="text-[17px] font-bold tracking-tight text-slate-900 leading-5">
-              Equi<span className="text-emerald-700">Flow</span>
+            <span className="text-[17px] font-extrabold tracking-tight text-[#04302a] leading-5">
+              Task<span className="text-[#0f9874]">otel</span>
             </span>
             <span className="hidden sm:block text-[9px] font-semibold text-slate-500 tracking-[0.08em] uppercase leading-none mt-1">
-              Workforce Operations
+              Hotel Operations, Simplified
             </span>
           </div>
         </div>

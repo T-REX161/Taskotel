@@ -367,7 +367,7 @@ describe('AssignmentsPage Component Integration', () => {
     });
 
     it('design: white rounded dropdown with subtle border and shadow, emerald hover accents', () => {
-      assert.ok(pageSource.includes('w-44 rounded-lg bg-white shadow-lg border border-gray-200 py-1'), 'Dropdown styling must match the EquiFlow menus');
+      assert.ok(pageSource.includes('w-44 rounded-lg bg-white shadow-lg border border-gray-200 py-1'), 'Dropdown styling must match the Taskotel menus');
       assert.ok(pageSource.includes('hover:bg-emerald-50 hover:text-emerald-700'), 'Items must use emerald hover accents');
     });
   });

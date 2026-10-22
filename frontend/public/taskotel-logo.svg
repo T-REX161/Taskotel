@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="72 63.5 790 246" fill="none" role="img" aria-label="Taskotel — Hotel Operations, Simplified">
+  <defs><linearGradient id="roofLeft" x1="0" y1="75" x2="0" y2="224" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#14977a"/><stop offset="0.25" stop-color="#22c990"/><stop offset="0.5" stop-color="#30e09d"/><stop offset="0.7" stop-color="#2ad396"/><stop offset="0.78" stop-color="#18a882"/><stop offset="1" stop-color="#0a7f62"/></linearGradient><linearGradient id="roofRight" x1="205" y1="80" x2="280" y2="142" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#17a27e"/><stop offset="1" stop-color="#0b765c"/></linearGradient><linearGradient id="tower" x1="0" y1="121" x2="0" y2="253" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#05554a"/><stop offset="1" stop-color="#033a33"/></linearGradient><linearGradient id="clipboard" x1="0" y1="158" x2="0" y2="261" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0f9a75"/><stop offset="1" stop-color="#11a67b"/></linearGradient><linearGradient id="wave" x1="76" y1="260" x2="314.5" y2="260" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#12a37b"/><stop offset="0.23" stop-color="#11a079"/><stop offset="0.42" stop-color="#0b8466"/><stop offset="0.65" stop-color="#086b57"/><stop offset="1" stop-color="#075c4c"/></linearGradient></defs>
+  <path d="M206.5 74.8C202 74.5 199.5 75.5 196 78L111 145.5Q108 148 108 152V220.5Q108 224 111.5 224H132.5Q136 224 136 220.5V157L206.5 103Z" fill="url(#roofLeft)"/>
+  <path d="M203.5 74.8C207 74.5 210 76.5 213 79.5C232 97 257 112 274.5 130.5A7.5 7.5 0 0 1 265.5 142C250 129.5 226 113 203.5 103Z" fill="url(#roofRight)"/>
+  <rect x="151" y="189.5" width="19" height="14.5" rx="2.6" fill="#179c7a"/>
+  <path d="M201.5 123.8Q205 120.6 208.5 123.8L232 141.2Q233 142 233 143.5V156A18 18 0 0 0 225 171V252.6C211 247.6 193.5 239.2 179.6 231V153.5H178Q176.5 153.5 176.5 152V143.5Q176.5 141.8 178 140.7Z" fill="url(#tower)"/>
+  <rect x="191.5" y="159" width="7.5" height="10" rx="1.2" fill="#ffffff"/>
+  <rect x="205.5" y="159" width="7.5" height="10" rx="1.2" fill="#ffffff"/>
+  <rect x="191.5" y="178.5" width="7.5" height="10" rx="1.2" fill="#76bcad"/>
+  <rect x="205.5" y="178.5" width="7.5" height="10" rx="1.2" fill="#76bcad"/>
+  <rect x="191.5" y="198" width="7.5" height="10" rx="1.2" fill="#ffffff"/>
+  <rect x="205.5" y="198" width="7.5" height="10" rx="1.2" fill="#ffffff"/>
+  <path d="M245 158.3H287.5Q300.7 158.3 300.7 171.5V236C300.7 254 290 260.7 266.2 260.7C242.4 260.7 231.7 254 231.7 236V171.5Q231.7 158.3 245 158.3Z" fill="url(#clipboard)"/>
+  <rect x="247" y="179.5" width="38" height="6.4" rx="3.2" fill="#ffffff"/>
+  <rect x="247" y="197.8" width="24.7" height="6.2" rx="3.1" fill="#ffffff"/>
+  <path d="M250.5 222.5L261.5 234L283.5 212" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M76 250.5C95 243 113 233.5 131 232C160 233 188 246 206 257C220 265.5 236 270 252 269.8C276 269.5 300 261 314.5 247.5C304 268 288 283 270 291C258 296.5 248 298 236 297.5C210 296 188 285 168 274.5C142 260 114 251 76 250.5Z" fill="url(#wave)"/>
+  <text x="343" y="222" font-family="&apos;Plus Jakarta Sans&apos;, system-ui, -apple-system, &apos;Segoe UI&apos;, sans-serif" font-weight="800" font-size="132" textLength="497" lengthAdjust="spacingAndGlyphs"><tspan fill="#04302a">Task</tspan><tspan fill="#0f9874">otel</tspan></text>
+  <text x="371" y="262" font-family="&apos;Plus Jakarta Sans&apos;, system-ui, -apple-system, &apos;Segoe UI&apos;, sans-serif" font-weight="600" font-size="24" textLength="470" lengthAdjust="spacing" fill="#4a5a57">HOTEL OPERATIONS, SIMPLIFIED</text>
+</svg>

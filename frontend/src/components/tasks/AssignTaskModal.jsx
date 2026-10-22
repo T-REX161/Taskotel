@@ -45,7 +45,7 @@ function getStaffInitials(name) {
 
 /**
  * AssignTaskModal — dedicated Task Assignment workflow view.
- * Redesigned to match the EquiFlow Task Assignment page layout:
+ * Redesigned to match the Taskotel Task Assignment page layout:
  *   - Top header with Back button, "Task Assignment" title & subtitle
  *   - Responsive two-column top section:
  *       • Left Card: Task Information (title, description, department, priority, duration, due date, deadline)

@@ -1,5 +1,5 @@
 /**
- * API utility for making authenticated requests to the EquiFlow backend.
+ * API utility for making authenticated requests to the Taskotel backend.
  */
 
 export const getToken = () => localStorage.getItem('token');

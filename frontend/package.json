@@ -2,7 +2,7 @@
   "name": "hotel-staff-workload-balancer-frontend",
   "private": true,
   "version": "0.0.0",
-  "description": "EquiFlow — Hospitality Workforce Operations",
+  "description": "Taskotel — Hotel Operations, Simplified",
   "type": "module",
   "scripts": {
     "dev": "vite",

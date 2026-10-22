@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon, LockIcon, ProfileIcon } from '../components/icons/Icons';
-import EquiFlowLogo from '../components/brand/EquiFlowLogo';
+import TaskotelLogo from '../components/brand/TaskotelLogo';
 import { setupCredentials } from '../services/api';
 import { evaluatePasswordRules } from '../utils/passwordPolicy';
 import PasswordRequirements from '../components/common/PasswordRequirements';
@@ -63,7 +63,7 @@ export default function SetCredentialsPage() {
 
           <div className="text-center mt-6">
             <p className="text-xs text-gray-400">
-              EquiFlow — Hospitality Workforce Operations &copy; {new Date().getFullYear()} • All rights reserved
+              Taskotel — Hotel Operations, Simplified &copy; {new Date().getFullYear()} • All rights reserved
             </p>
           </div>
         </div>
@@ -146,11 +146,11 @@ export default function SetCredentialsPage() {
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/80 shadow-xl shadow-emerald-950/5 p-7 sm:p-10">
           {/* Header Branding */}
           <div className="flex flex-col items-center text-center mb-6">
-            <EquiFlowLogo className="w-14 h-14 rounded-[20%] shadow-lg shadow-emerald-600/25 mb-4 transform transition-transform hover:scale-105 duration-200" />
+            <TaskotelLogo className="w-16 h-16 mb-3 transform transition-transform hover:scale-105 duration-200" />
 
             <div className="flex items-center gap-1.5">
-              <span className="text-xl font-extrabold tracking-tight text-gray-900">
-                Equi<span className="text-emerald-600">Flow</span>
+              <span className="text-xl font-extrabold tracking-tight text-[#04302a]">
+                Task<span className="text-[#0f9874]">otel</span>
               </span>
               <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60">
                 Staff Portal
@@ -364,7 +364,7 @@ export default function SetCredentialsPage() {
         {/* Footer info */}
         <div className="text-center mt-6">
           <p className="text-xs text-gray-400">
-            EquiFlow — Hospitality Workforce Operations &copy; {new Date().getFullYear()} • All rights reserved
+            Taskotel — Hotel Operations, Simplified &copy; {new Date().getFullYear()} • All rights reserved
           </p>
         </div>
       </div>
