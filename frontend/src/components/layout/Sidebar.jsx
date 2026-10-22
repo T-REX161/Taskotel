@@ -95,7 +95,7 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
           {/* Mobile drawer header */}
           <div className="h-12 px-2 flex items-center justify-between border-b border-gray-100 mb-4 lg:hidden shrink-0">
             <div className="flex items-center gap-3">
-              <EquiFlowLogo className="w-9 h-9 shrink-0 rounded-[28%] shadow-sm" />
+              <EquiFlowLogo className="w-9 h-9 shrink-0 rounded-[20%] shadow-sm" />
               <span className="text-[17px] font-bold tracking-tight text-slate-900 leading-5">
                 Equi<span className="text-emerald-700">Flow</span>
               </span>

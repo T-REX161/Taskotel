@@ -52,7 +52,7 @@ describe('EquiFlow branding', () => {
     for (const file of ['src/components/layout/Header.jsx', 'src/components/layout/Sidebar.jsx']) {
       const source = read(file);
       assert.ok(source.includes(appWordmark), `${file}: two-tone EquiFlow wordmark`);
-      assert.ok(/<EquiFlowLogo className="w-9 h-9 shrink-0 rounded-\[28%\] shadow-sm/.test(source), `${file}: 36px Flow E logo`);
+      assert.ok(/<EquiFlowLogo className="w-9 h-9 shrink-0 rounded-\[20%\] shadow-sm/.test(source), `${file}: 36px EquiFlow logo`);
       assert.ok(source.includes(wordmarkText), `${file}: 17px bold wordmark`);
     }
     const header = read('src/components/layout/Header.jsx');
@@ -64,10 +64,10 @@ describe('EquiFlow branding', () => {
     assert.ok(read('src/components/layout/Sidebar.jsx').includes('h-12 px-2 flex items-center justify-between'), 'Drawer header height unchanged');
   });
 
-  it('uses the Flow E logo in every branding location and nowhere uses the old building icon', () => {
-    const authLogo = '<EquiFlowLogo className="w-14 h-14 rounded-[28%] shadow-lg shadow-emerald-600/25 mb-4 transform transition-transform hover:scale-105 duration-200" />';
+  it('uses the EquiFlow logo in every branding location and nowhere uses the old building icon', () => {
+    const authLogo = '<EquiFlowLogo className="w-14 h-14 rounded-[20%] shadow-lg shadow-emerald-600/25 mb-4 transform transition-transform hover:scale-105 duration-200" />';
     for (const file of ['src/pages/LoginPage.jsx', 'src/pages/ForgotPasswordPage.jsx', 'src/pages/SetCredentialsPage.jsx', 'src/pages/EmailVerificationPage.jsx']) {
-      assert.ok(read(file).includes(authLogo), `${file}: 56px Flow E logo`);
+      assert.ok(read(file).includes(authLogo), `${file}: 56px EquiFlow logo`);
     }
     const offenders = [...sourceFiles(srcDir), path.join(frontendDir, 'index.html')]
       .filter((file) => /HotelLogoIcon|vite\.svg/.test(fs.readFileSync(file, 'utf8')))
@@ -75,16 +75,22 @@ describe('EquiFlow branding', () => {
     assert.deepStrictEqual(offenders, [], `Old logo / favicon references in: ${offenders.join(', ')}`);
   });
 
-  it('favicon is the same Flow E artwork as the React logo component', () => {
+  it('favicon is the same artwork as the React logo component', () => {
     assert.ok(read('index.html').includes('<link rel="icon" type="image/svg+xml" href="/equiflow-logo.svg" />'), 'Favicon link');
     const favicon = read('public/equiflow-logo.svg');
     const component = read('src/components/brand/EquiFlowLogo.jsx');
     const constant = (name) => component.match(new RegExp(`${name}: '([^']+)'`))?.[1];
-    for (const name of ['bodyPath', 'middlePath', 'gradientFrom', 'gradientTo', 'mint']) {
+    const names = ['viewBox', 'backgroundTop', 'backgroundMiddle', 'backgroundBottom', 'whiteLight', 'whiteShade',
+      'mintLight', 'mintMiddle', 'mintDeep', 'darkGreen', 'whitePath', 'mintPath', 'darkPath'];
+    for (const name of names) {
       assert.ok(constant(name) && favicon.includes(constant(name)), `favicon must use the component's ${name}`);
     }
-    assert.ok(favicon.includes('viewBox="0 0 48 48"') && favicon.includes('rx="13.5"') && favicon.includes('stroke-width="4.5"'), 'Same geometry');
-    assert.ok(favicon.indexOf(constant('middlePath')) < favicon.indexOf(constant('bodyPath')), 'Mint arm is drawn under the white spine, as in the component');
+    assert.ok(component.includes('tileRadius: 10,') && favicon.includes('rx="10"'), 'Same tile corner radius');
+    // Layering as in the reference: dark lower swoosh, then mint, then white on top
+    const order = ['darkPath', 'mintPath', 'whitePath'].map((name) => favicon.indexOf(constant(name)));
+    assert.ok(order[0] < order[1] && order[1] < order[2], 'Favicon layers: dark, mint, white');
+    const jsxOrder = ['d={L.darkPath}', 'd={L.mintPath}', 'd={L.whitePath}'].map((s) => component.indexOf(s));
+    assert.ok(jsxOrder.every((i) => i > 0) && jsxOrder[0] < jsxOrder[1] && jsxOrder[1] < jsxOrder[2], 'Component layers: dark, mint, white');
   });
 
   it('uses the EquiFlow name, description and footer consistently', () => {

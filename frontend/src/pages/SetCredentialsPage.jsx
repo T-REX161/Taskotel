@@ -146,7 +146,7 @@ export default function SetCredentialsPage() {
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/80 shadow-xl shadow-emerald-950/5 p-7 sm:p-10">
           {/* Header Branding */}
           <div className="flex flex-col items-center text-center mb-6">
-            <EquiFlowLogo className="w-14 h-14 rounded-[28%] shadow-lg shadow-emerald-600/25 mb-4 transform transition-transform hover:scale-105 duration-200" />
+            <EquiFlowLogo className="w-14 h-14 rounded-[20%] shadow-lg shadow-emerald-600/25 mb-4 transform transition-transform hover:scale-105 duration-200" />
 
             <div className="flex items-center gap-1.5">
               <span className="text-xl font-extrabold tracking-tight text-gray-900">

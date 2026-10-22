@@ -50,7 +50,7 @@ export default function Header({
           className="flex items-center gap-3 cursor-pointer select-none group"
           title="EquiFlow — Hospitality Workforce Operations"
         >
-          <EquiFlowLogo className="w-9 h-9 shrink-0 rounded-[28%] shadow-sm transition group-hover:brightness-95" />
+          <EquiFlowLogo className="w-9 h-9 shrink-0 rounded-[20%] shadow-sm transition group-hover:brightness-95" />
           <div className="flex flex-col justify-center">
             <span className="text-[17px] font-bold tracking-tight text-slate-900 leading-5">
               Equi<span className="text-emerald-700">Flow</span>
