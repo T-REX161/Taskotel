@@ -76,9 +76,11 @@ describe('Taskotel branding', () => {
 
   it('uses the Taskotel logo in every branding location and nowhere uses the old building icon or previous logo', () => {
     const authLogo = '<TaskotelLogo className="w-16 h-16 mb-3 transform transition-transform hover:scale-105 duration-200" />';
-    for (const file of ['src/pages/LoginPage.jsx', 'src/pages/ForgotPasswordPage.jsx', 'src/pages/SetCredentialsPage.jsx', 'src/pages/EmailVerificationPage.jsx']) {
+    for (const file of ['src/pages/ForgotPasswordPage.jsx', 'src/pages/SetCredentialsPage.jsx', 'src/pages/EmailVerificationPage.jsx']) {
       assert.ok(read(file).includes(authLogo), `${file}: 64px Taskotel mark`);
     }
+    // The split-screen login places the mark beside the wordmark instead of above it
+    assert.ok(read('src/pages/LoginPage.jsx').includes('<TaskotelLogo className="w-[72px] h-[72px] shrink-0 transform transition-transform hover:scale-105 duration-200" />'), 'Login: 72px Taskotel mark');
     const offenders = [...sourceFiles(srcDir), path.join(frontendDir, 'index.html')]
       .filter((file) => /HotelLogoIcon|vite\.svg|EquiFlowLogo|equiflow-logo\.svg/.test(fs.readFileSync(file, 'utf8')))
       .map((file) => path.relative(frontendDir, file));

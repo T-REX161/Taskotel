@@ -1,3 +1,24 @@
+/* Page and frame backgrounds, traced from the login reference: pale mint page, and a deep emerald
+   frame that darkens toward the bottom-left corner and lightens where it meets the photo */
+.login-page {
+  background:
+    radial-gradient(45% 60% at 50% 45%, #e6fbf2 0%, transparent 100%),
+    #e0f8ee;
+}
+
+.login-frame {
+  background:
+    radial-gradient(55% 65% at 0% 100%, #053a27 0%, transparent 100%),
+    linear-gradient(90deg, rgba(26, 122, 90, 0) 38%, #1a7a5a 52%),
+    linear-gradient(180deg, #0d6b4d 0%, #0b6447 55%, #084f37 100%);
+}
+
+/* Fades the photo's left edge into the frame so there is no seam above and below the card */
+.login-photo {
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 14%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 14%);
+}
+
 /*
  * Login result indicators (green ✓ on success, red ✕ on invalid credentials): the circle scales and
  * fades in, then the white strokes draw themselves. Pure CSS, so each indicator plays once when its
@@ -56,4 +77,20 @@
   .login-result-icon__stroke {
     animation: none;
   }
+}
+
+/* Verification / success / error banners overlay the subtitle's spot just above the username field. The slot
+   only restores the original gap (6px + the header's 15px), so a banner never adds height or moves the form. */
+.login-alert-slot {
+  position: relative;
+  height: 6px;
+}
+.login-alert-slot > div {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  z-index: 1;
+  font-size: 12px;
+  line-height: 1.2;
 }

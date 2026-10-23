@@ -11,8 +11,8 @@ const __dirname = path.dirname(__filename);
 describe('LoginPage result indicators', () => {
   const pageSource = fs.readFileSync(path.join(__dirname, 'LoginPage.jsx'), 'utf8');
   const css = fs.readFileSync(path.join(__dirname, 'LoginPage.css'), 'utf8');
-  const successBanner = pageSource.match(/\{loginSuccess && \([\s\S]*?\n {10}\)\}/)?.[0] || '';
-  const errorBanner = pageSource.match(/\{loginError && !loginSuccess && \([\s\S]*?\n {10}\)\}/)?.[0] || '';
+  const successBanner = pageSource.match(/\{loginSuccess && \([\s\S]*?\n {12}\)\}/)?.[0] || '';
+  const errorBanner = pageSource.match(/\{loginError && !loginSuccess && \([\s\S]*?\n {12}\)\}/)?.[0] || '';
   const handleSubmit = pageSource.match(/const handleSubmit = async[\s\S]*?\n {2}\};/)?.[0] || '';
 
   describe('getLoginOutcome (login result classification)', () => {
@@ -63,7 +63,7 @@ describe('LoginPage result indicators', () => {
       assert.ok(successBanner.includes('Signed in successfully! Redirecting to dashboard...'), 'Message must be unchanged');
       assert.ok(successBanner.includes('role="status"'), 'Success must be announced as a status');
       assert.ok(
-        successBanner.includes('className="mb-6 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn"'),
+        successBanner.includes('className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn"'),
         'Alert container styling must be unchanged (icon vertically centered via items-center)'
       );
     });
@@ -91,7 +91,7 @@ describe('LoginPage result indicators', () => {
 
     it('uses red-tinted alert styling matching the success alert and is announced assertively', () => {
       assert.ok(
-        errorBanner.includes('className="mb-6 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2.5 animate-fadeIn"'),
+        errorBanner.includes('className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2.5 animate-fadeIn"'),
         'Error alert must mirror the success alert layout in red'
       );
       assert.ok(errorBanner.includes('role="alert"'), 'Errors must be announced as alerts');
@@ -143,6 +143,26 @@ describe('LoginPage result indicators', () => {
     });
   });
 
+  describe('split-screen layout', () => {
+    it('shows the login card beside a local hotel reception photo that covers its half', () => {
+      assert.ok(pageSource.includes('src="/images/login-background.jpg"'), 'Photo is a local asset');
+      assert.ok(fs.existsSync(path.join(__dirname, '..', '..', 'public', 'images', 'login-background.jpg')), 'Photo file exists in public/images');
+      assert.ok(/<img\s+src="\/images\/login-background\.jpg"\s+alt=""\s+className="login-photo h-full w-full object-cover /.test(pageSource), 'Decorative photo fills its section without stretching');
+      assert.ok(/\.login-photo \{[^}]*mask-image: linear-gradient\(to right, transparent 0%, #000 14%\);/.test(css), 'Photo fades into the green frame so there is no seam');
+      assert.ok(pageSource.includes('className="absolute inset-y-0 right-0 hidden md:block md:w-[50%]" aria-hidden="true"'), 'Photo is hidden on small screens and from assistive tech');
+      assert.ok(pageSource.includes('md:w-[54%] lg:w-[46.2%]'), 'Card matches the reference (about 46% of the container), a little wider on tablet');
+      assert.ok(pageSource.includes('max-w-[1024px]') && pageSource.includes('md:min-h-[519px]'), 'Container keeps the reference proportions: 1024 x 519');
+      assert.ok(pageSource.includes('rounded-[20px] overflow-hidden'), 'Rounded container clips the photo to its corners');
+    });
+
+    it('keeps accessible labels for the placeholder-styled fields and the footer below the container', () => {
+      assert.ok(pageSource.includes('<label htmlFor="username" className="sr-only">'), 'Username keeps a label');
+      assert.ok(pageSource.includes('<label htmlFor="password" className="sr-only">'), 'Password keeps a label');
+      assert.ok(/<\/main>\s*\{\/\* Footer info \*\/\}\s*<p className="text-center text-xs/.test(pageSource), 'Footer sits below the container');
+      assert.ok(pageSource.includes("fetch('/api/auth/login'") && pageSource.includes('JSON.stringify({ username, password })'), 'Login request unchanged');
+    });
+  });
+
   describe('animation', () => {
     const rule = (selector) => css.match(new RegExp(`(^|\\n)${selector.replace(/[.]/g, '\\.')} \\{([^}]*)\\}`))?.[2] || '';
     const ms = (text) => [...text.matchAll(/(\d+)ms/g)].map((m) => Number(m[1]));
@@ -150,7 +170,7 @@ describe('LoginPage result indicators', () => {
     it('loads the login-only stylesheet and animates the icons only, not the alerts', () => {
       assert.ok(pageSource.includes("import './LoginPage.css';"), 'LoginPage must import its own stylesheet');
       assert.strictEqual((pageSource.match(/className="login-result-icon /g) || []).length, 2, 'Exactly the two circles get the entrance animation');
-      assert.strictEqual(/className="mb-6[^"]*login-result/.test(pageSource), false, 'Alert containers are not animated');
+      assert.strictEqual(/className="p-2[^"]*login-result/.test(pageSource), false, 'Alert containers are not animated');
     });
 
     it('scales and fades each circle in from its center without bouncing, spinning or looping', () => {

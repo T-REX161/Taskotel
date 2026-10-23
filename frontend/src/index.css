@@ -35,6 +35,13 @@
   }
 }
 
+/* Edge/Chromium draw their own reveal (eye) and clear (x) buttons inside text and password inputs.
+   Every password field here has its own show/hide toggle, so the native ones would show a second eye. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
 /* Subtle, unobtrusive scrollbar */
 ::-webkit-scrollbar {
   width: 5px;

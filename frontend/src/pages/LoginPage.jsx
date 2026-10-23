@@ -78,94 +78,102 @@ export default function LoginPage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-[#f2f6f3] text-gray-900 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative selection:bg-emerald-100 selection:text-emerald-900">
-      {/* Decorative ambient background glows */}
-      <div className="absolute top-1/4 -left-20 w-72 h-72 bg-emerald-200/30 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-teal-200/25 rounded-full blur-3xl pointer-events-none" />
+  // A banner covers the subtitle's spot above the username field, so nothing is pushed down
+  const hasBanner = loginSuccess || Boolean(loginError) || Boolean(verifiedMessage);
 
-      {/* Main Centered Login Card */}
-      <div className="w-full max-w-md relative z-10">
-        <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/80 shadow-xl shadow-emerald-950/5 p-7 sm:p-10">
+  return (
+    <div className="login-page min-h-screen text-gray-900 flex flex-col justify-center items-center px-4 py-6 sm:px-8 overflow-x-hidden selection:bg-emerald-100 selection:text-emerald-900">
+      {/* Split-screen container: login card on the left, hotel reception photo on the right */}
+      <main className="login-frame relative w-full max-w-[1024px] flex rounded-[20px] overflow-hidden shadow-2xl shadow-emerald-950/20 md:min-h-[519px]">
+        <div className="absolute inset-y-0 right-0 hidden md:block md:w-[50%]" aria-hidden="true">
+          <img
+            src="/images/login-background.jpg"
+            alt=""
+            className="login-photo h-full w-full object-cover object-center"
+          />
+        </div>
+
+        <section className="relative z-10 w-full md:w-[54%] lg:w-[46.2%] m-3 sm:m-4 md:ml-[28px] md:mr-0 md:mt-[26px] md:mb-[23px] bg-white rounded-[16px] shadow-xl shadow-emerald-950/15 flex flex-col justify-center px-6 py-6 sm:px-10 lg:pl-16 lg:pr-12">
 
           {/* Taskotel Branding / Logo */}
-          <div className="flex flex-col items-center text-center mb-8">
-            <TaskotelLogo className="w-16 h-16 mb-3 transform transition-transform hover:scale-105 duration-200" />
-
-            <div className="flex items-center gap-1.5">
-              <span className="text-xl font-extrabold tracking-tight text-[#04302a]">
-                Task<span className="text-[#0f9874]">otel</span>
-              </span>
-              <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                Staff Portal
-              </span>
+          <div className="mb-[19px]">
+            <div className="flex items-center gap-2 sm:pl-2">
+              <TaskotelLogo className="w-[72px] h-[72px] shrink-0 transform transition-transform hover:scale-105 duration-200" />
+              <div className="flex flex-col">
+                <span className="text-[34px] sm:text-[38px] font-extrabold tracking-tight text-[#04302a] leading-[40px]">
+                  Task<span className="text-[#0f9874]">otel</span>
+                </span>
+                <span className="text-[13px] font-medium text-slate-500">
+                  Hotel Operations, Simplified
+                </span>
+              </div>
             </div>
 
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight mt-5">
+            <h1 className="text-[27px] sm:text-[29px] leading-9 font-bold text-[#073638] tracking-tight mt-8">
               Welcome Back
             </h1>
-            <p className="text-sm text-gray-500 mt-1.5">
+            <p className={`text-[15.5px] text-gray-500 mt-0.5 ${hasBanner ? "invisible" : ""}`}>
               Sign in to your Taskotel account
             </p>
           </div>
 
-          {/* Verification Success Banner (when returning from email verification) */}
-          {verifiedMessage && !loginError && !loginSuccess && (
-            <div className="mb-6 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn">
-              <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <span>{verifiedMessage}</span>
-            </div>
-          )}
-
-          {/* Success Banner (when simulated sign in triggers) */}
-          {loginSuccess && (
-            <div
-              key={`success-${attemptId}`}
-              role="status"
-              className="mb-6 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn"
-            >
-              <span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center" aria-hidden="true">
-                <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                  <path className="login-result-icon__stroke" pathLength="1" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          {/* Reserved space for the result banners: the card keeps the same size with or without one */}
+          <div className="login-alert-slot">
+            {/* Verification Success Banner (when returning from email verification) */}
+            {verifiedMessage && !loginError && !loginSuccess && (
+              <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn">
+                <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-              </span>
-              <span>Signed in successfully! Redirecting to dashboard...</span>
-            </div>
-          )}
+                <span>{verifiedMessage}</span>
+              </div>
+            )}
 
-          {/* Error Banner: animated red ✕ only for invalid credentials; server/network errors are text only */}
-          {loginError && !loginSuccess && (
-            <div
-              key={`error-${attemptId}`}
-              role="alert"
-              className="mb-6 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2.5 animate-fadeIn"
-            >
-              {loginError.kind === 'invalid' && (
-                <span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-red-500 flex items-center justify-center" aria-hidden="true">
+            {/* Success Banner (when simulated sign in triggers) */}
+            {loginSuccess && (
+              <div
+                key={`success-${attemptId}`}
+                role="status"
+                className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn"
+              >
+                <span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center" aria-hidden="true">
                   <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                    <path className="login-result-icon__stroke login-result-icon__stroke--first" pathLength="1" strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12" />
-                    <path className="login-result-icon__stroke login-result-icon__stroke--second" pathLength="1" strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18" />
+                    <path className="login-result-icon__stroke" pathLength="1" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                 </span>
-              )}
-              <span>{loginError.message}</span>
-            </div>
-          )}
+                <span>Signed in successfully! Redirecting to dashboard...</span>
+              </div>
+            )}
+
+            {/* Error Banner: animated red ✕ only for invalid credentials; server/network errors are text only */}
+            {loginError && !loginSuccess && (
+              <div
+                key={`error-${attemptId}`}
+                role="alert"
+                className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2.5 animate-fadeIn"
+              >
+                {loginError.kind === 'invalid' && (
+                  <span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-red-500 flex items-center justify-center" aria-hidden="true">
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path className="login-result-icon__stroke login-result-icon__stroke--first" pathLength="1" strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12" />
+                      <path className="login-result-icon__stroke login-result-icon__stroke--second" pathLength="1" strokeLinecap="round" strokeLinejoin="round" d="M18 6L6 18" />
+                    </svg>
+                  </span>
+                )}
+                <span>{loginError.message}</span>
+              </div>
+            )}
+          </div>
 
           {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username Field */}
             <div>
-              <label
-                htmlFor="username"
-                className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5"
-              >
+              <label htmlFor="username" className="sr-only">
                 Username
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
                   <ProfileIcon className="w-4 h-4" />
                 </div>
                 <input
@@ -175,24 +183,20 @@ export default function LoginPage() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter your username"
-                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-xl border border-gray-200/90 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
+                  placeholder="Username"
+                  autoComplete="username"
+                  className="w-full h-[43px] pl-10 pr-4 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
                 />
               </div>
             </div>
 
             {/* Password Field with Show/Hide button */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label
-                  htmlFor="password"
-                  className="block text-xs font-bold uppercase tracking-wider text-gray-700"
-                >
-                  Password
-                </label>
-              </div>
+              <label htmlFor="password" className="sr-only">
+                Password
+              </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
                   <LockIcon className="w-4 h-4" />
                 </div>
                 <input
@@ -202,14 +206,15 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  className="w-full pl-10 pr-11 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-xl border border-gray-200/90 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  className="w-full h-[43px] pl-10 pr-10 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
                 />
                 {/* Show/Hide password toggle */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-emerald-700 transition-colors focus:outline-none"
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-500 hover:text-[#0c6f50] transition-colors focus:outline-none"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -222,15 +227,15 @@ export default function LoginPage() {
             </div>
 
             {/* Remember Me Checkbox & Forgot Password */}
-            <div className="flex items-center justify-between pt-1">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
+            <div className="flex items-center justify-between pt-1.5">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 rounded text-emerald-600 border-gray-300 focus:ring-emerald-500/20 focus:ring-offset-0 cursor-pointer accent-emerald-600"
+                  className="w-[18px] h-[18px] rounded text-[#0c6f50] border-gray-300 focus:ring-emerald-500/20 focus:ring-offset-0 cursor-pointer accent-[#0c6f50]"
                 />
-                <span className="text-xs font-medium text-gray-600">
+                <span className="text-sm font-medium text-gray-700">
                   Remember me
                 </span>
               </label>
@@ -238,18 +243,18 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => navigate('/forgot-password')}
-                className="text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline transition-colors"
+                className="text-sm font-medium text-[#0c6f50] hover:text-[#0a5e44] hover:underline transition-colors"
               >
                 Forgot password?
               </button>
             </div>
 
             {/* Green Sign In Button */}
-            <div className="pt-2">
+            <div className="pt-1.5">
               <button
                 type="submit"
                 disabled={isLoading || loginSuccess}
-                className={`w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 hover:shadow-lg hover:shadow-emerald-700/25 transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${isLoading ? 'opacity-85 cursor-wait' : ''
+                className={`w-full h-[43px] px-4 rounded-md text-base font-semibold text-white bg-[#0c6f50] hover:bg-[#0a5e44] active:bg-[#084f39] shadow-md shadow-emerald-900/20 hover:shadow-lg hover:shadow-emerald-900/25 transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${isLoading ? 'opacity-85 cursor-wait' : ''
                   }`}
               >
                 {isLoading ? (
@@ -267,15 +272,16 @@ export default function LoginPage() {
             </div>
           </form>
 
-        </div>
-
-        {/* Footer info */}
-        <div className="text-center mt-6">
-          <p className="text-xs text-gray-400">
-            Taskotel — Hotel Operations, Simplified &copy; {new Date().getFullYear()} • All rights reserved
+          <p className="text-center text-[12.5px] text-gray-500 mt-6">
+            Manage staff, tasks and workloads effortlessly.
           </p>
-        </div>
-      </div>
+        </section>
+      </main>
+
+      {/* Footer info */}
+      <p className="text-center text-xs text-gray-600 mt-3">
+        Taskotel — Hotel Operations, Simplified &copy; {new Date().getFullYear()} • All rights reserved
+      </p>
     </div>
   );
 }
