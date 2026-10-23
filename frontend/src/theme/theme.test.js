@@ -59,9 +59,15 @@ describe('dark mode palette', () => {
     assert.deepStrictEqual(Object.keys(light).sort(), Object.keys(dark).sort());
   });
 
-  it('dark mode surfaces: deep slate page, lighter cards, header and sidebar in between', () => {
-    assert.strictEqual(SURFACES.dark.page, '#0f172a');
-    assert.strictEqual(SURFACES.dark.card, '#1e293b');
+  it('dark mode surfaces: near-black page, charcoal cards, header and sidebar in between', () => {
+    assert.deepStrictEqual([SURFACES.dark.page, SURFACES.dark.chrome, SURFACES.dark.card], ['#090909', '#101010', '#181818']);
+    assert.strictEqual(overrides.bg.gray[50], '#202020', 'Table headers and form fields');
+    assert.strictEqual(overrides.border.gray[200], '#2a2a2a');
+    assert.deepStrictEqual([overrides.text.gray[900], overrides.text.gray[500], overrides.text.gray[400]], ['#f5f5f5', '#a3a3a3', '#737373'], 'Primary, secondary, muted');
+    for (const hex of [...Object.values(SURFACES.dark), ...Object.values(overrides.bg.gray), ...Object.values(overrides.text.gray), ...Object.values(overrides.border.gray)]) {
+      const [r, g, b] = hexToRgb(hex);
+      assert.ok(r === g && g === b, hex + ' is a neutral grey (no blue tint)');
+    }
     assert.strictEqual(overrides.bg.white, SURFACES.dark.card, 'Cards, tables, modals and menus');
     const [page, chrome, card, raised] = [SURFACES.dark.page, SURFACES.dark.chrome, SURFACES.dark.card, overrides.bg.gray[50]].map(luminance);
     assert.ok(page < chrome && chrome < card && card < raised, 'Each layer is a step lighter than the one behind it');
@@ -138,6 +144,52 @@ describe('theme wiring', () => {
   it('only the switch itself animates, and reduced motion is respected', () => {
     const context = read('src', 'theme', 'ThemeContext.jsx');
     assert.ok(context.includes("root.classList.add('theme-transition')") && context.includes('prefers-reduced-motion: reduce'));
-    assert.ok(read('src', 'index.css').includes('html.theme-transition *'));
+    assert.ok(context.includes('duration + TRANSITION_SLACK_MS'), 'Fallback: the class outlives the animation, so it is never cut short');
+    assert.ok(context.indexOf("const duration = cssDuration(root, '--theme-transition-duration'") < context.indexOf("root.classList.add('theme-transition')"),
+      'The duration is read before any class changes (no extra full-page restyle)');
+    const css = read('src', 'index.css');
+    assert.ok(css.includes('--theme-transition-duration: 300ms;'));
+    assert.ok(css.includes('--theme-transition-easing: cubic-bezier(0.4, 0, 0.2, 1);'), 'ease-in-out');
+    assert.ok(/@media \(prefers-reduced-motion: reduce\) \{\s*html\.theme-transition,[\s\S]*?transition: none;[\s\S]*?animation: none;/.test(css), 'No animation with reduced motion');
+  });
+
+  it('prefers a GPU cross-fade (view transition) scoped to the theme switch', () => {
+    const context = read('src', 'theme', 'ThemeContext.jsx');
+    assert.ok(context.includes("typeof document.startViewTransition === 'function'"), 'Feature-detected, with the colour-transition fallback');
+    assert.ok(/document\.startViewTransition\(\(\) => \{\s*setRootTheme\(root, theme\);/.test(context), 'The theme changes once, under the snapshot');
+    assert.ok(context.includes('if (pendingTheme !== theme) setRootTheme(root, theme);'), 'A re-render cannot pre-empt the running transition');
+    const css = read('src', 'index.css');
+    assert.ok(/html\.theme-switching::view-transition-old\(root\),\s*html\.theme-switching::view-transition-new\(root\) \{\s*animation-duration: var\(--theme-transition-duration\);\s*animation-timing-function: var\(--theme-transition-easing\);/.test(css));
+  });
+
+  it('the toggle reveals the new theme in a circle growing from the clicked button', () => {
+    const header = read('src', 'components', 'layout', 'Header.jsx');
+    assert.ok(/const rect = event\.currentTarget\.getBoundingClientRect\(\);\s*toggleTheme\(\{ x: rect\.left \+ rect\.width \/ 2, y: rect\.top \+ rect\.height \/ 2 \}\);/.test(header),
+      'Origin = centre of the toggle, in viewport pixels');
+    const context = read('src', 'theme', 'ThemeContext.jsx');
+    assert.ok(context.includes('Math.hypot(Math.max(origin.x, window.innerWidth - origin.x), Math.max(origin.y, window.innerHeight - origin.y))'), 'Radius reaches the farthest corner');
+    assert.ok(context.includes("pseudoElement: '::view-transition-new(root)'") && context.includes('`circle(0px at ${x}px ${y}px)`'), 'The new theme is revealed, the old stays underneath (crisp fallback)');
+    assert.ok(context.includes('transition.ready'), 'The circle starts once the old and new snapshots exist');
+    assert.ok(context.includes("latestTheme.current === 'dark' ? 'light' : 'dark'"), 'Rapid clicks always flip from the latest choice');
+    const css = read('src', 'index.css');
+    assert.ok(css.includes('--theme-reveal-duration: 900ms;') && css.includes('--theme-reveal-easing: cubic-bezier(0.4, 0, 0.2, 1);'), 'Relaxed, gentle curve');
+    // Soft edge: a feathered radial mask whose radius is a registered (animatable) length, ending beyond the corner
+    assert.ok(/@property --tk-reveal-radius \{\s*syntax: '<length>';\s*inherits: false;\s*initial-value: 0px;/.test(css));
+    assert.ok(css.includes('mask-image: radial-gradient(circle at var(--tk-reveal-x) var(--tk-reveal-y), #000 calc(var(--tk-reveal-radius) - var(--tk-reveal-feather)), transparent var(--tk-reveal-radius));'));
+    assert.ok(context.includes("{ '--tk-reveal-radius': ['0px', `${reach + feather}px`] }"), 'The soft rim also clears the farthest corner');
+    assert.ok(context.includes("fill: 'both'") && context.includes('revealAnimation?.cancel()'), 'Held fully revealed until teardown, then released');
+    assert.ok(/html\.theme-switching\.theme-reveal::view-transition-old\(root\),\s*html\.theme-switching\.theme-reveal::view-transition-new\(root\) \{\s*animation: none;\s*mix-blend-mode: normal;/.test(css), 'No cross-fade under the reveal');
+    assert.ok(/theme-reveal::view-transition-new\(root\) \{\s*z-index: 1;/.test(css), 'New theme above the old one');
+  });
+
+  it('the switch animates colours only, never layout', () => {
+    const css = read('src', 'index.css');
+    const block = css.slice(css.indexOf('html.theme-transition *::placeholder {'), css.indexOf('@media (prefers-reduced-motion'));
+    const properties = block.match(/transition-property: ([^;]+);/)[1].split(',').map((p) => p.trim());
+    assert.deepStrictEqual(properties, ['background-color', 'border-color', 'color', 'fill', 'stroke', 'outline-color', 'text-decoration-color', 'caret-color', 'box-shadow']);
+    for (const layout of ['all', 'width', 'height', 'padding', 'margin', 'transform', 'top', 'left', 'opacity']) {
+      assert.ok(!properties.includes(layout), layout);
+    }
+    assert.ok(!block.includes('!important'), 'Scoped by the class, not forced');
   });
 });

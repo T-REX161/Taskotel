@@ -38,9 +38,10 @@
     border-color: rgb(var(--tk-border-gray-200) / 0.8);
   }
 
-  /* Fields without a background class would otherwise get the browser's grey dark-mode default */
-  :where(html.dark) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), textarea, select) {
-    background-color: rgb(var(--tk-bg-white));
+  /* Form fields sit one step above the card (the raised gray-50 shade). Specificity 0,1,1: beats a plain bg-white
+     or bg-gray-50 on the field, but hover:/focus: states (0,2,0) still win. */
+  html.dark :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), textarea, select) {
+    background-color: rgb(var(--tk-bg-gray-50));
   }
 
   :where(html.dark) *,
@@ -83,13 +84,79 @@ input::-ms-clear {
 }
 
 
-/* Theme switch: colours cross-fade for a moment while the class changes (ThemeContext adds and removes this) */
+/* Theme switch (see applyTheme in src/theme/ThemeContext.jsx) */
+:root {
+  --theme-transition-duration: 300ms;
+  --theme-transition-easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --theme-reveal-duration: 900ms;
+  --theme-reveal-easing: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Circular reveal from the toggle: the old theme stays still underneath and the new theme is drawn on top,
+   revealed through a circle that ThemeContext grows over the new snapshot. No cross-fade of the whole screen,
+   so there is no flash: outside the circle is the old theme, inside it the new one. */
+
+/* Soft edge: the circle is a radial-gradient mask whose radius ThemeContext animates. It is fully opaque inside
+   and fades out over --tk-reveal-feather at the rim, so the new theme melts into the old one. ThemeContext sets
+   the centre and feather on <html> for the duration of the switch; the pseudo-elements inherit them. */
+@property --tk-reveal-radius {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+html.theme-switching.theme-reveal-soft::view-transition-new(root) {
+  -webkit-mask-image: radial-gradient(circle at var(--tk-reveal-x) var(--tk-reveal-y), #000 calc(var(--tk-reveal-radius) - var(--tk-reveal-feather)), transparent var(--tk-reveal-radius));
+  mask-image: radial-gradient(circle at var(--tk-reveal-x) var(--tk-reveal-y), #000 calc(var(--tk-reveal-radius) - var(--tk-reveal-feather)), transparent var(--tk-reveal-radius));
+}
+
+html.theme-switching.theme-reveal::view-transition-old(root),
+html.theme-switching.theme-reveal::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+html.theme-switching.theme-reveal::view-transition-old(root) {
+  z-index: 0;
+}
+html.theme-switching.theme-reveal::view-transition-new(root) {
+  z-index: 1;
+}
+
+/* Preferred path: a view transition cross-fades a snapshot of the old theme into the new one on the GPU.
+   Scoped by .theme-switching, so no other part of the app is affected. */
+html.theme-switching::view-transition-old(root),
+html.theme-switching::view-transition-new(root) {
+  animation-duration: var(--theme-transition-duration);
+  animation-timing-function: var(--theme-transition-easing);
+}
+
+/* Fallback for browsers without view transitions: .theme-transition is on <html> only while the theme changes, so
+   these transitions never affect normal hovers, dropdowns or loading animations. Only colour properties animate
+   (no size, spacing, position or transform). Specificity 0,1,1 overrides Tailwind's transition-* classes for that
+   moment without !important. */
 html.theme-transition,
 html.theme-transition *,
 html.theme-transition *::before,
-html.theme-transition *::after {
-  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, fill 200ms ease, stroke 200ms ease !important;
-  transition-delay: 0ms !important;
+html.theme-transition *::after,
+html.theme-transition *::placeholder {
+  transition-property: background-color, border-color, color, fill, stroke, outline-color, text-decoration-color, caret-color, box-shadow;
+  transition-duration: var(--theme-transition-duration);
+  transition-timing-function: var(--theme-transition-easing);
+  transition-delay: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after,
+  html.theme-transition *::placeholder {
+    transition: none;
+  }
+
+  html.theme-switching::view-transition-old(root),
+  html.theme-switching::view-transition-new(root) {
+    animation: none;
+  }
 }
 
 html.dark ::-webkit-scrollbar-thumb {

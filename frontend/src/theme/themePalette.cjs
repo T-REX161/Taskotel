@@ -14,29 +14,31 @@
 // Surfaces, from back to front. Light values are the ones the app has always used.
 const SURFACES = {
   light: { page: '#f8fafc', chrome: '#ffffff', card: '#ffffff' },
+  // Neutral black and charcoal (no blue tint)
   dark: {
-    page: '#0f172a', // page background
-    chrome: '#141e32', // header and sidebar: a step above the page, below the cards
-    card: '#1e293b', // cards, panels, tables, modals, menus and inputs (what bg-white becomes)
+    page: '#090909', // page background
+    chrome: '#101010', // header and sidebar: a step above the page, below the cards
+    card: '#181818', // cards, panels, table rows, modals and menus (what bg-white becomes)
   },
 };
 
 // Neutral greys (Tailwind gray and slate) in dark mode, by property and shade.
-// Light shades used as backgrounds become surfaces a step above the card (table headers, hover rows, chips);
-// dark shades used as text become light. Dark backgrounds (700-950: avatars, tooltips, overlays) stay dark so
-// white text on them still reads.
+// Light shades used as backgrounds become surfaces a step above the card (table headers, hover rows, inputs,
+// chips); dark shades used as text become light. Dark backgrounds (700-950: avatars, tooltips, overlays) stay
+// dark so white text on them still reads.
 const NEUTRAL = {
   bg: {
-    50: '#243145', 100: '#2a384e', 200: '#334155', 300: '#475569', 400: '#64748b',
-    500: '#7c8ba1', 600: '#94a3b8', 700: '#3b4a61', 800: '#2e3b52', 900: '#0b1120', 950: '#060a14',
+    50: '#202020', 100: '#262626', 200: '#2e2e2e', 300: '#404040', 400: '#5c5c5c',
+    500: '#737373', 600: '#8f8f8f', 700: '#333333', 800: '#2a2a2a', 900: '#050505', 950: '#000000',
   },
   text: {
-    300: '#5a6981', 400: '#7d8ca3', 500: '#94a3b8', 600: '#aebacb', 700: '#cbd5e1', 800: '#e2e8f0',
-    900: '#f1f5f9', 950: '#f8fafc',
+    // 900 primary, 500 secondary, 400 muted
+    300: '#525252', 400: '#737373', 500: '#a3a3a3', 600: '#b8b8b8', 700: '#d4d4d4', 800: '#e5e5e5',
+    900: '#f5f5f5', 950: '#fafafa',
   },
-  border: { 50: '#222e42', 100: '#273449', 200: '#2f3d54', 300: '#3e4d66', 400: '#52627c' },
-  ring: { 100: '#273449', 200: '#2f3d54', 300: '#3e4d66' },
-  placeholder: { 300: '#4f5e76', 400: '#6b7a92', 500: '#7d8ca3' },
+  border: { 50: '#202020', 100: '#242424', 200: '#2a2a2a', 300: '#3a3a3a', 400: '#4d4d4d' },
+  ring: { 100: '#242424', 200: '#2a2a2a', 300: '#3a3a3a' },
+  placeholder: { 300: '#5a5a5a', 400: '#6e6e6e', 500: '#858585' },
 };
 
 // Accent hues: pale tints (badges, alerts, selected rows) become low-key tints of the hue on the dark card,

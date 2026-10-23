@@ -75,7 +75,7 @@ export default function ForgotPasswordPage() {
             <TaskotelLogo className="w-16 h-16 mb-3 transform transition-transform hover:scale-105 duration-200" />
 
             <div className="flex items-center gap-1.5">
-              <span className="text-xl font-extrabold tracking-tight text-[#04302a] dark:text-slate-100">
+              <span className="text-xl font-extrabold tracking-tight text-[#04302a] dark:text-neutral-100">
                 Task<span className="text-[#0f9874]">otel</span>
               </span>
             </div>

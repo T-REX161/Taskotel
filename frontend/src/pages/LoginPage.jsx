@@ -100,7 +100,7 @@ export default function LoginPage() {
             <div className="flex items-center gap-2 sm:pl-2">
               <TaskotelLogo className="w-[72px] h-[72px] shrink-0 transform transition-transform hover:scale-105 duration-200" />
               <div className="flex flex-col">
-                <span className="text-[34px] sm:text-[38px] font-extrabold tracking-tight text-[#04302a] leading-[40px] dark:text-slate-100">
+                <span className="text-[34px] sm:text-[38px] font-extrabold tracking-tight text-[#04302a] leading-[40px] dark:text-neutral-100">
                   Task<span className="text-[#0f9874]">otel</span>
                 </span>
                 <span className="text-[13px] font-medium text-slate-500">
@@ -109,7 +109,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <h1 className="text-[27px] sm:text-[29px] leading-9 font-bold text-[#073638] tracking-tight mt-8 dark:text-slate-100">
+            <h1 className="text-[27px] sm:text-[29px] leading-9 font-bold text-[#073638] tracking-tight mt-8 dark:text-neutral-100">
               Welcome Back
             </h1>
             <p className={`text-[15.5px] text-gray-500 mt-0.5 ${hasBanner ? "invisible" : ""}`}>

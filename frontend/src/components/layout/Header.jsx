@@ -56,7 +56,7 @@ export default function Header({
         >
           <TaskotelLogo className="w-10 h-10 shrink-0 transition group-hover:brightness-95" />
           <div className="flex flex-col justify-center">
-            <span className="text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px] dark:text-slate-100">
+            <span className="text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px] dark:text-neutral-100">
               Task<span className="text-[#0f9874]">otel</span>
             </span>
             <span className="hidden sm:block whitespace-nowrap text-[7.2px] font-semibold text-[#6b7f99] tracking-[0.07em] uppercase leading-none mt-1">
@@ -118,7 +118,11 @@ export default function Header({
         {/* Theme toggle: Sun in light mode, Moon in dark mode */}
         <button
           type="button"
-          onClick={toggleTheme}
+          onClick={(event) => {
+            // The circular theme reveal grows from the centre of this button (also for keyboard activation)
+            const rect = event.currentTarget.getBoundingClientRect();
+            toggleTheme({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+          }}
           className="w-9 h-9 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
           aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
           title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
