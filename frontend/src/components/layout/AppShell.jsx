@@ -61,7 +61,7 @@ export default function AppShell({ children, activeNav, onNavChange }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-900">
+    <div className="min-h-screen flex flex-col bg-surface-page text-slate-900">
       {/* White Top Navigation Bar */}
       <Header
         onMenuClick={() => setIsSidebarOpen(true)}
@@ -82,7 +82,7 @@ export default function AppShell({ children, activeNav, onNavChange }) {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto bg-[#f8fafc]">
+        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto bg-surface-page">
           <div className="max-w-[1440px] mx-auto w-full">
             {children || <Outlet />}
           </div>

@@ -6,7 +6,10 @@ import {
   BellIcon,
   SettingsIcon,
   MenuIcon,
+  SunIcon,
+  MoonIcon,
 } from '../icons/Icons';
+import { useTheme } from '../../theme/ThemeContext';
 import { getUsername, getUserRole } from '../../services/api';
 
 export default function Header({
@@ -17,6 +20,7 @@ export default function Header({
   onProfileClick,
   onLogoClick,
 }) {
+  const { isDark, toggleTheme } = useTheme();
   const username = getUsername() || 'Administrator';
   const role = getUserRole() || 'ADMIN';
 
@@ -31,7 +35,7 @@ export default function Header({
       : 'Hotel Staff';
 
   return (
-    <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-white flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">
+    <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-surface-chrome flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">
       {/* Left: Mobile menu toggle + Taskotel Logo Branding */}
       <div className="flex items-center gap-3 sm:gap-5 shrink-0">
         {/* Mobile menu trigger */}
@@ -52,7 +56,7 @@ export default function Header({
         >
           <TaskotelLogo className="w-10 h-10 shrink-0 transition group-hover:brightness-95" />
           <div className="flex flex-col justify-center">
-            <span className="text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px]">
+            <span className="text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px] dark:text-slate-100">
               Task<span className="text-[#0f9874]">otel</span>
             </span>
             <span className="hidden sm:block whitespace-nowrap text-[7.2px] font-semibold text-[#6b7f99] tracking-[0.07em] uppercase leading-none mt-1">
@@ -98,8 +102,6 @@ export default function Header({
           title="Notifications"
         >
           <BellIcon className="w-4.5 h-4.5" />
-          {/* Notification Indicator Dot */}
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white" />
         </button>
 
         {/* Settings Icon */}
@@ -111,6 +113,17 @@ export default function Header({
           title="Settings"
         >
           <SettingsIcon className="w-4.5 h-4.5" />
+        </button>
+
+        {/* Theme toggle: Sun in light mode, Moon in dark mode */}
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="w-9 h-9 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
+          aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDark ? <MoonIcon className="w-[18px] h-[18px]" /> : <SunIcon className="w-[18px] h-[18px]" />}
         </button>
 
         {/* Divider */}

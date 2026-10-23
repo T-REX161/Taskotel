@@ -25,6 +25,30 @@
     min-height: 100%;
   }
 
+  /* Dark mode (html.dark). Colours come from the variables defined in src/theme/themePalette.cjs;
+     :where() keeps these defaults at zero specificity so utility classes still win. */
+  html.dark,
+  html.dark body {
+    background-color: rgb(var(--tk-surface-page));
+    color: rgb(var(--tk-text-gray-900));
+    color-scheme: dark;
+  }
+
+  :where(html.dark) * {
+    border-color: rgb(var(--tk-border-gray-200) / 0.8);
+  }
+
+  /* Fields without a background class would otherwise get the browser's grey dark-mode default */
+  :where(html.dark) :where(input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]), textarea, select) {
+    background-color: rgb(var(--tk-bg-white));
+  }
+
+  :where(html.dark) *,
+  :where(html.dark) ::before,
+  :where(html.dark) ::after {
+    --tw-ring-offset-color: rgb(var(--tk-bg-white));
+  }
+
   #root {
     margin: 0;
     padding: 0;
@@ -58,3 +82,16 @@ input::-ms-clear {
   background: rgba(148, 163, 184, 0.45);
 }
 
+
+/* Theme switch: colours cross-fade for a moment while the class changes (ThemeContext adds and removes this) */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, fill 200ms ease, stroke 200ms ease !important;
+  transition-delay: 0ms !important;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+}

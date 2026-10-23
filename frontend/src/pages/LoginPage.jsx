@@ -100,7 +100,7 @@ export default function LoginPage() {
             <div className="flex items-center gap-2 sm:pl-2">
               <TaskotelLogo className="w-[72px] h-[72px] shrink-0 transform transition-transform hover:scale-105 duration-200" />
               <div className="flex flex-col">
-                <span className="text-[34px] sm:text-[38px] font-extrabold tracking-tight text-[#04302a] leading-[40px]">
+                <span className="text-[34px] sm:text-[38px] font-extrabold tracking-tight text-[#04302a] leading-[40px] dark:text-slate-100">
                   Task<span className="text-[#0f9874]">otel</span>
                 </span>
                 <span className="text-[13px] font-medium text-slate-500">
@@ -109,7 +109,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <h1 className="text-[27px] sm:text-[29px] leading-9 font-bold text-[#073638] tracking-tight mt-8">
+            <h1 className="text-[27px] sm:text-[29px] leading-9 font-bold text-[#073638] tracking-tight mt-8 dark:text-slate-100">
               Welcome Back
             </h1>
             <p className={`text-[15.5px] text-gray-500 mt-0.5 ${hasBanner ? "invisible" : ""}`}>
@@ -214,7 +214,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-500 hover:text-[#0c6f50] transition-colors focus:outline-none"
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-500 hover:text-[#0c6f50] dark:hover:text-emerald-400 transition-colors focus:outline-none"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -233,7 +233,7 @@ export default function LoginPage() {
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-[18px] h-[18px] rounded text-[#0c6f50] border-gray-300 focus:ring-emerald-500/20 focus:ring-offset-0 cursor-pointer accent-[#0c6f50]"
+                  className="w-[18px] h-[18px] rounded text-[#0c6f50] dark:text-emerald-400 border-gray-300 focus:ring-emerald-500/20 focus:ring-offset-0 cursor-pointer accent-[#0c6f50]"
                 />
                 <span className="text-sm font-medium text-gray-700">
                   Remember me
@@ -243,7 +243,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => navigate('/forgot-password')}
-                className="text-sm font-medium text-[#0c6f50] hover:text-[#0a5e44] hover:underline transition-colors"
+                className="text-sm font-medium text-[#0c6f50] dark:text-emerald-400 hover:text-[#0a5e44] dark:hover:text-emerald-300 hover:underline transition-colors"
               >
                 Forgot password?
               </button>

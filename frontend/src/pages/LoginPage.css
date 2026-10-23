@@ -6,6 +6,12 @@
     #e0f8ee;
 }
 
+html.dark .login-page {
+  background:
+    radial-gradient(45% 60% at 50% 45%, rgb(16 185 129 / 0.08) 0%, transparent 100%),
+    rgb(var(--tk-surface-page));
+}
+
 .login-frame {
   background:
     radial-gradient(55% 65% at 0% 100%, #053a27 0%, transparent 100%),

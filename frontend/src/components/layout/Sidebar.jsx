@@ -86,7 +86,7 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
 
       {/* Sidebar container */}
       <aside
-        className={`fixed lg:sticky top-0 lg:top-16 z-40 lg:z-10 h-full lg:h-[calc(100vh-4rem)] w-60 bg-white border-r border-gray-200 flex flex-col justify-between transition-transform duration-200 ease-in-out shrink-0 select-none ${
+        className={`fixed lg:sticky top-0 lg:top-16 z-40 lg:z-10 h-full lg:h-[calc(100vh-4rem)] w-60 bg-surface-chrome border-r border-gray-200 flex flex-col justify-between transition-transform duration-200 ease-in-out shrink-0 select-none ${
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
@@ -96,7 +96,7 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
           <div className="h-12 px-2 flex items-center justify-between border-b border-gray-100 mb-4 lg:hidden shrink-0">
             <div className="flex items-center gap-3">
               <TaskotelLogo className="w-10 h-10 shrink-0" />
-              <span className="text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px]">
+              <span className="text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px] dark:text-slate-100">
                 Task<span className="text-[#0f9874]">otel</span>
               </span>
             </div>
@@ -119,7 +119,7 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
         </div>
 
         {/* Bottom Section: Logout */}
-        <div className="p-3 border-t border-gray-100 bg-white shrink-0">
+        <div className="p-3 border-t border-gray-100 bg-surface-chrome shrink-0">
           <button
             type="button"
             onClick={() => {

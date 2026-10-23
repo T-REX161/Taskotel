@@ -64,7 +64,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f2f6f3] text-gray-900 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative selection:bg-emerald-100 selection:text-emerald-900">
+    <div className="min-h-screen bg-[#f2f6f3] dark:bg-surface-page text-gray-900 flex flex-col justify-center items-center p-4 sm:p-6 lg:p-8 relative selection:bg-emerald-100 selection:text-emerald-900">
       <div className="absolute top-1/4 -left-20 w-72 h-72 bg-emerald-200/30 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute bottom-1/4 -right-20 w-80 h-80 bg-teal-200/25 rounded-full blur-3xl pointer-events-none" />
 
@@ -75,7 +75,7 @@ export default function ForgotPasswordPage() {
             <TaskotelLogo className="w-16 h-16 mb-3 transform transition-transform hover:scale-105 duration-200" />
 
             <div className="flex items-center gap-1.5">
-              <span className="text-xl font-extrabold tracking-tight text-[#04302a]">
+              <span className="text-xl font-extrabold tracking-tight text-[#04302a] dark:text-slate-100">
                 Task<span className="text-[#0f9874]">otel</span>
               </span>
             </div>
