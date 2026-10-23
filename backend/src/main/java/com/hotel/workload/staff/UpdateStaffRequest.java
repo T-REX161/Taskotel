@@ -15,8 +15,8 @@ public class UpdateStaffRequest {
 
     private String phone;
 
-    @NotNull(message = "Department is required")
-    private Department department;
+    @NotBlank(message = "Department is required")
+    private String department;
 
     @NotNull(message = "Availability is required")
     private Availability availability;
@@ -47,11 +47,11 @@ public class UpdateStaffRequest {
         this.phone = phone;
     }
 
-    public Department getDepartment() {
+    public String getDepartment() {
         return department;
     }
 
-    public void setDepartment(Department department) {
+    public void setDepartment(String department) {
         this.department = department;
     }
 

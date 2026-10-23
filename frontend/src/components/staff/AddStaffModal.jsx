@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { EyeIcon, EyeOffIcon, CloseIcon } from '../icons/Icons';
 import { createStaff } from '../../services/api';
 import { evaluatePasswordRules } from '../../utils/passwordPolicy';
 import PasswordRequirements from '../common/PasswordRequirements';
+import DepartmentOptions from '../common/DepartmentOptions';
+import useDepartments from '../../hooks/useDepartments';
 
 const initialFormState = {
   fullName: '',
@@ -25,11 +27,19 @@ const initialFormState = {
  *   onSuccess – callback(newStaff, fullName) after successful creation
  */
 export default function AddStaffModal({ isOpen, onClose, onSuccess }) {
+  const { departments, activeDepartments } = useDepartments();
   const navigate = useNavigate();
   const [formData, setFormData] = useState(initialFormState);
   const [showTemporaryPassword, setShowTemporaryPassword] = useState(false);
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // If the default department cannot take new staff (for example it is inactive), start on the first one that can
+  useEffect(() => {
+    if (activeDepartments.length > 0 && !activeDepartments.some((department) => department.code === formData.department)) {
+      setFormData((prev) => ({ ...prev, department: activeDepartments[0].code }));
+    }
+  }, [activeDepartments, formData.department]);
 
   if (!isOpen) return null;
 
@@ -235,12 +245,7 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess }) {
                   disabled={isSubmitting}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-800 bg-white"
                 >
-                  <option value="HOUSEKEEPING">Housekeeping</option>
-                  <option value="FRONT_DESK">Front Desk</option>
-                  <option value="MAINTENANCE">Maintenance</option>
-                  <option value="ROOM_SERVICE">Room Service</option>
-                  <option value="FOOD_AND_BEVERAGE">Food &amp; Beverage (F&amp;B)</option>
-                  <option value="SECURITY">Security</option>
+                  <DepartmentOptions departments={departments} activeOnly />
                 </select>
               </div>
 

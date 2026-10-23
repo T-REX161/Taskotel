@@ -7,6 +7,7 @@ import com.hotel.workload.security.User;
 import com.hotel.workload.security.UserRepository;
 import com.hotel.workload.staff.Availability;
 import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.TestDepartments;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.task.Priority;
@@ -114,7 +115,7 @@ public class WorkloadControllerTest {
         task.setPriority(Priority.MEDIUM);
         task.setStatus(status);
         task.setEstimatedDuration(estimatedDuration);
-        task.setDepartment(Department.HOUSEKEEPING);
+        task.setDepartment(TestDepartments.HOUSEKEEPING);
         task.setCreatedBy(admin);
         return taskRepository.saveAndFlush(task);
     }
@@ -148,8 +149,8 @@ public class WorkloadControllerTest {
     @WithMockUser(username = "teststaff1", roles = "STAFF")
     @Transactional
     public void testStaffCanRetrieveWorkloadReturns200AndOnlyOwnData() throws Exception {
-        Staff ownStaff = createStaff("teststaff1", "teststaff1@hotel.com", Department.HOUSEKEEPING);
-        Staff otherStaff = createStaff("teststaff2", "teststaff2@hotel.com", Department.FRONT_DESK);
+        Staff ownStaff = createStaff("teststaff1", "teststaff1@hotel.com", TestDepartments.HOUSEKEEPING);
+        Staff otherStaff = createStaff("teststaff2", "teststaff2@hotel.com", TestDepartments.FRONT_DESK);
 
         MvcResult result = mockMvc.perform(get("/api/workload"))
                 .andExpect(status().isOk())
@@ -179,7 +180,7 @@ public class WorkloadControllerTest {
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testStaffWithNoAssignmentsHasZeroValues() throws Exception {
-        Staff staff = createStaff("wlnoassign", "wlnoassign@hotel.com", Department.HOUSEKEEPING);
+        Staff staff = createStaff("wlnoassign", "wlnoassign@hotel.com", TestDepartments.HOUSEKEEPING);
 
         MvcResult result = mockMvc.perform(get("/api/workload"))
                 .andExpect(status().isOk())
@@ -206,7 +207,7 @@ public class WorkloadControllerTest {
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testStaffWithMultipleActiveTasksGetCorrectSum() throws Exception {
-        Staff staff = createStaff("wlmulti", "wlmulti@hotel.com", Department.HOUSEKEEPING);
+        Staff staff = createStaff("wlmulti", "wlmulti@hotel.com", TestDepartments.HOUSEKEEPING);
 
         Task t1 = createTask("WL Task Pending", TaskStatus.PENDING, 60);
         Task t2 = createTask("WL Task Assigned", TaskStatus.ASSIGNED, 90);
@@ -240,7 +241,7 @@ public class WorkloadControllerTest {
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testCompletedTasksAreExcludedFromWorkload() throws Exception {
-        Staff staff = createStaff("wlcompleted", "wlcompleted@hotel.com", Department.HOUSEKEEPING);
+        Staff staff = createStaff("wlcompleted", "wlcompleted@hotel.com", TestDepartments.HOUSEKEEPING);
 
         Task activeTask = createTask("WL Active Task", TaskStatus.PENDING, 60);
         Task completedTask = createTask("WL Completed Task", TaskStatus.COMPLETED, 120);
@@ -273,7 +274,7 @@ public class WorkloadControllerTest {
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testCancelledTasksAreExcludedFromWorkload() throws Exception {
-        Staff staff = createStaff("wlcancelled", "wlcancelled@hotel.com", Department.HOUSEKEEPING);
+        Staff staff = createStaff("wlcancelled", "wlcancelled@hotel.com", TestDepartments.HOUSEKEEPING);
 
         Task activeTask = createTask("WL Active For Cancel Test", TaskStatus.IN_PROGRESS, 45);
         Task cancelledTask = createTask("WL Cancelled Task", TaskStatus.CANCELLED, 90);
@@ -306,7 +307,7 @@ public class WorkloadControllerTest {
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testActiveTaskCountIsCorrect() throws Exception {
-        Staff staff = createStaff("wlcount", "wlcount@hotel.com", Department.FRONT_DESK);
+        Staff staff = createStaff("wlcount", "wlcount@hotel.com", TestDepartments.FRONT_DESK);
 
         Task t1 = createTask("WL Count Task 1", TaskStatus.PENDING, 30);
         Task t2 = createTask("WL Count Task 2", TaskStatus.ASSIGNED, 30);
@@ -340,7 +341,7 @@ public class WorkloadControllerTest {
     @Transactional
     public void testLowWorkloadStatusIsCalculatedCorrectly() throws Exception {
         // 120 min → LOW
-        Staff staff = createStaff("wllow", "wllow@hotel.com", Department.SECURITY);
+        Staff staff = createStaff("wllow", "wllow@hotel.com", TestDepartments.SECURITY);
         Task task = createTask("WL Low Status Task", TaskStatus.PENDING, 120);
         assign(task, staff);
 
@@ -366,7 +367,7 @@ public class WorkloadControllerTest {
     @Transactional
     public void testNormalWorkloadStatusIsCalculatedCorrectly() throws Exception {
         // 121 min → NORMAL
-        Staff staff = createStaff("wlnormal", "wlnormal@hotel.com", Department.SECURITY);
+        Staff staff = createStaff("wlnormal", "wlnormal@hotel.com", TestDepartments.SECURITY);
         Task task = createTask("WL Normal Status Task", TaskStatus.PENDING, 121);
         assign(task, staff);
 
@@ -392,7 +393,7 @@ public class WorkloadControllerTest {
     @Transactional
     public void testHighWorkloadStatusIsCalculatedCorrectly() throws Exception {
         // 241 min → HIGH
-        Staff staff = createStaff("wlhigh", "wlhigh@hotel.com", Department.MAINTENANCE);
+        Staff staff = createStaff("wlhigh", "wlhigh@hotel.com", TestDepartments.MAINTENANCE);
         Task task = createTask("WL High Status Task", TaskStatus.PENDING, 241);
         assign(task, staff);
 
@@ -418,7 +419,7 @@ public class WorkloadControllerTest {
     @Transactional
     public void testAtRiskWorkloadStatusIsCalculatedCorrectly() throws Exception {
         // 361 min → AT_RISK
-        Staff staff = createStaff("wlatrisk", "wlatrisk@hotel.com", Department.MAINTENANCE);
+        Staff staff = createStaff("wlatrisk", "wlatrisk@hotel.com", TestDepartments.MAINTENANCE);
         Task task = createTask("WL AtRisk Status Task", TaskStatus.PENDING, 361);
         assign(task, staff);
 
@@ -446,7 +447,7 @@ public class WorkloadControllerTest {
     @Transactional
     public void testWorkloadValuesAreCalculatedFromCurrentPostgresData() throws Exception {
         // Create a staff member, assign tasks, verify the dto reflects the DB state.
-        Staff staff = createStaff("wlpgcheck", "wlpgcheck@hotel.com", Department.ROOM_SERVICE);
+        Staff staff = createStaff("wlpgcheck", "wlpgcheck@hotel.com", TestDepartments.ROOM_SERVICE);
         Task t1 = createTask("WL PG Task 1", TaskStatus.ASSIGNED, 70);
         Task t2 = createTask("WL PG Task 2", TaskStatus.IN_PROGRESS, 80);
         assign(t1, staff);
@@ -479,7 +480,7 @@ public class WorkloadControllerTest {
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testNoWorkloadDataIsPersistedToStaff() throws Exception {
-        Staff staff = createStaff("wlnopersist", "wlnopersist@hotel.com", Department.HOUSEKEEPING);
+        Staff staff = createStaff("wlnopersist", "wlnopersist@hotel.com", TestDepartments.HOUSEKEEPING);
         Task task = createTask("WL NoPersist Task", TaskStatus.ASSIGNED, 200);
         assign(task, staff);
 
@@ -490,7 +491,7 @@ public class WorkloadControllerTest {
         Staff reloaded = staffRepository.findById(staff.getId()).orElseThrow();
         // Staff entity has no workload fields — we verify the entity is unchanged
         // by checking the department and availability are still the original values.
-        org.junit.jupiter.api.Assertions.assertEquals(Department.HOUSEKEEPING, reloaded.getDepartment());
+        org.junit.jupiter.api.Assertions.assertEquals(TestDepartments.HOUSEKEEPING, reloaded.getDepartment());
         org.junit.jupiter.api.Assertions.assertEquals(Availability.AVAILABLE, reloaded.getAvailability());
         // The Staff class has no workload fields, so no workload can have been persisted.
     }
@@ -499,7 +500,7 @@ public class WorkloadControllerTest {
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testResponseContainsRequiredWorkloadFields() throws Exception {
-        Staff staff = createStaff("wlfields", "wlfields@hotel.com", Department.FOOD_AND_BEVERAGE);
+        Staff staff = createStaff("wlfields", "wlfields@hotel.com", TestDepartments.FOOD_AND_BEVERAGE);
 
         MvcResult result = mockMvc.perform(get("/api/workload"))
                 .andExpect(status().isOk())

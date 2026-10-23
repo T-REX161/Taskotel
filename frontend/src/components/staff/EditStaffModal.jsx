@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CloseIcon } from '../icons/Icons';
 import { updateStaff } from '../../services/api';
+import DepartmentOptions from '../common/DepartmentOptions';
+import useDepartments from '../../hooks/useDepartments';
 
 /**
  * EditStaffModal — modal for updating an existing staff member's profile and active status.
@@ -14,6 +16,7 @@ import { updateStaff } from '../../services/api';
  *   onSuccess – callback(payload) after successful update
  */
 export default function EditStaffModal({ isOpen, staff, onClose, onSuccess }) {
+  const { departments } = useDepartments();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
     fullName: '',
@@ -225,12 +228,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess }) {
                   disabled={isSubmitting}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-800 bg-white"
                 >
-                  <option value="HOUSEKEEPING">Housekeeping</option>
-                  <option value="FRONT_DESK">Front Desk</option>
-                  <option value="MAINTENANCE">Maintenance</option>
-                  <option value="ROOM_SERVICE">Room Service</option>
-                  <option value="FOOD_AND_BEVERAGE">Food &amp; Beverage (F&amp;B)</option>
-                  <option value="SECURITY">Security</option>
+                  <DepartmentOptions departments={departments} activeOnly currentCode={staff?.department} />
                 </select>
               </div>
 

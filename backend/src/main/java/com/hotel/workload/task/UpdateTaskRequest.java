@@ -1,6 +1,5 @@
 package com.hotel.workload.task;
 
-import com.hotel.workload.staff.Department;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -26,7 +25,7 @@ public class UpdateTaskRequest {
 
     private LocalTime deadlineTime;
 
-    private Department department;
+    private String department;
 
     @NotNull(message = "Status is required")
     private TaskStatus status;
@@ -52,8 +51,8 @@ public class UpdateTaskRequest {
     public LocalTime getDeadlineTime() { return deadlineTime; }
     public void setDeadlineTime(LocalTime deadlineTime) { this.deadlineTime = deadlineTime; }
 
-    public Department getDepartment() { return department; }
-    public void setDepartment(Department department) { this.department = department; }
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
 
     public TaskStatus getStatus() { return status; }
     public void setStatus(TaskStatus status) { this.status = status; }

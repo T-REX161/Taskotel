@@ -5,6 +5,7 @@ import com.hotel.workload.assignment.AssignmentRepository;
 import com.hotel.workload.security.User;
 import com.hotel.workload.security.UserRepository;
 import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.DepartmentResolver;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import org.springframework.http.HttpStatus;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -26,15 +28,18 @@ public class TaskServiceImpl implements TaskService {
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
     private final AssignmentRepository assignmentRepository;
+    private final DepartmentResolver departmentResolver;
 
     public TaskServiceImpl(TaskRepository taskRepository,
                            UserRepository userRepository,
                            StaffRepository staffRepository,
-                           AssignmentRepository assignmentRepository) {
+                           AssignmentRepository assignmentRepository,
+                           DepartmentResolver departmentResolver) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
         this.assignmentRepository = assignmentRepository;
+        this.departmentResolver = departmentResolver;
     }
 
     @Override
@@ -89,7 +94,7 @@ public class TaskServiceImpl implements TaskService {
         task.setEstimatedDuration(request.getEstimatedDuration());
         task.setDueDate(request.getDueDate());
         task.setDeadlineTime(request.getDeadlineTime());
-        task.setDepartment(request.getDepartment());
+        task.setDepartment(departmentResolver.optionalActive(request.getDepartment()));
         task.setCreatedBy(createdBy);
         // createdAt / updatedAt handled by @PrePersist on the entity
         task = taskRepository.save(task);
@@ -103,7 +108,9 @@ public class TaskServiceImpl implements TaskService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
 
         // Reject before any field changes so a refused update leaves the task untouched
-        rejectDepartmentChangeThatConflictsWithAssignee(task, request.getDepartment());
+        // Unchanged department: kept even if it is now inactive. Changed department: must be an active one.
+        Department requestedDepartment = departmentResolver.forUpdate(task.getDepartment(), request.getDepartment(), false);
+        rejectDepartmentChangeThatConflictsWithAssignee(task, requestedDepartment);
         rejectStatusChangeThatConflictsWithAssignment(task, request.getStatus());
 
         task.setTitle(request.getTitle());
@@ -116,7 +123,7 @@ public class TaskServiceImpl implements TaskService {
         task.setEstimatedDuration(request.getEstimatedDuration());
         task.setDueDate(request.getDueDate());
         task.setDeadlineTime(request.getDeadlineTime());
-        task.setDepartment(request.getDepartment());
+        task.setDepartment(requestedDepartment);
 
         task = taskRepository.saveAndFlush(task);
         return mapToDto(task);
@@ -129,20 +136,20 @@ public class TaskServiceImpl implements TaskService {
      * the assignment rules.
      */
     private void rejectDepartmentChangeThatConflictsWithAssignee(Task task, Department requestedDepartment) {
-        if (requestedDepartment == null || requestedDepartment == task.getDepartment()) {
+        if (requestedDepartment == null || Objects.equals(requestedDepartment, task.getDepartment())) {
             return;
         }
 
         for (Assignment assignment : assignmentRepository.findAllByTaskId(task.getId())) {
             Staff assignee = assignment.getStaff();
-            if (assignee != null && assignee.getDepartment() != null && assignee.getDepartment() != requestedDepartment) {
+            if (assignee != null && assignee.getDepartment() != null && !assignee.getDepartment().equals(requestedDepartment)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, String.format(
                         "Cannot change this task's department to %s because it is assigned to %s (%s). "
                                 + "Reassign the task to a %s staff member first, or keep its current department.",
-                        requestedDepartment.getDisplayName(),
+                        requestedDepartment.getName(),
                         assignee.getName(),
-                        assignee.getDepartment().getDisplayName(),
-                        requestedDepartment.getDisplayName()));
+                        assignee.getDepartment().getName(),
+                        requestedDepartment.getName()));
             }
         }
     }
@@ -211,7 +218,10 @@ public class TaskServiceImpl implements TaskService {
         dto.setEstimatedDuration(task.getEstimatedDuration());
         dto.setDueDate(task.getDueDate());
         dto.setDeadlineTime(task.getDeadlineTime());
-        dto.setDepartment(task.getDepartment());
+        if (task.getDepartment() != null) {
+            dto.setDepartment(task.getDepartment().getCode());
+            dto.setDepartmentName(task.getDepartment().getName());
+        }
         dto.setCreatedAt(task.getCreatedAt());
         dto.setUpdatedAt(task.getUpdatedAt());
         return dto;

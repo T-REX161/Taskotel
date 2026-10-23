@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.password=",
         "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
         "spring.sql.init.mode=always",
-        "spring.sql.init.schema-locations=classpath:db/migration/V1__initial_schema.sql,classpath:db/migration/V2__add_credentials_setup_required.sql",
+        "spring.sql.init.schema-locations=classpath:db/migration/V1__initial_schema.sql,classpath:db/migration/V2__add_credentials_setup_required.sql,classpath:db/h2-departments-table.sql",
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.show-sql=false",
         "spring.jpa.properties.hibernate.format_sql=false",

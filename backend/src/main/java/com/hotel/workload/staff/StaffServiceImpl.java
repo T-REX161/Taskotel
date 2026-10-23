@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -40,6 +41,7 @@ public class StaffServiceImpl implements StaffService {
     private final PasswordValidatorService passwordValidatorService;
     private final AssignmentRepository assignmentRepository;
     private final TaskRepository taskRepository;
+    private final DepartmentResolver departmentResolver;
 
     @Autowired
     public StaffServiceImpl(StaffRepository staffRepository,
@@ -47,24 +49,28 @@ public class StaffServiceImpl implements StaffService {
                             PasswordEncoder passwordEncoder,
                             PasswordValidatorService passwordValidatorService,
                             AssignmentRepository assignmentRepository,
-                            TaskRepository taskRepository) {
+                            TaskRepository taskRepository,
+                            DepartmentResolver departmentResolver) {
         this.staffRepository = staffRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.passwordValidatorService = passwordValidatorService != null ? passwordValidatorService : new PasswordValidatorService();
         this.assignmentRepository = assignmentRepository;
         this.taskRepository = taskRepository;
+        this.departmentResolver = departmentResolver;
     }
 
     public StaffServiceImpl(StaffRepository staffRepository,
                             UserRepository userRepository,
                             PasswordEncoder passwordEncoder,
-                            PasswordValidatorService passwordValidatorService) {
-        this(staffRepository, userRepository, passwordEncoder, passwordValidatorService, null, null);
+                            PasswordValidatorService passwordValidatorService,
+                            DepartmentResolver departmentResolver) {
+        this(staffRepository, userRepository, passwordEncoder, passwordValidatorService, null, null, departmentResolver);
     }
 
-    public StaffServiceImpl(StaffRepository staffRepository, UserRepository userRepository, PasswordEncoder passwordEncoder) {
-        this(staffRepository, userRepository, passwordEncoder, new PasswordValidatorService(), null, null);
+    public StaffServiceImpl(StaffRepository staffRepository, UserRepository userRepository, PasswordEncoder passwordEncoder,
+                            DepartmentResolver departmentResolver) {
+        this(staffRepository, userRepository, passwordEncoder, new PasswordValidatorService(), null, null, departmentResolver);
     }
 
     @Override
@@ -98,7 +104,7 @@ public class StaffServiceImpl implements StaffService {
         staff.setName(request.getFullName());
         staff.setEmail(request.getEmail());
         staff.setPhone(request.getPhone());
-        staff.setDepartment(request.getDepartment());
+        staff.setDepartment(departmentResolver.requireActive(request.getDepartment()));
         staff.setAvailability(request.getAvailability());
         staff.setActive(true);
         
@@ -118,16 +124,19 @@ public class StaffServiceImpl implements StaffService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, DEACTIVATE_WITH_ACTIVE_ASSIGNMENTS_MESSAGE);
         }
 
-        if (request.getDepartment() != staff.getDepartment()) {
-            List<Task> conflictingTasks = activeTasksOutsideDepartment(staff.getId(), request.getDepartment());
+        // Unchanged department: kept even if it is now inactive. Changed department: must be an active one.
+        Department targetDepartment = departmentResolver.forUpdate(staff.getDepartment(), request.getDepartment(), true);
+
+        if (!Objects.equals(targetDepartment, staff.getDepartment())) {
+            List<Task> conflictingTasks = activeTasksOutsideDepartment(staff.getId(), targetDepartment);
             if (!conflictingTasks.isEmpty()) {
                 String taskList = conflictingTasks.stream()
-                        .map(t -> t.getTitle() + " (" + t.getDepartment().getDisplayName() + ")")
+                        .map(t -> t.getTitle() + " (" + t.getDepartment().getName() + ")")
                         .collect(Collectors.joining(", "));
                 throw new ResponseStatusException(HttpStatus.CONFLICT, String.format(
                         "Cannot move %s to %s because they have active tasks in another department: %s. "
                                 + "Reassign or complete those tasks first.",
-                        staff.getName(), request.getDepartment().getDisplayName(), taskList));
+                        staff.getName(), targetDepartment.getName(), taskList));
             }
         }
 
@@ -140,7 +149,7 @@ public class StaffServiceImpl implements StaffService {
         staff.setName(request.getFullName());
         staff.setEmail(request.getEmail());
         staff.setPhone(request.getPhone());
-        staff.setDepartment(request.getDepartment());
+        staff.setDepartment(targetDepartment);
         staff.setAvailability(request.getAvailability());
         staff.setActive(request.isActive());
 
@@ -231,6 +240,8 @@ public class StaffServiceImpl implements StaffService {
         }
 
         User user = staff.getUser();
+        // A department that names this person as its head must not keep pointing at a deleted record
+        departmentResolver.clearHeadStaff(staff.getId());
         staffRepository.delete(staff);
         staffRepository.flush();
 
@@ -266,7 +277,7 @@ public class StaffServiceImpl implements StaffService {
         return assignmentRepository.findByStaffIdOrderByAssignedAtDesc(staffId).stream()
                 .map(Assignment::getTask)
                 .filter(task -> task != null && ACTIVE_TASK_STATUSES.contains(task.getStatus()))
-                .filter(task -> task.getDepartment() != null && task.getDepartment() != department)
+                .filter(task -> task.getDepartment() != null && !task.getDepartment().equals(department))
                 .collect(Collectors.toList());
     }
 }

@@ -79,7 +79,10 @@ public class WorkloadServiceImpl implements WorkloadService {
             WorkloadDto dto = new WorkloadDto();
             dto.setStaffId(staff.getId());
             dto.setStaffName(staff.getName());
-            dto.setDepartment(staff.getDepartment());
+            if (staff.getDepartment() != null) {
+                dto.setDepartment(staff.getDepartment().getCode());
+                dto.setDepartmentName(staff.getDepartment().getName());
+            }
             dto.setAvailability(staff.getAvailability());
             dto.setActiveTaskCount(activeTaskCount);
             dto.setTotalEstimatedDuration(totalDuration);

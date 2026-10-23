@@ -46,6 +46,7 @@ public class ProductionConfigurationTest {
                 .withBean(SendGridProperties.class, () -> new SendGridProperties("SG.actual-live-production-key", "notifications@hotelwb.com", "EquiFlow"))
                 .withBean(UserRepository.class, () -> mock(UserRepository.class))
                 .withBean(com.hotel.workload.staff.StaffRepository.class, () -> mock(com.hotel.workload.staff.StaffRepository.class))
+                .withBean(com.hotel.workload.staff.DepartmentRepository.class, () -> mock(com.hotel.workload.staff.DepartmentRepository.class))
                 .withBean(com.hotel.workload.task.TaskRepository.class, () -> mock(com.hotel.workload.task.TaskRepository.class))
                 .withBean(com.hotel.workload.assignment.AssignmentRepository.class, () -> mock(com.hotel.workload.assignment.AssignmentRepository.class))
                 .withBean(PasswordEncoder.class, () -> mock(PasswordEncoder.class))
@@ -77,6 +78,7 @@ public class ProductionConfigurationTest {
                 .withBean(SendGridProperties.class, () -> new SendGridProperties("SG.actual-live-production-key", "notifications@hotelwb.com", "EquiFlow"))
                 .withBean(UserRepository.class, () -> mock(UserRepository.class))
                 .withBean(com.hotel.workload.staff.StaffRepository.class, () -> mock(com.hotel.workload.staff.StaffRepository.class))
+                .withBean(com.hotel.workload.staff.DepartmentRepository.class, () -> mock(com.hotel.workload.staff.DepartmentRepository.class))
                 .withBean(com.hotel.workload.task.TaskRepository.class, () -> mock(com.hotel.workload.task.TaskRepository.class))
                 .withBean(com.hotel.workload.assignment.AssignmentRepository.class, () -> mock(com.hotel.workload.assignment.AssignmentRepository.class))
                 .withBean(PasswordEncoder.class, () -> mock(PasswordEncoder.class))
@@ -108,6 +110,7 @@ public class ProductionConfigurationTest {
                 )
                 .withBean(UserRepository.class, () -> mock(UserRepository.class))
                 .withBean(com.hotel.workload.staff.StaffRepository.class, () -> mock(com.hotel.workload.staff.StaffRepository.class))
+                .withBean(com.hotel.workload.staff.DepartmentRepository.class, () -> mock(com.hotel.workload.staff.DepartmentRepository.class))
                 .withBean(com.hotel.workload.task.TaskRepository.class, () -> mock(com.hotel.workload.task.TaskRepository.class))
                 .withBean(com.hotel.workload.assignment.AssignmentRepository.class, () -> mock(com.hotel.workload.assignment.AssignmentRepository.class))
                 .withBean(PasswordEncoder.class, () -> mock(PasswordEncoder.class))
@@ -323,7 +326,8 @@ public class ProductionConfigurationTest {
                 mock(com.hotel.workload.task.TaskRepository.class),
                 mock(com.hotel.workload.assignment.AssignmentRepository.class),
                 mock(PasswordEncoder.class),
-                env
+                env,
+                mock(com.hotel.workload.staff.DepartmentRepository.class)
         );
 
         seeder.run();
@@ -346,7 +350,8 @@ public class ProductionConfigurationTest {
                 mock(com.hotel.workload.task.TaskRepository.class),
                 mock(com.hotel.workload.assignment.AssignmentRepository.class),
                 mock(PasswordEncoder.class),
-                env
+                env,
+                mock(com.hotel.workload.staff.DepartmentRepository.class)
         );
 
         seeder.run();
@@ -369,7 +374,8 @@ public class ProductionConfigurationTest {
                 mock(com.hotel.workload.task.TaskRepository.class),
                 mock(com.hotel.workload.assignment.AssignmentRepository.class),
                 mock(PasswordEncoder.class),
-                env
+                env,
+                mock(com.hotel.workload.staff.DepartmentRepository.class)
         );
 
         seeder.run();

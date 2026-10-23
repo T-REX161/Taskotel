@@ -39,6 +39,7 @@ public class StaffServiceImplTest {
     private PasswordValidatorService passwordValidatorService;
     private AssignmentRepository assignmentRepository;
     private TaskRepository taskRepository;
+    private DepartmentRepository departmentRepository;
     private StaffServiceImpl staffService;
 
     @BeforeEach
@@ -49,7 +50,14 @@ public class StaffServiceImplTest {
         passwordValidatorService = new PasswordValidatorService();
         assignmentRepository = mock(AssignmentRepository.class);
         taskRepository = mock(TaskRepository.class);
-        staffService = new StaffServiceImpl(staffRepository, userRepository, passwordEncoder, passwordValidatorService, assignmentRepository, taskRepository);
+        departmentRepository = mock(DepartmentRepository.class);
+        // Resolve the built-in departments by code, so the real DepartmentResolver rules are exercised
+        when(departmentRepository.findByCode(any())).thenAnswer(invocation -> {
+            String code = invocation.getArgument(0);
+            return TestDepartments.ALL.stream().filter(d -> d.getCode().equals(code)).findFirst();
+        });
+        staffService = new StaffServiceImpl(staffRepository, userRepository, passwordEncoder, passwordValidatorService,
+                assignmentRepository, taskRepository, new DepartmentResolver(departmentRepository));
     }
 
     @AfterEach
@@ -62,7 +70,7 @@ public class StaffServiceImplTest {
         request.setFullName("Test Staff");
         request.setEmail("test@hotel.com");
         request.setPhone("1234567890");
-        request.setDepartment(Department.FRONT_DESK);
+        request.setDepartment(TestDepartments.FRONT_DESK.getCode());
         request.setAvailability(Availability.AVAILABLE);
         request.setUsername("teststaff");
         request.setTemporaryPassword("ValidTemp@123");
@@ -106,7 +114,7 @@ public class StaffServiceImplTest {
         savedStaff.setId(UUID.randomUUID());
         savedStaff.setName(request.getFullName());
         savedStaff.setEmail(request.getEmail());
-        savedStaff.setDepartment(request.getDepartment());
+        savedStaff.setDepartment(TestDepartments.of(request.getDepartment()));
         savedStaff.setAvailability(request.getAvailability());
         savedStaff.setActive(true);
         savedStaff.setUser(savedUser);
@@ -281,7 +289,7 @@ public class StaffServiceImplTest {
         staff.setId(staffId);
         staff.setName("Busy Staff");
         staff.setEmail("busy@hotel.com");
-        staff.setDepartment(Department.HOUSEKEEPING);
+        staff.setDepartment(TestDepartments.HOUSEKEEPING);
         staff.setAvailability(Availability.AVAILABLE);
         staff.setActive(true);
         staff.setUser(user);
@@ -292,7 +300,7 @@ public class StaffServiceImplTest {
         UpdateStaffRequest request = new UpdateStaffRequest();
         request.setFullName(staff.getName());
         request.setEmail(staff.getEmail());
-        request.setDepartment(staff.getDepartment());
+        request.setDepartment(staff.getDepartment().getCode());
         request.setAvailability(Availability.AVAILABLE);
         request.setActive(active);
         return request;
@@ -380,7 +388,7 @@ public class StaffServiceImplTest {
     private UpdateStaffRequest departmentChangeRequest(Staff staff, Department department) {
         UpdateStaffRequest request = updateRequestFor(staff, true);
         request.setEmail("changed@hotel.com");
-        request.setDepartment(department);
+        request.setDepartment(department.getCode());
         return request;
     }
 
@@ -392,15 +400,15 @@ public class StaffServiceImplTest {
         staff.getUser().setEmail("busy@hotel.com");
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(assignmentRepository.findByStaffIdOrderByAssignedAtDesc(staffId))
-                .thenReturn(List.of(assignmentWithTask("Room 12 cleaning", Department.HOUSEKEEPING, TaskStatus.IN_PROGRESS)));
+                .thenReturn(List.of(assignmentWithTask("Room 12 cleaning", TestDepartments.HOUSEKEEPING, TaskStatus.IN_PROGRESS)));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> staffService.updateStaff(staffId, departmentChangeRequest(staff, Department.SECURITY)));
+                () -> staffService.updateStaff(staffId, departmentChangeRequest(staff, TestDepartments.SECURITY)));
 
         assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
         assertEquals("Cannot move Busy Staff to Security because they have active tasks in another department: "
                 + "Room 12 cleaning (Housekeeping). Reassign or complete those tasks first.", ex.getReason());
-        assertEquals(Department.HOUSEKEEPING, staff.getDepartment());
+        assertEquals(TestDepartments.HOUSEKEEPING, staff.getDepartment());
         assertEquals("busy@hotel.com", staff.getEmail());
         assertEquals("busy@hotel.com", staff.getUser().getEmail());
         verify(staffRepository, never()).save(any());
@@ -415,14 +423,14 @@ public class StaffServiceImplTest {
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(staffRepository.save(any(Staff.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(assignmentRepository.findByStaffIdOrderByAssignedAtDesc(staffId)).thenReturn(List.of(
-                assignmentWithTask("Done task", Department.HOUSEKEEPING, TaskStatus.COMPLETED),
-                assignmentWithTask("Cancelled task", Department.HOUSEKEEPING, TaskStatus.CANCELLED),
-                assignmentWithTask("Security patrol", Department.SECURITY, TaskStatus.ASSIGNED),
+                assignmentWithTask("Done task", TestDepartments.HOUSEKEEPING, TaskStatus.COMPLETED),
+                assignmentWithTask("Cancelled task", TestDepartments.HOUSEKEEPING, TaskStatus.CANCELLED),
+                assignmentWithTask("Security patrol", TestDepartments.SECURITY, TaskStatus.ASSIGNED),
                 assignmentWithTask("Unscoped task", null, TaskStatus.PENDING)));
 
-        StaffDto result = staffService.updateStaff(staffId, departmentChangeRequest(staff, Department.SECURITY));
+        StaffDto result = staffService.updateStaff(staffId, departmentChangeRequest(staff, TestDepartments.SECURITY));
 
-        assertEquals(Department.SECURITY, result.getDepartment());
+        assertEquals("SECURITY", result.getDepartment());
         verify(staffRepository).save(staff);
     }
 

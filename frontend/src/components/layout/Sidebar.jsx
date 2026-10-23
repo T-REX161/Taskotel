@@ -96,7 +96,7 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
           <div className="h-12 px-2 flex items-center justify-between border-b border-gray-100 mb-4 lg:hidden shrink-0">
             <div className="flex items-center gap-3">
               <TaskotelLogo className="w-10 h-10 shrink-0" />
-              <span className="text-[17px] font-extrabold tracking-tight text-[#04302a] leading-5">
+              <span className="text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px]">
                 Task<span className="text-[#0f9874]">otel</span>
               </span>
             </div>

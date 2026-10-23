@@ -25,8 +25,9 @@ public class Staff {
 
     private String phone;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "department", referencedColumnName = "code", nullable = false,
+            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Department department;
 
     @Enumerated(EnumType.STRING)

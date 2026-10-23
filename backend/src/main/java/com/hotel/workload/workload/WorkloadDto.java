@@ -1,7 +1,6 @@
 package com.hotel.workload.workload;
 
 import com.hotel.workload.staff.Availability;
-import com.hotel.workload.staff.Department;
 import java.util.UUID;
 
 /**
@@ -12,7 +11,8 @@ public class WorkloadDto {
 
     private UUID staffId;
     private String staffName;
-    private Department department;
+    private String department;
+    private String departmentName;
     private Availability availability;
     private int activeTaskCount;
     private int totalEstimatedDuration;
@@ -50,8 +50,11 @@ public class WorkloadDto {
     public String getStaffName() { return staffName; }
     public void setStaffName(String staffName) { this.staffName = staffName; }
 
-    public Department getDepartment() { return department; }
-    public void setDepartment(Department department) { this.department = department; }
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
+
+    public String getDepartmentName() { return departmentName; }
+    public void setDepartmentName(String departmentName) { this.departmentName = departmentName; }
 
     public Availability getAvailability() { return availability; }
     public void setAvailability(Availability availability) { this.availability = availability; }

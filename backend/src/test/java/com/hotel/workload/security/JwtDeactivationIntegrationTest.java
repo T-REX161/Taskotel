@@ -2,6 +2,7 @@ package com.hotel.workload.security;
 
 import com.hotel.workload.staff.Availability;
 import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.TestDepartments;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.staff.StaffService;
@@ -64,7 +65,7 @@ public class JwtDeactivationIntegrationTest {
         staff.setUser(user);
         staff.setName(user.getUsername() + " FullName");
         staff.setEmail(user.getEmail());
-        staff.setDepartment(Department.FRONT_DESK);
+        staff.setDepartment(TestDepartments.FRONT_DESK);
         staff.setAvailability(Availability.AVAILABLE);
         staff.setActive(active);
         return staffRepository.save(staff);

@@ -1,6 +1,5 @@
 package com.hotel.workload.task;
 
-import com.hotel.workload.staff.Department;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -16,7 +15,8 @@ public class TaskDto {
     private Integer estimatedDuration;
     private LocalDate dueDate;
     private LocalTime deadlineTime;
-    private Department department;
+    private String department;
+    private String departmentName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -39,8 +39,11 @@ public class TaskDto {
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
     public LocalTime getDeadlineTime() { return deadlineTime; }
     public void setDeadlineTime(LocalTime deadlineTime) { this.deadlineTime = deadlineTime; }
-    public Department getDepartment() { return department; }
-    public void setDepartment(Department department) { this.department = department; }
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
+
+    public String getDepartmentName() { return departmentName; }
+    public void setDepartmentName(String departmentName) { this.departmentName = departmentName; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

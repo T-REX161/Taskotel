@@ -4,9 +4,11 @@ import { TasksIcon } from '../components/icons/Icons';
 import { createTask, createAssignment, getStaff, getTasks, getAssignments } from '../services/api';
 import CreateTaskForm from '../components/tasks/CreateTaskForm';
 import { filterEligibleStaff } from '../utils/staffFilter';
+import useDepartments from '../hooks/useDepartments';
 
 export default function CreateTaskPage() {
   const navigate = useNavigate();
+  const { departments, activeDepartments } = useDepartments();
 
   const initialFormState = {
     title: '',
@@ -29,6 +31,13 @@ export default function CreateTaskPage() {
   const [assignments, setAssignments] = useState([]);
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
   const [createdTaskRecord, setCreatedTaskRecord] = useState(null);
+
+  // If the default department cannot take new tasks (for example it is inactive), start on the first one that can
+  useEffect(() => {
+    if (activeDepartments.length > 0 && !activeDepartments.some((department) => department.code === formData.department)) {
+      setFormData((prev) => ({ ...prev, department: activeDepartments[0].code }));
+    }
+  }, [activeDepartments, formData.department]);
 
   useEffect(() => {
     let isMounted = true;
@@ -249,6 +258,7 @@ export default function CreateTaskPage() {
         formData={formData}
         onInputChange={handleInputChange}
         staffList={eligibleStaff}
+        departments={departments}
         isLoadingStaff={isLoadingStaff}
         isSubmitting={isSubmitting}
         createdTaskRecord={createdTaskRecord}

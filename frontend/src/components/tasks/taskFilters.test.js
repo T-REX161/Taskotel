@@ -34,32 +34,22 @@ describe('TaskFilters department dropdown options', () => {
     assert.strictEqual(allOption.label, 'All Departments');
   });
 
-  it('includes only the 6 departments supported by the backend in the expected order', () => {
-    const departmentValues = options.map((opt) => opt.value).filter(Boolean);
-    const expectedDepartments = [
-      'HOUSEKEEPING',
-      'FRONT_DESK',
-      'MAINTENANCE',
-      'ROOM_SERVICE',
-      'FOOD_AND_BEVERAGE',
-      'SECURITY',
-    ];
-    assert.deepStrictEqual(
-      departmentValues,
-      expectedDepartments,
-      'Department options must strictly match the backend Department enum'
-    );
+  it('lists the departments from the data instead of a hardcoded list', () => {
+    assert.ok(selectContent.includes('<DepartmentOptions departments={departments} />'),
+      'Options must be generated from the department list');
+    assert.ok(source.includes("import useDepartments from '../../hooks/useDepartments';") && source.includes('useDepartments()'),
+      'The list must come from useDepartments');
+    // The only literal option is "All Departments"
+    assert.deepStrictEqual(options.map((opt) => opt.value), ['']);
   });
 
-  it('removes unsupported options (KITCHEN, SPA, and CONCIERGE)', () => {
-    const unsupported = ['KITCHEN', 'SPA', 'CONCIERGE'];
-    for (const dept of unsupported) {
-      const exists = options.some((opt) => opt.value === dept);
-      assert.strictEqual(
-        exists,
-        false,
-        `TaskFilters must not contain unsupported option: ${dept}`
-      );
+  it('shows every department, active or inactive, because existing tasks may belong to an inactive one', () => {
+    assert.ok(!selectContent.includes('activeOnly'), 'The filter must not hide inactive departments');
+  });
+
+  it('no longer hardcodes any department code', () => {
+    for (const code of ['HOUSEKEEPING', 'FRONT_DESK', 'MAINTENANCE', 'ROOM_SERVICE', 'FOOD_AND_BEVERAGE', 'SECURITY', 'KITCHEN', 'SPA', 'CONCIERGE']) {
+      assert.ok(!source.includes(code), 'TaskFilters must not hardcode ' + code);
     }
   });
 });

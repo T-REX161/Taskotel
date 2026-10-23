@@ -3,6 +3,9 @@
  * Pure functions — no React imports, no API calls, no side-effects.
  */
 
+import { displayDepartmentName } from '../../utils/departmentRegistry.js';
+
+
 export function getPriorityColor(priority) {
   switch (priority) {
     case 'URGENT':
@@ -66,15 +69,8 @@ export function formatStatus(status) {
 }
 
 export function formatDepartment(dept) {
-  switch (dept) {
-    case 'HOUSEKEEPING': return 'Housekeeping';
-    case 'FRONT_DESK': return 'Front Desk';
-    case 'MAINTENANCE': return 'Maintenance';
-    case 'ROOM_SERVICE': return 'Room Service';
-    case 'FOOD_AND_BEVERAGE': return 'Food & Beverage';
-    case 'SECURITY': return 'Security';
-    default: return dept ? dept.replace(/_/g, ' ') : '-';
-  }
+  if (!dept) return '-';
+  return displayDepartmentName(dept);
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

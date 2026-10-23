@@ -247,7 +247,8 @@ export function calculateWorkloadSummary(workloadList = []) {
 }
 
 /**
- * All departments supported by the backend Department enum.
+ * The built-in departments. Used only when the department list from the API is not available,
+ * so the workload panel still shows something sensible against an older backend.
  */
 export const SUPPORTED_DEPARTMENTS = [
   { code: 'HOUSEKEEPING', name: 'Housekeeping' },
@@ -276,15 +277,22 @@ export function calculateDepartmentWorkloads(workloadList = [], departmentList =
     }
   });
 
+  // Departments come from the database, so a department created later appears here without any code change.
+  // Without a list, the built-in six are used.
+  const seeds = deptMetaMap.size > 0 ? Array.from(deptMetaMap.values()) : SUPPORTED_DEPARTMENTS;
+
   const deptMap = new Map();
-  SUPPORTED_DEPARTMENTS.forEach((dept) => {
-    const meta = deptMetaMap.get(dept.code);
-    deptMap.set(dept.code, {
+  seeds.forEach((dept) => {
+    const meta = deptMetaMap.get(String(dept.code).toUpperCase());
+    deptMap.set(String(dept.code).toUpperCase(), {
       code: dept.code,
       name: meta?.name || dept.name,
       totalMinutes: 0,
       activeTaskCount: 0,
       staffCount: typeof meta?.staffCount === 'number' ? meta.staffCount : 0,
+      iconKey: meta?.iconKey,
+      colorKey: meta?.colorKey,
+      active: meta ? meta.active !== false : true,
     });
   });
 
@@ -310,10 +318,11 @@ export function calculateDepartmentWorkloads(workloadList = [], departmentList =
     if (!entry) {
       entry = {
         code: rawDept,
-        name: rawDept,
+        name: (typeof w.departmentName === 'string' && w.departmentName) || rawDept,
         totalMinutes: 0,
         activeTaskCount: 0,
         staffCount: 0,
+        active: true,
       };
       deptMap.set(rawDept, entry);
     }

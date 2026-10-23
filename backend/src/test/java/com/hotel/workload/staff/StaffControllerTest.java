@@ -612,7 +612,7 @@ public class StaffControllerTest {
                 staff.setUser(user);
                 staff.setName(username + " Full");
                 staff.setEmail(email);
-                staff.setDepartment(Department.FRONT_DESK);
+                staff.setDepartment(TestDepartments.FRONT_DESK);
                 staff.setAvailability(Availability.AVAILABLE);
                 staff.setActive(active);
                 return staffRepository.save(staff);
@@ -623,7 +623,7 @@ public class StaffControllerTest {
                 task.setTitle(title);
                 task.setPriority(com.hotel.workload.task.Priority.MEDIUM);
                 task.setStatus(status);
-                task.setDepartment(Department.FRONT_DESK);
+                task.setDepartment(TestDepartments.FRONT_DESK);
                 task.setCreatedBy(creator);
                 return taskRepository.save(task);
         }
@@ -945,7 +945,7 @@ public class StaffControllerTest {
                                     "availability": "%s",
                                     "active": %s
                                 }
-                                """, staff.getName(), staff.getEmail(), phone, staff.getDepartment(), availability, active);
+                                """, staff.getName(), staff.getEmail(), phone, staff.getDepartment().getCode(), availability, active);
         }
 
         /**
@@ -1094,7 +1094,7 @@ public class StaffControllerTest {
                                     "availability": "AVAILABLE",
                                     "active": %s
                                 }
-                                """, staff.getName(), email, department, active);
+                                """, staff.getName(), email, department.getCode(), active);
         }
 
         private com.hotel.workload.task.Task assignTaskInDepartment(Staff staff, String title, Department department, com.hotel.workload.task.TaskStatus status) {
@@ -1134,7 +1134,7 @@ public class StaffControllerTest {
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, "changed_" + username + "@hotel.com", Department.HOUSEKEEPING, true)))
+                                .content(departmentChangeJson(staff, "changed_" + username + "@hotel.com", TestDepartments.HOUSEKEEPING, true)))
                                 .andExpect(status().isConflict())
                                 .andExpect(jsonPath("$.message").value(
                                                 "Cannot move " + username + " Full to Housekeeping because they have active tasks in another department: "
@@ -1148,15 +1148,15 @@ public class StaffControllerTest {
         @org.springframework.transaction.annotation.Transactional
         public void testChangingDepartmentOfStaffWithOnlyCompletedOrCancelledTasksSucceeds() throws Exception {
                 Staff staff = createStaffWithAssignedTask("p2_staff_history", true, com.hotel.workload.task.TaskStatus.COMPLETED);
-                assignTaskInDepartment(staff, "p2_staff_history cancelled", Department.FRONT_DESK, com.hotel.workload.task.TaskStatus.CANCELLED);
+                assignTaskInDepartment(staff, "p2_staff_history cancelled", TestDepartments.FRONT_DESK, com.hotel.workload.task.TaskStatus.CANCELLED);
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, staff.getEmail(), Department.HOUSEKEEPING, true)))
+                                .content(departmentChangeJson(staff, staff.getEmail(), TestDepartments.HOUSEKEEPING, true)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.department").value("HOUSEKEEPING"));
 
-                org.junit.jupiter.api.Assertions.assertEquals(Department.HOUSEKEEPING, reloadStaff(staff.getId()).getDepartment());
+                org.junit.jupiter.api.Assertions.assertEquals(TestDepartments.HOUSEKEEPING, reloadStaff(staff.getId()).getDepartment());
         }
 
         @Test
@@ -1167,11 +1167,11 @@ public class StaffControllerTest {
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, staff.getEmail(), Department.SECURITY, true)))
+                                .content(departmentChangeJson(staff, staff.getEmail(), TestDepartments.SECURITY, true)))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.department").value("SECURITY"));
 
-                org.junit.jupiter.api.Assertions.assertEquals(Department.SECURITY, reloadStaff(staff.getId()).getDepartment());
+                org.junit.jupiter.api.Assertions.assertEquals(TestDepartments.SECURITY, reloadStaff(staff.getId()).getDepartment());
         }
 
         @Test
@@ -1180,14 +1180,14 @@ public class StaffControllerTest {
         public void testMovingStaffIntoTheDepartmentOfTheirMismatchedTaskSucceeds() throws Exception {
                 // Mirrors an existing record where staff hold an active task from another department
                 Staff staff = createTestStaff("p2_staff_repair", "p2_staff_repair@hotel.com", true); // FRONT_DESK
-                assignTaskInDepartment(staff, "p2 legacy housekeeping task", Department.HOUSEKEEPING, com.hotel.workload.task.TaskStatus.ASSIGNED);
+                assignTaskInDepartment(staff, "p2 legacy housekeeping task", TestDepartments.HOUSEKEEPING, com.hotel.workload.task.TaskStatus.ASSIGNED);
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, staff.getEmail(), Department.HOUSEKEEPING, true)))
+                                .content(departmentChangeJson(staff, staff.getEmail(), TestDepartments.HOUSEKEEPING, true)))
                                 .andExpect(status().isOk());
 
-                org.junit.jupiter.api.Assertions.assertEquals(Department.HOUSEKEEPING, reloadStaff(staff.getId()).getDepartment());
+                org.junit.jupiter.api.Assertions.assertEquals(TestDepartments.HOUSEKEEPING, reloadStaff(staff.getId()).getDepartment());
         }
 
         @Test
@@ -1195,12 +1195,12 @@ public class StaffControllerTest {
         @org.springframework.transaction.annotation.Transactional
         public void testMovingStaffWithMismatchedTaskToAThirdDepartmentReturns409() throws Exception {
                 Staff staff = createTestStaff("p2_staff_third", "p2_staff_third@hotel.com", true); // FRONT_DESK
-                assignTaskInDepartment(staff, "p2 legacy task", Department.HOUSEKEEPING, com.hotel.workload.task.TaskStatus.ASSIGNED);
+                assignTaskInDepartment(staff, "p2 legacy task", TestDepartments.HOUSEKEEPING, com.hotel.workload.task.TaskStatus.ASSIGNED);
                 StaffSnapshot before = StaffSnapshot.of(staff);
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, "changed_third@hotel.com", Department.SECURITY, true)))
+                                .content(departmentChangeJson(staff, "changed_third@hotel.com", TestDepartments.SECURITY, true)))
                                 .andExpect(status().isConflict())
                                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("p2 legacy task (Housekeeping)")));
 
@@ -1212,13 +1212,13 @@ public class StaffControllerTest {
         @org.springframework.transaction.annotation.Transactional
         public void testConflictMessageListsOnlyTasksOutsideTheNewDepartment() throws Exception {
                 Staff staff = createTestStaff("p2_staff_mixed", "p2_staff_mixed@hotel.com", true); // FRONT_DESK
-                assignTaskInDepartment(staff, "front desk task", Department.FRONT_DESK, com.hotel.workload.task.TaskStatus.ASSIGNED);
-                assignTaskInDepartment(staff, "housekeeping task", Department.HOUSEKEEPING, com.hotel.workload.task.TaskStatus.IN_PROGRESS);
+                assignTaskInDepartment(staff, "front desk task", TestDepartments.FRONT_DESK, com.hotel.workload.task.TaskStatus.ASSIGNED);
+                assignTaskInDepartment(staff, "housekeeping task", TestDepartments.HOUSEKEEPING, com.hotel.workload.task.TaskStatus.IN_PROGRESS);
                 StaffSnapshot before = StaffSnapshot.of(staff);
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, staff.getEmail(), Department.HOUSEKEEPING, true)))
+                                .content(departmentChangeJson(staff, staff.getEmail(), TestDepartments.HOUSEKEEPING, true)))
                                 .andExpect(status().isConflict())
                                 .andExpect(jsonPath("$.message").value(
                                                 "Cannot move p2_staff_mixed Full to Housekeeping because they have active tasks in another department: "
@@ -1237,7 +1237,7 @@ public class StaffControllerTest {
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, staff.getEmail(), Department.SECURITY, false)))
+                                .content(departmentChangeJson(staff, staff.getEmail(), TestDepartments.SECURITY, false)))
                                 .andExpect(status().isConflict());
 
                 assertStaffAndLoginUnchanged(before);

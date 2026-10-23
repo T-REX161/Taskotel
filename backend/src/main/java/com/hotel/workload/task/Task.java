@@ -39,7 +39,9 @@ public class Task {
 
     private LocalTime deadlineTime;
 
-    @Enumerated(EnumType.STRING)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "department", referencedColumnName = "code",
+            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Department department;
 
     @ManyToOne(fetch = FetchType.LAZY)

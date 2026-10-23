@@ -5,6 +5,7 @@ import com.hotel.workload.assignment.Assignment;
 import com.hotel.workload.assignment.AssignmentRepository;
 import com.hotel.workload.staff.Availability;
 import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.TestDepartments;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.task.Task;
@@ -91,7 +92,7 @@ public class DashboardControllerTest {
         Staff staff = new Staff();
         staff.setName("John Doe");
         staff.setEmail("john@example.com");
-        staff.setDepartment(Department.HOUSEKEEPING);
+        staff.setDepartment(TestDepartments.HOUSEKEEPING);
         staff.setAvailability(Availability.AVAILABLE);
         staff.setActive(true);
         staff.setUser(staffUser);
@@ -107,7 +108,7 @@ public class DashboardControllerTest {
         Staff staff2 = new Staff();
         staff2.setName("Jane Smith");
         staff2.setEmail("jane@example.com");
-        staff2.setDepartment(Department.MAINTENANCE);
+        staff2.setDepartment(TestDepartments.MAINTENANCE);
         staff2.setAvailability(Availability.AVAILABLE);
         staff2.setActive(true);
         staff2.setUser(staffUser2);

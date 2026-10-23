@@ -56,6 +56,8 @@ public class PostgresMigrationIT {
             "postgres", "template0", "template1");
     private static final List<String> PROTECTED_PREFIXES = List.of("wb_restore_check_", "wb_restored_");
     private static final String V3_MARKER = "Created by Flyway V3: one assignment row per task";
+    /** These tests prove V3 on its own; V4 (departments) is proved by DepartmentMigrationIT, so Flyway stops at 3 here. */
+    private static final String V3_TARGET = "3";
     private static final Path FINGERPRINT_SQL = Path.of("db-tools/fingerprint.sql");
     private static final Path ROLLBACK_EXISTING = Path.of("db-tools/rollback/V3_existing.sql");
     private static final Path ROLLBACK_FRESH = Path.of("db-tools/rollback/V3_fresh.sql");
@@ -204,13 +206,13 @@ public class PostgresMigrationIT {
         Target fresh = target("fresh");
         assertEquals(0, publicTableCount(fresh), "The _fresh rehearsal database must be empty");
 
-        MigrateResult first = flyway(fresh, true, null).migrate();
+        MigrateResult first = flyway(fresh, true, V3_TARGET).migrate();
         assertEquals(3, first.migrationsExecuted);
         assertEquals(List.of("1:SQL:true", "2:SQL:true", "3:SQL:true"), history(fresh));
         assertEquals("UNIQUE (task_id)", constraintDefinition(fresh));
         assertEquals(V3_MARKER, constraintComment(fresh));
 
-        MigrateResult second = flyway(fresh, true, null).migrate();
+        MigrateResult second = flyway(fresh, true, V3_TARGET).migrate();
         assertEquals(0, second.migrationsExecuted, "A second start must find nothing to migrate");
 
         // Recovery on a fresh install: the guarded rollback removes exactly V3 (constraint, its index, history row)
@@ -228,13 +230,13 @@ public class PostgresMigrationIT {
         assertTrue(removedByRollback.stream().allMatch(entry -> entry.contains("uk_assignments_task_id")), removedByRollback.toString());
 
         // ... and V3 can be applied again with an identical result
-        MigrateResult reapplied = flyway(fresh, true, null).migrate();
+        MigrateResult reapplied = flyway(fresh, true, V3_TARGET).migrate();
         assertEquals(1, reapplied.migrationsExecuted, "Only V3 must run again");
         assertEquals(List.of("1:SQL:true", "2:SQL:true", "3:SQL:true"), history(fresh));
         assertEquals("UNIQUE (task_id)", constraintDefinition(fresh));
         assertEquals(V3_MARKER, constraintComment(fresh));
         assertEquals(schemaWithV3, schemaSnapshot(fresh), "Re-applied V3 must produce the same schema as the first run");
-        assertEquals(0, flyway(fresh, true, null).migrate().migrationsExecuted);
+        assertEquals(0, flyway(fresh, true, V3_TARGET).migrate().migrationsExecuted);
     }
 
     // ── M7, M3, M8 ──────────────────────────────────────────────────────────
@@ -248,13 +250,13 @@ public class PostgresMigrationIT {
         String dataBefore = fingerprint(copy);
 
         // M7: production settings never baseline automatically
-        FlywayException refused = assertThrows(FlywayException.class, () -> flyway(copy, false, null).migrate());
+        FlywayException refused = assertThrows(FlywayException.class, () -> flyway(copy, false, V3_TARGET).migrate());
         assertTrue(messages(refused).toLowerCase().contains("baseline"), messages(refused));
         assertFalse(historyTableExists(copy), "A refused start must not create the history table");
         assertEquals(schemaBefore, schemaSnapshot(copy));
 
         // M3: baseline at 2, only V3 runs, data unchanged, only the constraint and its index added
-        MigrateResult result = flyway(copy, true, null).migrate();
+        MigrateResult result = flyway(copy, true, V3_TARGET).migrate();
         assertEquals(1, result.migrationsExecuted);
         assertEquals(List.of("2:BASELINE:true", "3:SQL:true"), history(copy));
         assertEquals(dataBefore, fingerprint(copy), "V3 must not change any row");
@@ -277,7 +279,7 @@ public class PostgresMigrationIT {
         assertEquals(dataBefore, fingerprint(copy));
 
         // Recovery on an existing install: after the rollback, V3 can be applied again with an identical result ...
-        MigrateResult reapplied = flyway(copy, true, null).migrate();
+        MigrateResult reapplied = flyway(copy, true, V3_TARGET).migrate();
         assertEquals(1, reapplied.migrationsExecuted, "Baseline and V3 must run again");
         assertEquals(List.of("2:BASELINE:true", "3:SQL:true"), history(copy));
         assertEquals(schemaAfter, schemaSnapshot(copy), "Re-applied V3 must produce the same schema as the first run");
@@ -313,7 +315,7 @@ public class PostgresMigrationIT {
         Set<String> schemaBefore = schemaSnapshot(dupe);
         String dataBefore = fingerprint(dupe);
 
-        FlywayException failure = assertThrows(FlywayException.class, () -> flyway(dupe, true, null).migrate());
+        FlywayException failure = assertThrows(FlywayException.class, () -> flyway(dupe, true, V3_TARGET).migrate());
         assertTrue(messages(failure).contains("more than one assignment row"), messages(failure));
 
         assertNull(constraintDefinition(dupe), "V3 must not leave the constraint behind");
@@ -339,27 +341,27 @@ public class PostgresMigrationIT {
 
         // M5a: an index already uses the name
         execute(collide, "CREATE INDEX uk_assignments_task_id ON public.assignments (staff_id)");
-        FlywayException relation = assertThrows(FlywayException.class, () -> flyway(collide, true, null).migrate());
+        FlywayException relation = assertThrows(FlywayException.class, () -> flyway(collide, true, V3_TARGET).migrate());
         assertTrue(messages(relation).contains("a relation named uk_assignments_task_id already exists"), messages(relation));
         assertEquals(List.of("1:SQL:true", "2:SQL:true"), history(collide));
         execute(collide, "DROP INDEX public.uk_assignments_task_id");
 
         // M5b: a constraint with that name but a different definition
         execute(collide, "ALTER TABLE public.assignments ADD CONSTRAINT uk_assignments_task_id UNIQUE (task_id, staff_id)");
-        FlywayException definition = assertThrows(FlywayException.class, () -> flyway(collide, true, null).migrate());
+        FlywayException definition = assertThrows(FlywayException.class, () -> flyway(collide, true, V3_TARGET).migrate());
         assertTrue(messages(definition).contains("unexpected definition"), messages(definition));
         execute(collide, "ALTER TABLE public.assignments DROP CONSTRAINT uk_assignments_task_id");
 
         // M5c: a unique index on task_id under another name
         execute(collide, "CREATE UNIQUE INDEX wb_rehearsal_other_unique_task_id ON public.assignments (task_id)");
-        FlywayException otherName = assertThrows(FlywayException.class, () -> flyway(collide, true, null).migrate());
+        FlywayException otherName = assertThrows(FlywayException.class, () -> flyway(collide, true, V3_TARGET).migrate());
         assertTrue(messages(otherName).contains("unique index under another name"), messages(otherName));
         execute(collide, "DROP INDEX public.wb_rehearsal_other_unique_task_id");
         assertEquals(List.of("1:SQL:true", "2:SQL:true"), history(collide));
 
         // M6: an identical constraint already exists: V3 succeeds without claiming it
         execute(collide, "ALTER TABLE public.assignments ADD CONSTRAINT uk_assignments_task_id UNIQUE (task_id)");
-        assertEquals(1, flyway(collide, true, null).migrate().migrationsExecuted);
+        assertEquals(1, flyway(collide, true, V3_TARGET).migrate().migrationsExecuted);
         assertEquals(List.of("1:SQL:true", "2:SQL:true", "3:SQL:true"), history(collide));
         assertNull(constraintComment(collide), "V3 must not label a constraint it did not create");
 

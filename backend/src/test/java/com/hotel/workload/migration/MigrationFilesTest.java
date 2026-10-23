@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1, V2 and V3 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V4 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -69,7 +69,8 @@ public class MigrationFilesTest {
         assertEquals(List.of(
                 "V1__initial_schema.sql",
                 "V2__add_credentials_setup_required.sql",
-                "V3__assignment_task_unique.sql"), names);
+                "V3__assignment_task_unique.sql",
+                "V4__departments_table.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -77,7 +78,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3), versions, "Versions must be 1, 2, 3 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4), versions, "Versions must be 1, 2, 3, 4 with no gaps or duplicates");
     }
 
     @Test

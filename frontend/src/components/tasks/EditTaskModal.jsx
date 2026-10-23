@@ -1,5 +1,7 @@
 import React from 'react';
 import { CloseIcon } from '../icons/Icons';
+import DepartmentOptions from '../common/DepartmentOptions';
+import useDepartments from '../../hooks/useDepartments';
 
 /**
  * Inline spinner SVG reused across the submit buttons.
@@ -39,6 +41,8 @@ export default function EditTaskModal({
   isSubmitting,
   formError,
 }) {
+  const { departments } = useDepartments();
+
   if (!task) return null;
 
   const field = (name) => ({
@@ -104,12 +108,7 @@ export default function EditTaskModal({
                 {...field('department')}
                 className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-white"
               >
-                <option value="HOUSEKEEPING">Housekeeping</option>
-                <option value="FRONT_DESK">Front Desk</option>
-                <option value="MAINTENANCE">Maintenance</option>
-                <option value="ROOM_SERVICE">Room Service</option>
-                <option value="FOOD_AND_BEVERAGE">Food &amp; Beverage</option>
-                <option value="SECURITY">Security</option>
+                <DepartmentOptions departments={departments} activeOnly currentCode={task.department} />
               </select>
             </div>
 

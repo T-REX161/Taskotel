@@ -137,45 +137,54 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
     });
   });
 
-  describe('Two-Column Responsive Layout (65–67% Table, min-w-0 Protection)', () => {
-    it('implements responsive two-column grid with ~66.7% table allocation (8 of 12 columns)', () => {
-      assert.ok(
-        pageSource.includes('lg:grid-cols-12'),
-        'Layout must use a 12-column grid at desktop width'
-      );
-      assert.ok(
-        pageSource.includes('lg:col-span-8'),
-        'Left column (Staff Workload table) must take 8 of 12 columns (66.7% width)'
-      );
-      assert.ok(
-        pageSource.includes('lg:col-span-4'),
-        'Right column (Workload by Department panel) must take 4 of 12 columns (33.3% width)'
-      );
+  describe('Stacked Full-Width Layout', () => {
+    it('orders the sections: summary container, thresholds, department panel, staff table', () => {
+      const at = (m) => pageSource.indexOf(m);
+      const order = ['aria-label="Workload summary"', 'Workload Thresholds:', '<h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>', 'Staff Workload Distribution</h2>'].map(at);
+      assert.ok(order.every((i) => i > 0), 'All four sections must exist');
+      assert.deepStrictEqual(order, [...order].sort((x, y) => x - y), 'Sections must appear in the required order');
     });
 
-    it('applies min-w-0 to both grid columns to prevent flex/grid container blowout', () => {
-      assert.ok(
-        pageSource.includes('lg:col-span-8 min-w-0'),
-        'Table card column must have min-w-0 to shrink properly'
-      );
-      assert.ok(
-        pageSource.includes('lg:col-span-4 min-w-0'),
-        'Department panel column must have min-w-0 to shrink properly'
-      );
+    it('no longer splits the department panel and the table into side-by-side columns', () => {
+      assert.ok(!pageSource.includes('lg:grid-cols-12'), 'No 12-column split');
+      assert.ok(!pageSource.includes('lg:col-span-8') && !pageSource.includes('lg:col-span-4'), 'No column spans');
+    });
+
+    it('puts the four real summary cards and the staff total in one full-width container', () => {
+      const start = pageSource.indexOf('aria-label="Workload summary">');
+      const section = pageSource.slice(start, pageSource.indexOf('</section>', start));
+      assert.ok(section.includes('{summaryCards.map('), 'Summary cards live inside the container');
+      assert.ok(section.includes('lg:grid-cols-4'), 'Cards sit in a responsive grid');
+      assert.ok(section.includes('Total Staff:') && section.includes('{sortedWorkload.length}'), 'Staff total uses real data, top right');
+    });
+
+    it('shows each department in its own card inside a Workload Summary-style container, in a grid that grows with the data', () => {
+      const start = pageSource.indexOf('aria-label="Workload by department"');
+      const section = pageSource.slice(start, pageSource.indexOf('</section>', start));
+      assert.ok(pageSource.includes('min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department"'), 'Same container style as the summary');
+      assert.ok(section.includes('grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))]'), 'Auto-fill grid, so rows are added as departments grow');
+      assert.ok(section.includes('{departmentWorkloads.map((dept, index) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
+      assert.ok(section.includes('min-w-0 bg-white rounded-xl p-4 shadow-2xs border border-gray-100'), 'Each department is a card');
+      for (const field of ['{dept.name}', '{dept.totalMinutes} mins', 'dept.percentage', 'dept.activeTaskCount', 'dept.staffCount', 'getDepartmentBarColor(index)']) {
+        assert.ok(section.includes(field), 'Card shows ' + field);
+      }
+      for (const fixed of ['lg:grid-cols-3', 'md:grid-cols-2', 'SUPPORTED_DEPARTMENTS', 'departmentWorkloads[', 'slice(']) {
+        assert.ok(!section.includes(fixed), 'No hardcoded department count: ' + fixed);
+      }
     });
   });
 
   describe('Staff Workload Table Compact Proportions & Sizing', () => {
-    it('enforces table-fixed w-full layout with exact column proportions: 23%, 16%, 12%, 11%, 21%, 17% totaling 100%', () => {
+    it('enforces table-fixed w-full layout with exact column proportions: 25%, 18%, 10%, 10%, 22%, 15% totaling 100%', () => {
       assert.ok(pageSource.includes('table-fixed'), 'Table must use table-fixed layout');
       assert.ok(pageSource.includes('w-full'), 'Table must use w-full layout');
       assert.ok(pageSource.includes('<colgroup>'), 'Table must use colgroup for explicit column widths');
-      assert.ok(pageSource.includes('w-[23%]'), 'Staff Member col width: 23%');
-      assert.ok(pageSource.includes('w-[16%]'), 'Department col width: 16%');
-      assert.ok(pageSource.includes('w-[12%]'), 'Active Tasks col width: 12%');
+      assert.ok(pageSource.includes('w-[25%]'), 'Staff Member col width: 25%');
+      assert.ok(pageSource.includes('w-[18%]'), 'Department col width: 18%');
+      assert.ok(pageSource.includes('w-[10%]'), 'Active Tasks col width: 10%');
       assert.ok(pageSource.includes('w-[11%]'), 'Workload col width: 11%');
-      assert.ok(pageSource.includes('w-[21%]'), 'Utilization col width: 21%');
-      assert.ok(pageSource.includes('w-[17%]'), 'Availability col width: 17%');
+      assert.ok(pageSource.includes('w-[22%]'), 'Utilization col width: 22%');
+      assert.ok(pageSource.includes('w-[15%]'), 'Availability col width: 15%');
     });
 
     it('restores header font size to ~12–13px (text-xs) and body font size to ~13–14px (text-[13px] sm:text-sm)', () => {
@@ -183,8 +192,8 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       assert.ok(pageSource.includes('text-[13px]'), 'Body rows must use comfortable 13px/14px font size');
     });
 
-    it('restores comfortable table cell padding (px-3 py-3)', () => {
-      assert.ok(pageSource.includes('px-3 py-3'), 'Must use comfortable padding (px-3 py-3)');
+    it('uses comfortable, even table cell padding (px-3 lg:px-4 py-3)', () => {
+      assert.ok(pageSource.includes('px-3 lg:px-4 py-3'), 'Must use comfortable padding (px-3, px-4 on large screens, py-3)');
     });
 
     it('uses concise, non-overlapping header labels consistently left-aligned', () => {
@@ -213,7 +222,7 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       );
     });
 
-    it('renders unclipped Availability badges with dot indicators in the 17% width column', () => {
+    it('renders unclipped Availability badges with dot indicators in the 15% width column', () => {
       assert.ok(
         pageSource.includes('Available') && pageSource.includes('Unavailable'),
         'Table must display Available and Unavailable status'
@@ -226,7 +235,9 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
 
     it('displays utilization percentage, status badge, progress bar, and minute indicator cleanly inside Utilization column', () => {
       assert.ok(pageSource.includes('calculateWorkloadPercentage'), 'Table must calculate shift percentage');
-      assert.ok(pageSource.includes('/ 480m'), 'Table must display 480m shift baseline');
+      assert.ok(pageSource.includes('<UtilizationMeter percentage={percentage} status={status} minutes={safeDuration} />'), 'Table must render the utilization meter with the calculated values');
+      const meter = fs.readFileSync(path.join(__dirname, '..', 'components', 'workload', 'UtilizationMeter.jsx'), 'utf8');
+      assert.ok(meter.includes('{minutes} / {baseline} mins') && meter.includes('baseline = 480'), 'Meter must display used workload / 480 mins shift baseline');
       assert.ok(pageSource.includes('getWorkloadProgressBarColor'), 'Table must use status-based progress bar color');
       assert.ok(pageSource.includes('getWorkloadStatusBadge'), 'Table must display status badge');
     });
@@ -463,10 +474,10 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       assert.strictEqual(sumDeptMinutes, 300);
     });
 
-    it('contains mathematical consistency confirmation note', () => {
+    it('keeps a short note that the department total comes from the active staff workloads', () => {
       assert.ok(
-        pageSource.includes('mathematical consistency'),
-        'Panel must document mathematical consistency with total staff workload'
+        pageSource.includes('Calculated from active staff workloads.') && !pageSource.includes('mathematical consistency') && pageSource.includes('{summary.totalWorkload} mins'),
+        'Footer shows the short note and the unchanged total'
       );
     });
   });
@@ -492,11 +503,28 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       );
     });
 
-    it('provides manual Refresh button in header for live data synchronization', () => {
-      assert.ok(
-        pageSource.includes('title="Refresh live workload from backend"'),
-        'Header must contain manual refresh button'
-      );
+    it('no longer shows the Live Sync badge or a Refresh button', () => {
+      assert.ok(!pageSource.includes('Live Sync'), 'No Live Sync badge');
+      assert.ok(!pageSource.includes("'Refreshing...'") && !pageSource.includes("'Refresh'") && !pageSource.includes('isRefreshing'), 'No Refresh button label or state');
+      assert.ok(!pageSource.includes('title="Refresh live workload from backend"'), 'No refresh button title');
+      assert.ok(pageSource.includes('Monitor staff workload and active task distribution.') && pageSource.includes('>Staff Workload</h1>'), 'Heading and subtitle kept');
+    });
+
+    it('refreshes the workload automatically every 30 seconds while the tab is visible', () => {
+      assert.ok(pageSource.includes('const WORKLOAD_REFRESH_MS = 30000;'));
+      assert.ok(pageSource.includes("if (document.visibilityState === 'visible') fetchData(true);"), 'Only refreshes while the tab is visible');
+      assert.ok(pageSource.includes('}, WORKLOAD_REFRESH_MS);'), 'Interval uses the 30s constant');
+      assert.ok(pageSource.includes("document.addEventListener('visibilitychange', handleVisibility)"), 'Catches up when the tab returns');
+      assert.ok(pageSource.includes('clearInterval(intervalId)') && pageSource.includes("document.removeEventListener('visibilitychange'"), 'Cleans up on unmount');
+    });
+
+    it('background refreshes never show the spinner or error panel, never overlap, and keep data on failure', () => {
+      assert.ok(pageSource.includes('if (isFetchingRef.current) return;'), 'No overlapping requests');
+      assert.ok(pageSource.includes("if (!isBackground) {\n      setIsLoading(true);\n      setError('');\n    }") || pageSource.includes("if (!isBackground) {\r\n      setIsLoading(true);\r\n      setError('');\r\n    }"), 'Spinner and error reset only for foreground loads');
+      assert.ok(pageSource.includes('if (isBackground) {') && pageSource.includes("console.warn('Background workload refresh failed; keeping the current data:', err);"), 'Background failures only log');
+      assert.ok(pageSource.includes("setError(err.message || 'Unable to load staff workload data. Please try again.');"), 'Foreground failures still show the error panel');
+      assert.ok(pageSource.includes('isBackground ? prev : []'), 'A failed departments or staff request keeps the previous list');
+      assert.ok(pageSource.includes("navigate('/login')"), 'Expired sessions still go to login');
     });
   });
 });

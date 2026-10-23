@@ -58,17 +58,17 @@ describe('Taskotel branding', () => {
 
   it('header and mobile sidebar share the same brand block proportions', () => {
     const appWordmark = 'Task<span className="text-[#0f9874]">otel</span>';
-    const wordmarkText = 'text-[17px] font-extrabold tracking-tight text-[#04302a] leading-5';
+    const wordmarkText = 'text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px]';
     for (const file of ['src/components/layout/Header.jsx', 'src/components/layout/Sidebar.jsx']) {
       const source = read(file);
       assert.ok(source.includes(appWordmark), `${file}: two-tone Taskotel wordmark`);
       assert.ok(source.includes('<TaskotelLogo className="w-10 h-10 shrink-0'), `${file}: 40px Taskotel mark`);
-      assert.ok(source.includes(wordmarkText), `${file}: 17px extrabold wordmark`);
+      assert.ok(source.includes(wordmarkText), `${file}: 20px bold wordmark`);
     }
     const header = read('src/components/layout/Header.jsx');
     assert.ok(
-      header.includes('<span className="hidden sm:block text-[9px] font-semibold text-slate-500 tracking-[0.08em] uppercase leading-none mt-1">'),
-      'Header subtitle: 9px muted blue-gray with subtle letter spacing, hidden below sm'
+      header.includes('<span className="hidden sm:block whitespace-nowrap text-[7.2px] font-semibold text-[#6b7f99] tracking-[0.07em] uppercase leading-none mt-1">'),
+      'Header subtitle: 7.2px muted blue-gray with subtle letter spacing, hidden below sm'
     );
     assert.ok(header.includes('<header className="h-16 '), 'Header height unchanged (64px)');
     assert.ok(read('src/components/layout/Sidebar.jsx').includes('h-12 px-2 flex items-center justify-between'), 'Drawer header height unchanged');

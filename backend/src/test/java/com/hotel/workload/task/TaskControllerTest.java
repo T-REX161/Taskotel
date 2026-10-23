@@ -4,6 +4,7 @@ import com.hotel.workload.security.Role;
 import com.hotel.workload.security.User;
 import com.hotel.workload.security.UserRepository;
 import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.TestDepartments;
 import com.hotel.workload.staff.Availability;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
@@ -107,7 +108,7 @@ public class TaskControllerTest {
         task.setStatus(TaskStatus.PENDING);
         task.setEstimatedDuration(30);
         task.setDueDate(LocalDate.of(2026, 10, 10));
-        task.setDepartment(Department.FRONT_DESK);
+        task.setDepartment(TestDepartments.FRONT_DESK);
         task.setCreatedBy(admin);
         return taskRepository.saveAndFlush(task);
     }
@@ -151,7 +152,7 @@ public class TaskControllerTest {
         staff.setUser(user);
         staff.setName("Test Staff " + username);
         staff.setEmail(email);
-        staff.setDepartment(Department.HOUSEKEEPING);
+        staff.setDepartment(TestDepartments.HOUSEKEEPING);
         staff.setAvailability(Availability.AVAILABLE);
         staff.setActive(true);
         return staffRepository.saveAndFlush(staff);
@@ -448,7 +449,7 @@ public class TaskControllerTest {
      * HOUSEKEEPING task assigned to a HOUSEKEEPING staff member.
      */
     private Task createAssignedTaskForUpdate(String username) {
-        return createAssignedTask(username, Department.HOUSEKEEPING, Department.HOUSEKEEPING, TaskStatus.ASSIGNED);
+        return createAssignedTask(username, TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.ASSIGNED);
     }
 
     private static final String VALID_UPDATE_TASK_JSON = """
@@ -653,7 +654,7 @@ public class TaskControllerTest {
         assertEquals(TaskStatus.IN_PROGRESS, persisted.getStatus());
         assertEquals(90, persisted.getEstimatedDuration());
         assertEquals(LocalDate.of(2026, 11, 15), persisted.getDueDate());
-        assertEquals(Department.HOUSEKEEPING, persisted.getDepartment());
+        assertEquals(TestDepartments.HOUSEKEEPING, persisted.getDepartment());
         // Verify createdAt is preserved
         assertEquals(originalCreatedAt, persisted.getCreatedAt());
         // Verify updatedAt is set
@@ -1010,7 +1011,7 @@ public class TaskControllerTest {
     @Transactional
     public void testChangingAssignedTaskDepartmentAwayFromAssigneeReturns409AndLeavesTaskUnchanged(TaskStatus status) throws Exception {
         String username = "p2_task_" + status.name().toLowerCase();
-        Task task = createAssignedTask(username, Department.HOUSEKEEPING, Department.HOUSEKEEPING, status);
+        Task task = createAssignedTask(username, TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, status);
 
         mockMvc.perform(put("/api/tasks/" + task.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1022,7 +1023,7 @@ public class TaskControllerTest {
                                 + "or keep its current department."));
 
         Task reloaded = reloadTask(task.getId());
-        assertEquals(Department.HOUSEKEEPING, reloaded.getDepartment(), "Rejected update must not change the department");
+        assertEquals(TestDepartments.HOUSEKEEPING, reloaded.getDepartment(), "Rejected update must not change the department");
         assertEquals("Original Task", reloaded.getTitle(), "Rejected update must not change any other field");
         assertEquals(30, reloaded.getEstimatedDuration());
         assertEquals(status, reloaded.getStatus());
@@ -1042,14 +1043,14 @@ public class TaskControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.department").value("SECURITY"));
 
-        assertEquals(Department.SECURITY, reloadTask(task.getId()).getDepartment());
+        assertEquals(TestDepartments.SECURITY, reloadTask(task.getId()).getDepartment());
     }
 
     @Test
     @WithMockUser(roles = "MANAGER")
     @Transactional
     public void testEditingAssignedTaskWithoutChangingDepartmentSucceeds() throws Exception {
-        Task task = createAssignedTask("p2_task_same_dept", Department.HOUSEKEEPING, Department.HOUSEKEEPING, TaskStatus.ASSIGNED);
+        Task task = createAssignedTask("p2_task_same_dept", TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.ASSIGNED);
 
         mockMvc.perform(put("/api/tasks/" + task.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1060,7 +1061,7 @@ public class TaskControllerTest {
         Task reloaded = reloadTask(task.getId());
         assertEquals("Renamed Assigned Task", reloaded.getTitle());
         assertEquals(45, reloaded.getEstimatedDuration());
-        assertEquals(Department.HOUSEKEEPING, reloaded.getDepartment());
+        assertEquals(TestDepartments.HOUSEKEEPING, reloaded.getDepartment());
     }
 
     @Test
@@ -1068,7 +1069,7 @@ public class TaskControllerTest {
     @Transactional
     public void testChangingMismatchedTaskDepartmentToAssigneeDepartmentSucceeds() throws Exception {
         // Mirrors an existing record whose department diverged from its assignee before this rule existed
-        Task task = createAssignedTask("p2_task_repair", Department.MAINTENANCE, Department.HOUSEKEEPING, TaskStatus.ASSIGNED);
+        Task task = createAssignedTask("p2_task_repair", TestDepartments.MAINTENANCE, TestDepartments.HOUSEKEEPING, TaskStatus.ASSIGNED);
 
         mockMvc.perform(put("/api/tasks/" + task.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1076,14 +1077,14 @@ public class TaskControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.department").value("MAINTENANCE"));
 
-        assertEquals(Department.MAINTENANCE, reloadTask(task.getId()).getDepartment());
+        assertEquals(TestDepartments.MAINTENANCE, reloadTask(task.getId()).getDepartment());
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testEditingMismatchedTaskWithoutChangingDepartmentSucceeds() throws Exception {
-        Task task = createAssignedTask("p2_task_legacy_edit", Department.MAINTENANCE, Department.HOUSEKEEPING, TaskStatus.ASSIGNED);
+        Task task = createAssignedTask("p2_task_legacy_edit", TestDepartments.MAINTENANCE, TestDepartments.HOUSEKEEPING, TaskStatus.ASSIGNED);
 
         mockMvc.perform(put("/api/tasks/" + task.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1092,21 +1093,21 @@ public class TaskControllerTest {
 
         Task reloaded = reloadTask(task.getId());
         assertEquals("Legacy Task Renamed", reloaded.getTitle());
-        assertEquals(Department.HOUSEKEEPING, reloaded.getDepartment());
+        assertEquals(TestDepartments.HOUSEKEEPING, reloaded.getDepartment());
     }
 
     @Test
     @WithMockUser(roles = "ADMIN")
     @Transactional
     public void testChangingMismatchedTaskToAThirdDepartmentReturns409() throws Exception {
-        Task task = createAssignedTask("p2_task_legacy_third", Department.MAINTENANCE, Department.HOUSEKEEPING, TaskStatus.ASSIGNED);
+        Task task = createAssignedTask("p2_task_legacy_third", TestDepartments.MAINTENANCE, TestDepartments.HOUSEKEEPING, TaskStatus.ASSIGNED);
 
         mockMvc.perform(put("/api/tasks/" + task.getId())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(taskUpdateJson("Original Task", "SECURITY", TaskStatus.ASSIGNED)))
                 .andExpect(status().isConflict());
 
-        assertEquals(Department.HOUSEKEEPING, reloadTask(task.getId()).getDepartment());
+        assertEquals(TestDepartments.HOUSEKEEPING, reloadTask(task.getId()).getDepartment());
     }
 
     @Test
@@ -1114,7 +1115,7 @@ public class TaskControllerTest {
     @Transactional
     public void testClearingAssignedTaskDepartmentKeepsExistingBehaviour() throws Exception {
         // A null department means "no department restriction", matching the assignment rules
-        Task task = createAssignedTask("p2_task_null_dept", Department.HOUSEKEEPING, Department.HOUSEKEEPING, TaskStatus.ASSIGNED);
+        Task task = createAssignedTask("p2_task_null_dept", TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.ASSIGNED);
 
         mockMvc.perform(put("/api/tasks/" + task.getId())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -1161,7 +1162,7 @@ public class TaskControllerTest {
     @Transactional
     public void testAssignedTaskCannotBeSetBackToPending(TaskStatus currentStatus) throws Exception {
         String username = "p3_to_pending_" + currentStatus.name().toLowerCase();
-        Task task = createAssignedTask(username, Department.HOUSEKEEPING, Department.HOUSEKEEPING, currentStatus);
+        Task task = createAssignedTask(username, TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, currentStatus);
 
         putTask(task.getId(), taskUpdateJson("Changed Title", "HOUSEKEEPING", TaskStatus.PENDING))
                 .andExpect(status().isConflict())
@@ -1194,7 +1195,7 @@ public class TaskControllerTest {
     @Transactional
     public void testCompletedTaskCannotBeReopenedOrMoved(TaskStatus requestedStatus) throws Exception {
         Task task = createAssignedTask("p3_completed_" + requestedStatus.name().toLowerCase(),
-                Department.HOUSEKEEPING, Department.HOUSEKEEPING, TaskStatus.COMPLETED);
+                TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.COMPLETED);
 
         putTask(task.getId(), taskUpdateJson("Changed Title", "HOUSEKEEPING", requestedStatus))
                 .andExpect(status().isConflict())
@@ -1211,7 +1212,7 @@ public class TaskControllerTest {
     @Transactional
     public void testCancelledAssignedTaskCannotBeReopenedOrMoved(TaskStatus requestedStatus) throws Exception {
         Task task = createAssignedTask("p3_cancelled_" + requestedStatus.name().toLowerCase(),
-                Department.HOUSEKEEPING, Department.HOUSEKEEPING, TaskStatus.CANCELLED);
+                TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.CANCELLED);
 
         putTask(task.getId(), taskUpdateJson("Changed Title", "HOUSEKEEPING", requestedStatus))
                 .andExpect(status().isConflict())
@@ -1248,7 +1249,7 @@ public class TaskControllerTest {
     @Transactional
     public void testValidStatusChangesOnAssignedTaskSucceed(TaskStatus from, TaskStatus to) throws Exception {
         Task task = createAssignedTask("p3_valid_" + from.name().toLowerCase() + "_" + to.name().toLowerCase(),
-                Department.HOUSEKEEPING, Department.HOUSEKEEPING, from);
+                TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, from);
 
         putTask(task.getId(), taskUpdateJson("Changed Title", "HOUSEKEEPING", to))
                 .andExpect(status().isOk())
@@ -1278,7 +1279,7 @@ public class TaskControllerTest {
     @WithMockUser(roles = "MANAGER")
     @Transactional
     public void testCompletedTaskFieldsCanStillBeEditedWhenStatusIsUnchanged() throws Exception {
-        Task task = createAssignedTask("p3_completed_edit", Department.HOUSEKEEPING, Department.HOUSEKEEPING, TaskStatus.COMPLETED);
+        Task task = createAssignedTask("p3_completed_edit", TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.COMPLETED);
 
         putTask(task.getId(), taskUpdateJson("Completed Task Renamed", "HOUSEKEEPING", TaskStatus.COMPLETED))
                 .andExpect(status().isOk());
@@ -1308,7 +1309,7 @@ public class TaskControllerTest {
     @Transactional
     public void testLegacyPendingTaskWithAssignmentCanBeEditedAndRepairedToAssigned() throws Exception {
         // Mirrors an existing record left PENDING while it still has an assignment
-        Task task = createAssignedTask("p3_legacy_pending", Department.HOUSEKEEPING, Department.HOUSEKEEPING, TaskStatus.PENDING);
+        Task task = createAssignedTask("p3_legacy_pending", TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.PENDING);
 
         putTask(task.getId(), taskUpdateJson("Legacy Renamed", "HOUSEKEEPING", TaskStatus.PENDING))
                 .andExpect(status().isOk());
@@ -1326,7 +1327,7 @@ public class TaskControllerTest {
     public void testFullLifecycleThroughAssignmentEndpointKeepsStatusConsistent() throws Exception {
         Staff staff = createTestStaff("p3_lifecycle", "p3_lifecycle@hotel.com"); // HOUSEKEEPING, active, AVAILABLE
         Task task = createUnassignedTaskWithStatus(TaskStatus.PENDING);
-        task.setDepartment(Department.HOUSEKEEPING);
+        task.setDepartment(TestDepartments.HOUSEKEEPING);
         task = taskRepository.saveAndFlush(task);
 
         // Cannot skip the assignment step

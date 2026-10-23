@@ -2,6 +2,8 @@
  * API utility for making authenticated requests to the Taskotel backend.
  */
 
+import { registerDepartments, registerDepartmentNames } from '../utils/departmentRegistry.js';
+
 export const getToken = () => localStorage.getItem('token');
 export const getUserRole = () => localStorage.getItem('role');
 export const getUsername = () => localStorage.getItem('username');
@@ -103,15 +105,45 @@ export const getDashboardSummary = () => {
 /**
  * Get all departments with staff and active task metrics.
  */
-export const getDepartments = () => {
-  return apiFetch('/api/departments');
+export const getDepartments = async () => {
+  const departments = await apiFetch('/api/departments');
+  registerDepartments(departments);
+  return departments;
+};
+
+/**
+ * Create a department (ADMIN or MANAGER).
+ * Request: { name, description?, iconKey?, colorKey?, headStaffId?, active? }
+ */
+export const createDepartment = async (request) => {
+  const department = await apiFetch('/api/departments', {
+    method: 'POST',
+    body: JSON.stringify(request),
+  });
+  registerDepartments([department]);
+  return department;
+};
+
+/**
+ * Update a department by its code (ADMIN or MANAGER). The code never changes.
+ * Request: { name, description?, iconKey?, colorKey?, headStaffId?, active }
+ */
+export const updateDepartment = async (code, request) => {
+  const department = await apiFetch(`/api/departments/${encodeURIComponent(code)}`, {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  });
+  registerDepartments([department]);
+  return department;
 };
 
 /**
  * Get the list of all tasks.
  */
-export const getTasks = () => {
-  return apiFetch('/api/tasks');
+export const getTasks = async () => {
+  const tasks = await apiFetch('/api/tasks');
+  registerDepartmentNames(tasks);
+  return tasks;
 };
 
 /**
@@ -181,8 +213,10 @@ export const getUsers = () => {
 /**
  * Get the list of all staff members.
  */
-export const getStaff = () => {
-  return apiFetch('/api/staff');
+export const getStaff = async () => {
+  const staff = await apiFetch('/api/staff');
+  registerDepartmentNames(staff);
+  return staff;
 };
 
 /**
@@ -236,8 +270,10 @@ export const removeStaff = (id) => {
 /**
  * Get current workload for all staff members computed on-the-fly.
  */
-export const getWorkload = () => {
-  return apiFetch('/api/workload');
+export const getWorkload = async () => {
+  const workload = await apiFetch('/api/workload');
+  registerDepartmentNames(workload);
+  return workload;
 };
 
 /**

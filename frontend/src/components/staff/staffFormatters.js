@@ -3,8 +3,16 @@
  * Pure functions — no React imports, no API calls, no side-effects.
  */
 
+import { displayDepartmentName } from '../../utils/departmentRegistry.js';
+
+
 export function formatDepartment(dept) {
   if (!dept) return 'General';
+  return displayDepartmentName(dept, compactDepartmentLabel(dept));
+}
+
+/** Short labels for the built-in departments; undefined for any other department. */
+function compactDepartmentLabel(dept) {
   switch (dept.toUpperCase()) {
     case 'FRONT_DESK':
       return 'Front Desk';
@@ -22,7 +30,7 @@ export function formatDepartment(dept) {
     case 'SECURITY':
       return 'Security';
     default:
-      return dept.replace(/_/g, ' ');
+      return undefined;
   }
 }
 

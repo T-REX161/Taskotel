@@ -49,7 +49,7 @@ public class StaffCredentialSetupFlowTest {
         request.setFullName("John Setup");
         request.setEmail("john.setup@hotel.com");
         request.setPhone("1234567890");
-        request.setDepartment(Department.FRONT_DESK);
+        request.setDepartment(TestDepartments.FRONT_DESK.getCode());
         request.setAvailability(Availability.AVAILABLE);
         request.setUsername("johnsetup");
         request.setTemporaryPassword("TempPass@123");

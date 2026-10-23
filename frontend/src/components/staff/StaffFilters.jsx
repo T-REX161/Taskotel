@@ -1,5 +1,7 @@
 import React from 'react';
 import { SearchIcon } from '../icons/Icons';
+import DepartmentOptions from '../common/DepartmentOptions';
+import useDepartments from '../../hooks/useDepartments';
 
 /**
  * StaffFilters — unified, cohesive filter toolbar beneath the Staff Management header.
@@ -25,6 +27,7 @@ export default function StaffFilters({
   selectedStatus = '',
   onStatusChange,
 }) {
+  const { departments } = useDepartments();
   return (
     <div className="flex flex-col md:flex-row items-center gap-3 w-full">
       {/* Search staff input */}
@@ -51,12 +54,7 @@ export default function StaffFilters({
           className="w-full h-10 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 cursor-pointer transition-colors shadow-xs"
         >
           <option value="">All Departments</option>
-          <option value="HOUSEKEEPING">Housekeeping</option>
-          <option value="FRONT_DESK">Front Desk</option>
-          <option value="MAINTENANCE">Maintenance</option>
-          <option value="ROOM_SERVICE">Room Service</option>
-          <option value="FOOD_AND_BEVERAGE">Food &amp; Beverage</option>
-          <option value="SECURITY">Security</option>
+          <DepartmentOptions departments={departments} />
         </select>
       </div>
 

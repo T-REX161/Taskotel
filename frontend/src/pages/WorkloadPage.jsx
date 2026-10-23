@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   WorkloadIcon,
@@ -22,6 +22,11 @@ import {
   getAvailabilityColor,
 } from '../components/staff/staffFormatters';
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
+import DepartmentBadge from '../components/workload/DepartmentBadge';
+import UtilizationMeter from '../components/workload/UtilizationMeter';
+
+// How often the workload refreshes itself in the background
+const WORKLOAD_REFRESH_MS = 30000;
 
 export default function WorkloadPage() {
   const navigate = useNavigate();
@@ -30,28 +35,32 @@ export default function WorkloadPage() {
   const [departments, setDepartments] = useState([]);
   const [allStaff, setAllStaff] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const isFetchingRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const lastFetchRef = useRef(0);
 
-  const fetchData = useCallback(async (isManualRefresh = false) => {
-    if (isManualRefresh) {
-      setIsRefreshing(true);
-    } else {
+  // isBackground: a quiet refresh of already-loaded data. It never shows the loading spinner or the error
+  // panel, and a failed attempt keeps the data on screen (the next scheduled attempt simply tries again).
+  const fetchData = useCallback(async (isBackground = false) => {
+    if (isFetchingRef.current) return; // never run two requests at once
+    isFetchingRef.current = true;
+    if (!isBackground) {
       setIsLoading(true);
+      setError('');
     }
-    setError('');
 
     try {
       const workloadPromise = getWorkload();
       const departmentsPromise = getDepartments().catch((err) => {
         console.warn('Failed to load departments for workload distribution:', err);
-        return [];
+        return null;
       });
       const staffPromise = getStaff().catch((err) => {
         console.warn('Failed to load staff list for workload view modal:', err);
-        return [];
+        return null;
       });
 
       const [workloadData, departmentsData, staffData] = await Promise.all([
@@ -59,24 +68,51 @@ export default function WorkloadPage() {
         departmentsPromise,
         staffPromise,
       ]);
+      if (!isMountedRef.current) return;
 
       setWorkload(Array.isArray(workloadData) ? workloadData : []);
-      setDepartments(Array.isArray(departmentsData) ? departmentsData : []);
-      setAllStaff(Array.isArray(staffData) ? staffData : []);
+      // A failed departments/staff request keeps the previous list on a background refresh
+      setDepartments((prev) => (Array.isArray(departmentsData) ? departmentsData : isBackground ? prev : []));
+      setAllStaff((prev) => (Array.isArray(staffData) ? staffData : isBackground ? prev : []));
+      lastFetchRef.current = Date.now();
     } catch (err) {
+      if (!isMountedRef.current) return;
       if (err.message && err.message.includes('Redirecting to login')) {
         navigate('/login');
         return;
       }
-      setError(err.message || 'Unable to load staff workload data. Please try again.');
+      if (isBackground) {
+        console.warn('Background workload refresh failed; keeping the current data:', err);
+      } else {
+        setError(err.message || 'Unable to load staff workload data. Please try again.');
+      }
     } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
+      isFetchingRef.current = false;
+      if (isMountedRef.current && !isBackground) setIsLoading(false);
     }
   }, [navigate]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     fetchData();
+
+    // Keep the data current without any button: refresh every 30s while the tab is visible, and catch up
+    // when the tab becomes visible again after being hidden for longer than that.
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData(true);
+    }, WORKLOAD_REFRESH_MS);
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastFetchRef.current >= WORKLOAD_REFRESH_MS) {
+        fetchData(true);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isMountedRef.current = false;
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [fetchData]);
 
   // Dynamic summary across active staff workload (complete dataset)
@@ -270,60 +306,41 @@ export default function WorkloadPage() {
             Monitor staff workload and active task distribution.
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Live Sync
+      </div>
+
+      {/* 1. Workload Summary: one full-width container holding the summary cards and the staff total */}
+      <section className="bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload summary">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm sm:text-base font-bold text-gray-900">Workload Summary</h2>
+          <span className="text-xs text-gray-500">
+            Total Staff:{" "}
+            <span className="font-bold text-gray-900">{sortedWorkload.length}</span>
           </span>
-          <button
-            type="button"
-            onClick={() => fetchData(true)}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 active:bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-            title="Refresh live workload from backend"
-          >
-            <svg
-              className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-600' : 'text-gray-500'}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            {isRefreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
         </div>
-      </div>
-
-      {/* Responsive Four Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {summaryCards.map((card, idx) => (
-          <div
-            key={idx}
-            className="bg-white rounded-xl p-4 shadow-2xs border border-gray-100 flex items-center space-x-3.5 hover:border-gray-200 transition-colors"
-          >
-            <div className={`p-2.5 sm:p-3 rounded-xl ${card.bg} border ${card.border} shrink-0`}>
-              {card.icon}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {summaryCards.map((card, idx) => (
+            <div
+              key={idx}
+              className="bg-white rounded-xl p-4 shadow-2xs border border-gray-100 flex items-center space-x-3.5 hover:border-gray-200 transition-colors"
+            >
+              <div className={`p-2.5 sm:p-3 rounded-xl ${card.bg} border ${card.border} shrink-0`}>
+                {card.icon}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-2xs sm:text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">
+                  {card.title}
+                </p>
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5 truncate">
+                  {card.value}
+                </h3>
+                <p className="text-2xs text-gray-400 mt-0.5 truncate">{card.subtitle}</p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-2xs sm:text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">
-                {card.title}
-              </p>
-              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5 truncate">
-                {card.value}
-              </h3>
-              <p className="text-2xs text-gray-400 mt-0.5 truncate">{card.subtitle}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      </section>
 
-      {/* Workload Status Thresholds Legend */}
+      {/* 2. Workload Status Thresholds Legend (unchanged) */}
       <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-gray-700">Workload Thresholds:</span>
@@ -349,405 +366,378 @@ export default function WorkloadPage() {
         </div>
       </div>
 
-      {/* Responsive Two-Column Layout (Table: ~66.7%, Department: ~33.3%) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* Left Column: Staff Workload Table (8 of 12 cols = 66.7% width, min-w-0 prevents grid blowout) */}
-        <div className="lg:col-span-8 min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 overflow-hidden">
-          <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-gray-900">Staff Workload Distribution</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Active load, task count, and shift utilization
-              </p>
-            </div>
-            <div className="flex items-center gap-2.5 self-start sm:self-auto">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
-                {sortedWorkload.length} Staff
-              </span>
-              {sortedWorkload.length > 0 && (
-                <div className="flex items-center gap-1.5 pl-2.5 border-l border-gray-200">
-                  <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage <= 1}
-                    className="w-7 h-7 flex items-center justify-center rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors cursor-pointer text-sm font-semibold select-none shadow-2xs"
-                    aria-label="Previous page"
-                    title="Previous page"
-                  >
-                    ‹
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage >= totalPages}
-                    className="w-7 h-7 flex items-center justify-center rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors cursor-pointer text-sm font-semibold select-none shadow-2xs"
-                    aria-label="Next page"
-                    title="Next page"
-                  >
-                    ›
-                  </button>
+      {/* 3. Workload by Department: full width container with one card per department */}
+      <section className="min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department">
+        <div>
+          <h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>
+          <p className="text-2xs sm:text-xs text-gray-500 mt-0.5">
+            Operational load across hotel functional units
+          </p>
+        </div>
+
+        {/* One card per department, generated from the data. auto-fill keeps every card the same width and
+            wraps to new rows as departments are added, so no department count is hardcoded. */}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
+          {departmentWorkloads.map((dept, index) => {
+            const barColor = getDepartmentBarColor(index);
+            return (
+              <div
+                key={dept.code}
+                className="min-w-0 bg-white rounded-xl p-4 shadow-2xs border border-gray-100 space-y-2.5 hover:border-gray-200 transition-colors"
+              >
+                <div className="flex justify-between items-start gap-2 text-xs sm:text-sm">
+                  <span className="min-w-0 font-semibold text-gray-900 break-words leading-snug">{dept.name}</span>
+                  <span className="font-bold text-gray-900 whitespace-nowrap">{dept.totalMinutes} mins</span>
                 </div>
-              )}
-            </div>
-          </div>
 
-          {/* Desktop/Tablet Table Layout (Visible on md and up; fixed column balance fits 1366x768 without horizontal scrolling) */}
-          <div className="hidden md:block w-full overflow-hidden">
-            <table className="w-full text-left border-collapse table-fixed">
-              <colgroup>
-                <col className="w-[23%]" />
-                <col className="w-[16%]" />
-                <col className="w-[12%]" />
-                <col className="w-[11%]" />
-                <col className="w-[21%]" />
-                <col className="w-[17%]" />
-              </colgroup>
-              <thead className="bg-gray-50/80 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100 select-none">
-                <tr>
-                  <th className="w-[23%] px-3 py-3 font-semibold whitespace-nowrap text-left" title="Staff Member">Staff</th>
-                  <th className="w-[16%] px-3 py-3 font-semibold whitespace-nowrap text-left">Department</th>
-                  <th className="w-[12%] px-3 py-3 font-semibold whitespace-nowrap text-left" title="Active Tasks">Tasks</th>
-                  <th className="w-[11%] px-3 py-3 font-semibold whitespace-nowrap text-left" title="Total Workload">Workload</th>
-                  <th className="w-[21%] px-3 py-3 font-semibold whitespace-nowrap text-left">Utilization</th>
-                  <th className="w-[17%] px-3 py-3 font-semibold whitespace-nowrap text-left">Availability</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 text-[13px] sm:text-sm">
-                {paginatedWorkload.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <WorkloadIcon className="w-8 h-8 text-gray-300" />
-                        <p className="font-medium text-gray-700 text-sm">No staff workload records available</p>
-                        <p className="text-xs text-gray-400">
-                          Workload metrics will appear as tasks are assigned to staff.
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedWorkload.map((item, idx) => {
-                    const totalDuration =
-                      typeof item.totalEstimatedDuration === 'number'
-                        ? item.totalEstimatedDuration
-                        : parseInt(item.totalEstimatedDuration, 10) || 0;
-                    const safeDuration = Math.max(0, totalDuration);
-                    const activeTasks =
-                      typeof item.activeTaskCount === 'number'
-                        ? item.activeTaskCount
-                        : parseInt(item.activeTaskCount, 10) || 0;
-                    const status =
-                      item.workloadStatus || deriveWorkloadStatus(safeDuration);
-                    const percentage = calculateWorkloadPercentage(safeDuration, 480);
-                    const available = isAvailable(item.availability);
-                    const initials = getInitials(item.staffName);
-
-                    // Check if profile details available in allStaff
-                    const staffMatch = allStaff.find(
-                      (s) => String(s.id).toLowerCase() === String(item.staffId).toLowerCase()
-                    );
-
-                    return (
-                      <tr
-                        key={item.staffId || idx}
-                        className="hover:bg-gray-50/60 transition-colors group"
-                      >
-                        {/* 1. Staff (Avatar + Name with accessible View trigger + Role) */}
-                        <td className="px-3 py-3 min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {staffMatch?.avatarUrl || staffMatch?.profileImage ? (
-                              <img
-                                src={staffMatch.avatarUrl || staffMatch.profileImage}
-                                alt={item.staffName}
-                                className="w-7 h-7 rounded-full object-cover shrink-0 border border-gray-200"
-                              />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-200 select-none">
-                                {initials}
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1 overflow-hidden">
-                              <button
-                                type="button"
-                                onClick={() => handleViewStaff(item)}
-                                className="font-semibold text-gray-900 text-[13px] sm:text-sm hover:text-emerald-700 transition-colors cursor-pointer text-left truncate flex items-center gap-1 group/name w-full max-w-full"
-                                title={`View details for ${item.staffName}`}
-                              >
-                                <span className="truncate">{item.staffName}</span>
-                                <EyeIcon className="w-3.5 h-3.5 text-gray-400 group-hover/name:text-emerald-600 shrink-0 opacity-70 group-hover/name:opacity-100 transition-opacity" />
-                              </button>
-                              <span className="text-[11px] text-gray-400 truncate block leading-tight">
-                                {staffMatch?.role || `@${(item.staffName || '').toLowerCase().replace(/\s+/g, '.')}`}
-                              </span>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 2. Department */}
-                        <td className="px-3 py-3 min-w-0">
-                          <span
-                            className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200 truncate max-w-full leading-tight"
-                            title={formatDepartment(item.department)}
-                          >
-                            {formatDepartment(item.department)}
-                          </span>
-                        </td>
-
-                        {/* 3. Tasks */}
-                        <td className="px-3 py-3 min-w-0">
-                          <span className="text-[13px] sm:text-sm font-medium text-gray-800 block truncate">
-                            {activeTasks} {activeTasks === 1 ? 'task' : 'tasks'}
-                          </span>
-                        </td>
-
-                        {/* 4. Workload */}
-                        <td className="px-3 py-3 min-w-0">
-                          <span className="text-[13px] sm:text-sm font-semibold text-gray-900 block truncate">
-                            {safeDuration} mins
-                          </span>
-                        </td>
-
-                        {/* 5. Utilization (Balanced Progress Bar + Percentage + Status Badge) */}
-                        <td className="px-3 py-3 min-w-0">
-                          <div className="space-y-1 w-full min-w-0 overflow-hidden">
-                            <div className="flex justify-between items-center text-xs leading-none">
-                              <span className="font-bold text-gray-800">{percentage}%</span>
-                              <span
-                                className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getWorkloadStatusBadge(
-                                  status
-                                )}`}
-                              >
-                                {status.replace('_', ' ')}
-                              </span>
-                            </div>
-                            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full transition-all duration-300 ${getWorkloadProgressBarColor(
-                                  status
-                                )}`}
-                                style={{ width: `${Math.min(percentage, 100)}%` }}
-                              />
-                            </div>
-                            <div className="text-[11px] text-gray-400 text-right leading-none">
-                              {safeDuration}m / 480m
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* 6. Availability */}
-                        <td className="px-3 py-3 min-w-0">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${getAvailabilityColor(
-                              item.availability
-                            )}`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                                available ? 'bg-emerald-500' : 'bg-amber-500'
-                              }`}
-                            />
-                            {available ? 'Available' : 'Unavailable'}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Mobile Responsive Staff Card Layout (< md viewport to prevent horizontal scrolling) */}
-          <div className="block md:hidden divide-y divide-gray-100">
-            {paginatedWorkload.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <WorkloadIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                <p className="font-medium text-gray-700 text-sm">No staff workload records available</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  Workload metrics will appear as tasks are assigned to staff.
-                </p>
-              </div>
-            ) : (
-              paginatedWorkload.map((item, idx) => {
-                const totalDuration =
-                  typeof item.totalEstimatedDuration === 'number'
-                    ? item.totalEstimatedDuration
-                    : parseInt(item.totalEstimatedDuration, 10) || 0;
-                const safeDuration = Math.max(0, totalDuration);
-                const activeTasks =
-                  typeof item.activeTaskCount === 'number'
-                    ? item.activeTaskCount
-                    : parseInt(item.activeTaskCount, 10) || 0;
-                const status =
-                  item.workloadStatus || deriveWorkloadStatus(safeDuration);
-                const percentage = calculateWorkloadPercentage(safeDuration, 480);
-                const available = isAvailable(item.availability);
-                const initials = getInitials(item.staffName);
-                const staffMatch = allStaff.find(
-                  (s) => String(s.id).toLowerCase() === String(item.staffId).toLowerCase()
-                );
-
-                return (
+                {/* Proportional Progress Bar */}
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    key={item.staffId || idx}
-                    className="p-4 space-y-3 hover:bg-gray-50/50 transition-colors"
-                  >
-                    {/* Header Row: Staff Info + Availability Pill */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {staffMatch?.avatarUrl || staffMatch?.profileImage ? (
-                          <img
-                            src={staffMatch.avatarUrl || staffMatch?.profileImage}
-                            alt={item.staffName}
-                            className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-200 select-none">
-                            {initials}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => handleViewStaff(item)}
-                            className="font-semibold text-gray-900 text-sm text-left truncate flex items-center gap-1 hover:text-emerald-700 cursor-pointer"
-                            title={`View details for ${item.staffName}`}
-                          >
-                            <span className="truncate">{item.staffName}</span>
-                            <EyeIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                          </button>
-                          <span className="text-2xs text-gray-400 block truncate">
-                            {staffMatch?.role || `@${(item.staffName || '').toLowerCase().replace(/\s+/g, '.')}`}
-                          </span>
-                        </div>
-                      </div>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold shrink-0 ${getAvailabilityColor(
-                          item.availability
-                        )}`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            available ? 'bg-emerald-500' : 'bg-amber-500'
-                          }`}
-                        />
-                        {available ? 'Available' : 'Unavailable'}
-                      </span>
-                    </div>
+                    className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+                    style={{ width: `${Math.min(dept.percentage, 100)}%` }}
+                  />
+                </div>
 
-                    {/* Meta Row: Department, Tasks, Workload */}
-                    <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-gray-50">
-                      <div>
-                        <span className="text-2xs text-gray-400 block">Department</span>
-                        <span className="font-medium text-gray-700 truncate block mt-0.5">
-                          {formatDepartment(item.department)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-2xs text-gray-400 block">Active Tasks</span>
-                        <span className="font-medium text-gray-800 block mt-0.5">
-                          {activeTasks} {activeTasks === 1 ? 'task' : 'tasks'}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-2xs text-gray-400 block">Workload</span>
-                        <span className="font-semibold text-gray-900 block mt-0.5">
-                          {safeDuration} mins
-                        </span>
-                      </div>
-                    </div>
+                <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 text-2xs text-gray-500">
+                  <span>
+                    {dept.percentage}% of total load
+                  </span>
+                  <span>
+                    {dept.activeTaskCount} {dept.activeTaskCount === 1 ? 'task' : 'tasks'}
+                    {dept.staffCount > 0 ? ` • ${dept.staffCount} staff` : ''}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
-                    {/* Utilization Progress Bar */}
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-2xs font-medium text-gray-500">
-                          Shift Utilization ({safeDuration}m / 480m)
-                        </span>
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-bold text-gray-800">{percentage}%</span>
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-2xs font-bold uppercase ${getWorkloadStatusBadge(
-                              status
-                            )}`}
-                          >
-                            {status.replace('_', ' ')}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all duration-300 ${getWorkloadProgressBarColor(
-                            status
-                          )}`}
-                          style={{ width: `${Math.min(percentage, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })
+        {/* Total Department Workload Callout: one compact line, wraps cleanly on small screens */}
+        <div className="pt-2.5 border-t border-gray-100">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-0.5 bg-gray-50/70 px-3 py-2 rounded-xl border border-gray-100">
+            <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 min-w-0">
+              <span className="text-xs font-semibold text-gray-600">Total Department Load</span>
+              <span className="text-2xs text-gray-400">Calculated from active staff workloads.</span>
+            </div>
+            <span className="ml-auto text-sm font-bold text-gray-900 whitespace-nowrap">
+              {summary.totalWorkload} mins
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Staff Workload Distribution: full width, below Workload by Department */}
+      <div className="min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 overflow-hidden">
+        <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
+          <div>
+            <h2 className="text-sm sm:text-base font-bold text-gray-900">Staff Workload Distribution</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Active load, task count, and shift utilization
+            </p>
+          </div>
+          <div className="flex items-center gap-2.5 self-start sm:self-auto">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
+              {sortedWorkload.length} Staff
+            </span>
+            {sortedWorkload.length > 0 && (
+              <div className="flex items-center gap-1.5 pl-2.5 border-l border-gray-200">
+                <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="w-7 h-7 flex items-center justify-center rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors cursor-pointer text-sm font-semibold select-none shadow-2xs"
+                  aria-label="Previous page"
+                  title="Previous page"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="w-7 h-7 flex items-center justify-center rounded border border-gray-200 bg-white hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 transition-colors cursor-pointer text-sm font-semibold select-none shadow-2xs"
+                  aria-label="Next page"
+                  title="Next page"
+                >
+                  ›
+                </button>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Workload by Department (4 of 12 cols = 33.3% width, min-w-0 prevents grid blowout) */}
-        <div className="lg:col-span-4 min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 p-4 space-y-3.5">
-          <div className="border-b border-gray-100 pb-2.5">
-            <h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>
-            <p className="text-2xs sm:text-xs text-gray-500 mt-0.5">
-              Operational load across hotel functional units
-            </p>
-          </div>
+        {/* Desktop/Tablet Table Layout (Visible on md and up; fixed column balance fits 1366x768 without horizontal scrolling) */}
+        <div className="hidden md:block w-full overflow-hidden">
+          <table className="w-full text-left border-collapse table-fixed">
+            <colgroup>
+              <col className="w-[24%] lg:w-[25%]" />
+              <col className="w-[16%] lg:w-[18%]" />
+              <col className="w-[11%] lg:w-[10%]" />
+              <col className="w-[12%] lg:w-[10%]" />
+              <col className="w-[18%] lg:w-[22%]" />
+              <col className="w-[19%] lg:w-[15%]" />
+            </colgroup>
+            <thead className="bg-emerald-50/50 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-emerald-100/70 select-none">
+              <tr>
+                <th className="w-[24%] lg:w-[25%] px-3 lg:px-4 py-3 font-semibold whitespace-nowrap text-left" title="Staff Member">Staff</th>
+                <th className="w-[16%] lg:w-[18%] px-3 lg:px-4 py-3 font-semibold whitespace-nowrap text-left">Department</th>
+                <th className="w-[11%] lg:w-[10%] px-3 lg:px-4 py-3 font-semibold whitespace-nowrap text-left" title="Active Tasks">Tasks</th>
+                <th className="w-[12%] lg:w-[10%] px-3 lg:px-4 py-3 font-semibold whitespace-nowrap text-left" title="Total Workload">Workload</th>
+                <th className="w-[18%] lg:w-[22%] px-3 lg:px-4 py-3 font-semibold whitespace-nowrap text-left">Utilization</th>
+                <th className="w-[19%] lg:w-[15%] px-3 lg:px-4 py-3 font-semibold whitespace-nowrap text-left">Availability</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-[13px] sm:text-sm">
+              {paginatedWorkload.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <WorkloadIcon className="w-8 h-8 text-gray-300" />
+                      <p className="font-medium text-gray-700 text-sm">No staff workload records available</p>
+                      <p className="text-xs text-gray-400">
+                        Workload metrics will appear as tasks are assigned to staff.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                paginatedWorkload.map((item, idx) => {
+                  const totalDuration =
+                    typeof item.totalEstimatedDuration === 'number'
+                      ? item.totalEstimatedDuration
+                      : parseInt(item.totalEstimatedDuration, 10) || 0;
+                  const safeDuration = Math.max(0, totalDuration);
+                  const activeTasks =
+                    typeof item.activeTaskCount === 'number'
+                      ? item.activeTaskCount
+                      : parseInt(item.activeTaskCount, 10) || 0;
+                  const status =
+                    item.workloadStatus || deriveWorkloadStatus(safeDuration);
+                  const percentage = calculateWorkloadPercentage(safeDuration, 480);
+                  const available = isAvailable(item.availability);
+                  const initials = getInitials(item.staffName);
 
-          {/* Department List with Proportional Progress Bars */}
-          <div className="space-y-3">
-            {departmentWorkloads.map((dept, index) => {
-              const barColor = getDepartmentBarColor(index);
+                  // Check if profile details available in allStaff
+                  const staffMatch = allStaff.find(
+                    (s) => String(s.id).toLowerCase() === String(item.staffId).toLowerCase()
+                  );
+
+                  return (
+                    <tr
+                      key={item.staffId || idx}
+                      className="hover:bg-emerald-50/30 transition-colors group"
+                    >
+                      {/* 1. Staff (Avatar + Name with accessible View trigger + Role) */}
+                      <td className="px-4 py-2 min-w-0 align-middle">
+                        <div className="flex items-center gap-2 lg:gap-3 min-w-0">
+                          {staffMatch?.avatarUrl || staffMatch?.profileImage ? (
+                            <img
+                              src={staffMatch.avatarUrl || staffMatch.profileImage}
+                              alt={item.staffName}
+                              className="w-7 h-7 lg:w-9 lg:h-9 rounded-full object-cover shrink-0 border border-gray-200"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 lg:w-9 lg:h-9 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-200 select-none">
+                              {initials}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={() => handleViewStaff(item)}
+                              className="block max-w-full font-semibold text-gray-900 text-sm sm:text-[15px] leading-snug hover:text-emerald-700 transition-colors cursor-pointer text-left group/name"
+                              title={`View details for ${item.staffName}`}
+                            >
+                              <span className="break-words">{item.staffName}</span>
+                              <EyeIcon className="inline-block w-3.5 h-3.5 ml-1.5 align-[-2px] text-gray-400 group-hover/name:text-emerald-600 shrink-0 opacity-70 group-hover/name:opacity-100 transition-opacity" />
+                            </button>
+                            <span className={`text-[11px] text-gray-400 truncate block leading-tight mt-0.5 ${staffMatch?.role ? 'uppercase tracking-wider font-medium' : ''}`}>
+                              {staffMatch?.role || `@${(item.staffName || '').toLowerCase().replace(/\s+/g, '.')}`}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 2. Department */}
+                      <td className="px-4 py-2 min-w-0 align-middle">
+                        <DepartmentBadge department={item.department} />
+                      </td>
+
+                      {/* 3. Tasks */}
+                      <td className="px-4 py-2 min-w-0 align-middle">
+                        <span className="text-[13px] sm:text-sm font-medium text-gray-800 block truncate tabular-nums">
+                          {activeTasks} {activeTasks === 1 ? 'task' : 'tasks'}
+                        </span>
+                      </td>
+
+                      {/* 4. Workload */}
+                      <td className="px-4 py-2 min-w-0 align-middle">
+                        <span className="text-[13px] sm:text-sm font-semibold text-gray-900 block truncate tabular-nums">
+                          {safeDuration} mins
+                        </span>
+                      </td>
+
+                      {/* 5. Utilization (Balanced Progress Bar + Percentage + Status Badge) */}
+                      <td className="px-4 py-2 min-w-0 align-middle">
+                        <UtilizationMeter percentage={percentage} status={status} minutes={safeDuration} />
+                      </td>
+
+                      {/* 6. Availability */}
+                      <td className="px-4 py-2 min-w-0 align-middle">
+                        <span
+                          className={`inline-flex items-center gap-2 h-7 px-3 rounded-full text-[13px] font-semibold whitespace-nowrap ${getAvailabilityColor(
+                            item.availability
+                          )}`}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              available ? 'bg-emerald-500' : 'bg-amber-500'
+                            }`}
+                          />
+                          {available ? 'Available' : 'Unavailable'}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Responsive Staff Card Layout (< md viewport to prevent horizontal scrolling) */}
+        <div className="block md:hidden divide-y divide-gray-100">
+          {paginatedWorkload.length === 0 ? (
+            <div className="p-8 text-center text-gray-500">
+              <WorkloadIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="font-medium text-gray-700 text-sm">No staff workload records available</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Workload metrics will appear as tasks are assigned to staff.
+              </p>
+            </div>
+          ) : (
+            paginatedWorkload.map((item, idx) => {
+              const totalDuration =
+                typeof item.totalEstimatedDuration === 'number'
+                  ? item.totalEstimatedDuration
+                  : parseInt(item.totalEstimatedDuration, 10) || 0;
+              const safeDuration = Math.max(0, totalDuration);
+              const activeTasks =
+                typeof item.activeTaskCount === 'number'
+                  ? item.activeTaskCount
+                  : parseInt(item.activeTaskCount, 10) || 0;
+              const status =
+                item.workloadStatus || deriveWorkloadStatus(safeDuration);
+              const percentage = calculateWorkloadPercentage(safeDuration, 480);
+              const available = isAvailable(item.availability);
+              const initials = getInitials(item.staffName);
+              const staffMatch = allStaff.find(
+                (s) => String(s.id).toLowerCase() === String(item.staffId).toLowerCase()
+              );
+
               return (
-                <div key={dept.code} className="space-y-1">
-                  <div className="flex justify-between items-center text-xs sm:text-sm">
-                    <span className="font-semibold text-gray-900 truncate pr-2">{dept.name}</span>
-                    <span className="font-bold text-gray-900 whitespace-nowrap">{dept.totalMinutes} mins</span>
+                <div
+                  key={item.staffId || idx}
+                  className="p-4 space-y-3 hover:bg-gray-50/50 transition-colors"
+                >
+                  {/* Header Row: Staff Info + Availability Pill */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {staffMatch?.avatarUrl || staffMatch?.profileImage ? (
+                        <img
+                          src={staffMatch.avatarUrl || staffMatch?.profileImage}
+                          alt={item.staffName}
+                          className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-200 select-none">
+                          {initials}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => handleViewStaff(item)}
+                          className="font-semibold text-gray-900 text-sm text-left truncate flex items-center gap-1 hover:text-emerald-700 cursor-pointer"
+                          title={`View details for ${item.staffName}`}
+                        >
+                          <span className="truncate">{item.staffName}</span>
+                          <EyeIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        </button>
+                        <span className="text-2xs text-gray-400 block truncate">
+                          {staffMatch?.role || `@${(item.staffName || '').toLowerCase().replace(/\s+/g, '.')}`}
+                        </span>
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold shrink-0 ${getAvailabilityColor(
+                        item.availability
+                      )}`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                          available ? 'bg-emerald-500' : 'bg-amber-500'
+                        }`}
+                      />
+                      {available ? 'Available' : 'Unavailable'}
+                    </span>
                   </div>
 
-                  {/* Proportional Progress Bar */}
-                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-                      style={{ width: `${Math.min(dept.percentage, 100)}%` }}
-                    />
+                  {/* Meta Row: Department, Tasks, Workload */}
+                  <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-gray-50">
+                    <div>
+                      <span className="text-2xs text-gray-400 block">Department</span>
+                      <span className="font-medium text-gray-700 truncate block mt-0.5">
+                        {formatDepartment(item.department)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-2xs text-gray-400 block">Active Tasks</span>
+                      <span className="font-medium text-gray-800 block mt-0.5">
+                        {activeTasks} {activeTasks === 1 ? 'task' : 'tasks'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-2xs text-gray-400 block">Workload</span>
+                      <span className="font-semibold text-gray-900 block mt-0.5">
+                        {safeDuration} mins
+                      </span>
+                    </div>
                   </div>
 
-                  <div className="flex justify-between items-center text-2xs text-gray-400">
-                    <span>
-                      {dept.percentage}% of total load
-                    </span>
-                    <span>
-                      {dept.activeTaskCount} {dept.activeTaskCount === 1 ? 'task' : 'tasks'}
-                      {dept.staffCount > 0 ? ` • ${dept.staffCount} staff` : ''}
-                    </span>
+                  {/* Utilization Progress Bar */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-2xs font-medium text-gray-500">
+                        Shift Utilization ({safeDuration}m / 480m)
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-bold text-gray-800">{percentage}%</span>
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-2xs font-bold uppercase ${getWorkloadStatusBadge(
+                            status
+                          )}`}
+                        >
+                          {status.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${getWorkloadProgressBarColor(
+                          status
+                        )}`}
+                        style={{ width: `${Math.min(percentage, 100)}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
               );
-            })}
-          </div>
-
-          {/* Total Department Workload Callout */}
-          <div className="pt-2.5 border-t border-gray-100 space-y-1.5">
-            <div className="flex justify-between items-center bg-gray-50/70 p-2.5 rounded-xl border border-gray-100">
-              <span className="text-xs font-semibold text-gray-600">Total Department Load</span>
-              <span className="text-sm sm:text-base font-bold text-gray-900">
-                {summary.totalWorkload} mins
-              </span>
-            </div>
-            <p className="text-2xs text-gray-400 leading-relaxed">
-              Department totals are aggregated directly from active staff workload durations,
-              maintaining 100% mathematical consistency with total staff workload.
-            </p>
-          </div>
+            })
+          )}
         </div>
       </div>
 

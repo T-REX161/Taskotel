@@ -7,7 +7,8 @@ public class StaffDto {
     private String name;
     private String email;
     private String phone;
-    private Department department;
+    private String department;
+    private String departmentName;
     private Availability availability;
     private boolean active;
     
@@ -23,7 +24,10 @@ public class StaffDto {
         dto.setName(staff.getName());
         dto.setEmail(staff.getEmail());
         dto.setPhone(staff.getPhone());
-        dto.setDepartment(staff.getDepartment());
+        if (staff.getDepartment() != null) {
+            dto.setDepartment(staff.getDepartment().getCode());
+            dto.setDepartmentName(staff.getDepartment().getName());
+        }
         dto.setAvailability(staff.getAvailability());
         dto.setActive(staff.isActive());
         if (staff.getUser() != null) {
@@ -44,8 +48,11 @@ public class StaffDto {
     public void setEmail(String email) { this.email = email; }
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
-    public Department getDepartment() { return department; }
-    public void setDepartment(Department department) { this.department = department; }
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
+
+    public String getDepartmentName() { return departmentName; }
+    public void setDepartmentName(String departmentName) { this.departmentName = departmentName; }
     public Availability getAvailability() { return availability; }
     public void setAvailability(Availability availability) { this.availability = availability; }
     public boolean isActive() { return active; }

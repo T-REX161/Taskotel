@@ -6,6 +6,7 @@ import com.hotel.workload.security.User;
 import com.hotel.workload.security.UserRepository;
 import com.hotel.workload.staff.Availability;
 import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.TestDepartments;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.task.Priority;
@@ -100,7 +101,7 @@ public class AssignmentControllerTest {
         staff.setUser(user);
         staff.setName("Test Staff " + username);
         staff.setEmail(email);
-        staff.setDepartment(Department.HOUSEKEEPING);
+        staff.setDepartment(TestDepartments.HOUSEKEEPING);
         staff.setAvailability(availability);
         staff.setActive(active);
         return staffRepository.saveAndFlush(staff);
@@ -112,7 +113,7 @@ public class AssignmentControllerTest {
         task.setTitle(title);
         task.setPriority(Priority.MEDIUM);
         task.setStatus(status);
-        task.setDepartment(Department.HOUSEKEEPING);
+        task.setDepartment(TestDepartments.HOUSEKEEPING);
         task.setCreatedBy(admin);
         return taskRepository.saveAndFlush(task);
     }
@@ -841,11 +842,11 @@ public class AssignmentControllerTest {
     @Transactional
     public void testStaffInDifferentDepartmentCannotBeAssignedReturns400() throws Exception {
         Staff frontDeskStaff = createTestStaff("fdstaff1", "fdstaff1@hotel.com", true, Availability.AVAILABLE);
-        frontDeskStaff.setDepartment(Department.FRONT_DESK);
+        frontDeskStaff.setDepartment(TestDepartments.FRONT_DESK);
         frontDeskStaff = staffRepository.saveAndFlush(frontDeskStaff);
 
         Task housekeepingTask = createTestTask("Housekeeping Task Dept Check", TaskStatus.PENDING);
-        housekeepingTask.setDepartment(Department.HOUSEKEEPING);
+        housekeepingTask.setDepartment(TestDepartments.HOUSEKEEPING);
         housekeepingTask = taskRepository.saveAndFlush(housekeepingTask);
 
         CreateAssignmentRequest request = new CreateAssignmentRequest(housekeepingTask.getId(), frontDeskStaff.getId());
@@ -862,11 +863,11 @@ public class AssignmentControllerTest {
     public void testStaffInDifferentDepartmentCannotBeReassignedReturns400() throws Exception {
         Staff hkStaff = createTestStaff("hkorig", "hkorig@hotel.com", true, Availability.AVAILABLE);
         Staff fdStaff = createTestStaff("fdtarget", "fdtarget@hotel.com", true, Availability.AVAILABLE);
-        fdStaff.setDepartment(Department.FRONT_DESK);
+        fdStaff.setDepartment(TestDepartments.FRONT_DESK);
         fdStaff = staffRepository.saveAndFlush(fdStaff);
 
         Task housekeepingTask = createTestTask("Housekeeping Reassign Dept Check", TaskStatus.PENDING);
-        housekeepingTask.setDepartment(Department.HOUSEKEEPING);
+        housekeepingTask.setDepartment(TestDepartments.HOUSEKEEPING);
         housekeepingTask = taskRepository.saveAndFlush(housekeepingTask);
 
         Assignment assignment = new Assignment();

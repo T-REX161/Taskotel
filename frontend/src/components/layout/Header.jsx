@@ -52,10 +52,10 @@ export default function Header({
         >
           <TaskotelLogo className="w-10 h-10 shrink-0 transition group-hover:brightness-95" />
           <div className="flex flex-col justify-center">
-            <span className="text-[17px] font-extrabold tracking-tight text-[#04302a] leading-5">
+            <span className="text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px]">
               Task<span className="text-[#0f9874]">otel</span>
             </span>
-            <span className="hidden sm:block text-[9px] font-semibold text-slate-500 tracking-[0.08em] uppercase leading-none mt-1">
+            <span className="hidden sm:block whitespace-nowrap text-[7.2px] font-semibold text-[#6b7f99] tracking-[0.07em] uppercase leading-none mt-1">
               Hotel Operations, Simplified
             </span>
           </div>

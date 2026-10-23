@@ -58,7 +58,7 @@ public class AssignmentServiceImpl implements AssignmentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Staff member is not available");
         }
 
-        if (task.getDepartment() != null && staff.getDepartment() != null && task.getDepartment() != staff.getDepartment()) {
+        if (task.getDepartment() != null && staff.getDepartment() != null && !task.getDepartment().equals(staff.getDepartment())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Staff member does not belong to the task's department");
         }
 
@@ -144,7 +144,7 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         Task task = assignment.getTask();
 
-        if (task != null && task.getDepartment() != null && targetStaff.getDepartment() != null && task.getDepartment() != targetStaff.getDepartment()) {
+        if (task != null && task.getDepartment() != null && targetStaff.getDepartment() != null && !task.getDepartment().equals(targetStaff.getDepartment())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target staff member does not belong to the task's department");
         }
 

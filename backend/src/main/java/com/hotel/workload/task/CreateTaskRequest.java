@@ -1,6 +1,5 @@
 package com.hotel.workload.task;
 
-import com.hotel.workload.staff.Department;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -26,7 +25,7 @@ public class CreateTaskRequest {
 
     private LocalTime deadlineTime;
 
-    private Department department;
+    private String department;
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
@@ -42,6 +41,6 @@ public class CreateTaskRequest {
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
     public LocalTime getDeadlineTime() { return deadlineTime; }
     public void setDeadlineTime(LocalTime deadlineTime) { this.deadlineTime = deadlineTime; }
-    public Department getDepartment() { return department; }
-    public void setDepartment(Department department) { this.department = department; }
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
 }

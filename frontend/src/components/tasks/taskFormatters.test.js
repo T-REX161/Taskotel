@@ -221,7 +221,8 @@ describe('formatDepartment', () => {
     assert.strictEqual(formatDepartment(null), '-');
     assert.strictEqual(formatDepartment(''), '-');
     assert.strictEqual(formatDepartment(undefined), '-');
-    assert.strictEqual(formatDepartment('OTHER_DEPT'), 'OTHER DEPT');
+    // A department the app has not been told about is shown as a readable form of its code
+    assert.strictEqual(formatDepartment('OTHER_DEPT'), 'Other Dept');
   });
 });
 

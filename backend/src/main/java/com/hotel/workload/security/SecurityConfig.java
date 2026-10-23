@@ -80,6 +80,8 @@ public class SecurityConfig {
                     .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/workload").hasAnyRole("ADMIN", "MANAGER", "STAFF")
                     .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/dashboard", "/api/dashboard/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
                     .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/departments", "/api/departments/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
+                    .requestMatchers(org.springframework.http.HttpMethod.POST, "/api/departments").hasAnyRole("ADMIN", "MANAGER")
+                    .requestMatchers(org.springframework.http.HttpMethod.PUT, "/api/departments/**").hasAnyRole("ADMIN", "MANAGER")
                     .requestMatchers("/api/**").authenticated()
                     .anyRequest().permitAll();
             })

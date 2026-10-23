@@ -7,6 +7,7 @@ import com.hotel.workload.security.User;
 import com.hotel.workload.security.UserRepository;
 import com.hotel.workload.staff.Availability;
 import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.DepartmentRepository;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.task.Priority;
@@ -31,6 +32,7 @@ public class DemoDataSeeder implements CommandLineRunner {
     private final AssignmentRepository assignmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final Environment environment;
+    private final DepartmentRepository departmentRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     public DemoDataSeeder(UserRepository userRepository,
@@ -38,21 +40,30 @@ public class DemoDataSeeder implements CommandLineRunner {
                           TaskRepository taskRepository,
                           AssignmentRepository assignmentRepository,
                           PasswordEncoder passwordEncoder,
-                          Environment environment) {
+                          Environment environment,
+                          DepartmentRepository departmentRepository) {
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
         this.taskRepository = taskRepository;
         this.assignmentRepository = assignmentRepository;
         this.passwordEncoder = passwordEncoder;
         this.environment = environment;
+        this.departmentRepository = departmentRepository;
     }
 
     public DemoDataSeeder(UserRepository userRepository,
                           StaffRepository staffRepository,
                           TaskRepository taskRepository,
                           AssignmentRepository assignmentRepository,
-                          PasswordEncoder passwordEncoder) {
-        this(userRepository, staffRepository, taskRepository, assignmentRepository, passwordEncoder, null);
+                          PasswordEncoder passwordEncoder,
+                          DepartmentRepository departmentRepository) {
+        this(userRepository, staffRepository, taskRepository, assignmentRepository, passwordEncoder, null, departmentRepository);
+    }
+
+    /** One of the built-in departments, created by DepartmentBootstrap before this seeder runs. */
+    private Department department(String code) {
+        return departmentRepository.findByCode(code)
+                .orElseThrow(() -> new IllegalStateException("Built-in department missing: " + code));
     }
 
     private boolean isProductionEnvironment() {
@@ -129,7 +140,7 @@ public class DemoDataSeeder implements CommandLineRunner {
         rahul.setUser(rahulUser);
         rahul.setName("Rahul");
         rahul.setEmail("rahul@hotel.com");
-        rahul.setDepartment(Department.HOUSEKEEPING);
+        rahul.setDepartment(department("HOUSEKEEPING"));
         rahul.setAvailability(Availability.AVAILABLE);
         rahul = staffRepository.save(rahul);
 
@@ -137,7 +148,7 @@ public class DemoDataSeeder implements CommandLineRunner {
         priya.setUser(priyaUser);
         priya.setName("Priya");
         priya.setEmail("priya@hotel.com");
-        priya.setDepartment(Department.FRONT_DESK);
+        priya.setDepartment(department("FRONT_DESK"));
         priya.setAvailability(Availability.AVAILABLE);
         priya = staffRepository.save(priya);
 
@@ -145,14 +156,14 @@ public class DemoDataSeeder implements CommandLineRunner {
         amit.setUser(amitUser);
         amit.setName("Amit");
         amit.setEmail("amit@hotel.com");
-        amit.setDepartment(Department.MAINTENANCE);
+        amit.setDepartment(department("MAINTENANCE"));
         amit.setAvailability(Availability.UNAVAILABLE);
         amit = staffRepository.save(amit);
 
         // Tasks
         Task task1 = new Task();
         task1.setTitle("Room Cleaning");
-        task1.setDepartment(Department.HOUSEKEEPING);
+        task1.setDepartment(department("HOUSEKEEPING"));
         task1.setPriority(Priority.HIGH);
         task1.setStatus(TaskStatus.ASSIGNED);
         task1.setEstimatedDuration(30);
@@ -161,7 +172,7 @@ public class DemoDataSeeder implements CommandLineRunner {
 
         Task task2 = new Task();
         task2.setTitle("Front Desk Assistance");
-        task2.setDepartment(Department.FRONT_DESK);
+        task2.setDepartment(department("FRONT_DESK"));
         task2.setPriority(Priority.MEDIUM);
         task2.setStatus(TaskStatus.IN_PROGRESS);
         task2.setEstimatedDuration(45);
@@ -170,7 +181,7 @@ public class DemoDataSeeder implements CommandLineRunner {
 
         Task task3 = new Task();
         task3.setTitle("AC Maintenance");
-        task3.setDepartment(Department.MAINTENANCE);
+        task3.setDepartment(department("MAINTENANCE"));
         task3.setPriority(Priority.URGENT);
         task3.setStatus(TaskStatus.PENDING);
         task3.setEstimatedDuration(60);
@@ -179,7 +190,7 @@ public class DemoDataSeeder implements CommandLineRunner {
 
         Task task4 = new Task();
         task4.setTitle("Room Inspection");
-        task4.setDepartment(Department.HOUSEKEEPING);
+        task4.setDepartment(department("HOUSEKEEPING"));
         task4.setPriority(Priority.LOW);
         task4.setStatus(TaskStatus.ASSIGNED);
         task4.setEstimatedDuration(30);

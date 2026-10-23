@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatDepartment } from './taskFormatters';
+import DepartmentOptions from '../common/DepartmentOptions';
 
 /**
  * CreateTaskForm — controlled form card presentation for task creation and optional initial assignment.
@@ -20,6 +21,7 @@ export default function CreateTaskForm({
   formData,
   onInputChange,
   staffList = [],
+  departments = [],
   isLoadingStaff = false,
   isSubmitting = false,
   createdTaskRecord = null,
@@ -91,12 +93,7 @@ export default function CreateTaskForm({
               disabled={isSubmitting || isTaskLocked}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-900 bg-white disabled:bg-gray-50 disabled:text-gray-500"
             >
-              <option value="HOUSEKEEPING">Housekeeping</option>
-              <option value="FRONT_DESK">Front Desk</option>
-              <option value="MAINTENANCE">Maintenance</option>
-              <option value="ROOM_SERVICE">Room Service</option>
-              <option value="FOOD_AND_BEVERAGE">Food &amp; Beverage (F&amp;B)</option>
-              <option value="SECURITY">Security</option>
+              <DepartmentOptions departments={departments} activeOnly />
             </select>
           </div>
 
