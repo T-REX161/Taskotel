@@ -26,7 +26,8 @@ const initialFormState = {
  *   onClose   – callback to close the modal
  *   onSuccess – callback(newStaff, fullName) after successful creation
  */
-export default function AddStaffModal({ isOpen, onClose, onSuccess }) {
+// title / description / submitLabel: optional, so the same form can be opened as "Add User" from the Users page
+export default function AddStaffModal({ isOpen, onClose, onSuccess, title = 'Add New Staff', description = null, submitLabel = 'Add Staff' }) {
   const { departments, activeDepartments } = useDepartments();
   const navigate = useNavigate();
   const [formData, setFormData] = useState(initialFormState);
@@ -151,8 +152,11 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess }) {
         className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto border border-gray-100"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-900">Add New Staff</h2>
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center gap-4">
+          <div className="min-w-0">
+            <h2 className="text-xl font-bold text-gray-900">{title}</h2>
+            {description && <p className="text-sm text-gray-500 mt-1">{description}</p>}
+          </div>
           <button
             type="button"
             onClick={handleClose}
@@ -368,10 +372,10 @@ export default function AddStaffModal({ isOpen, onClose, onSuccess }) {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span>Adding Staff...</span>
+                  <span>{submitLabel === 'Add Staff' ? 'Adding Staff...' : 'Adding...'}</span>
                 </>
               ) : (
-                'Add Staff'
+                submitLabel
               )}
             </button>
           </div>

@@ -280,5 +280,137 @@ public class AuthServiceTest {
         assertFalse(user.isFirstLogin()); // Ensure setupCredentials updates this
         verify(userRepository, times(1)).save(user);
     }
+
+    // ---------------- Username or email sign-in ----------------
+
+    private User account(String username, String email, Role role) {
+        User user = new User();
+        user.setUsername(username);
+        user.setEmail(email);
+        user.setPassword(passwordEncoder.encode("password"));
+        user.setRole(role);
+        user.setActive(true);
+        user.setEmailVerified(true);
+        user.setCredentialsSetupRequired(false);
+        return user;
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(Role.class)
+    @DisplayName("Email login signs in the same account as its username, for every role, with the same token")
+    public void testEmailLoginEveryRole(Role role) {
+        String username = role.name().toLowerCase() + "_user";
+        User user = account(username, username + "@hotel.com", role);
+        when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
+        when(userRepository.findAllByEmailIgnoreCase(username + "@hotel.com")).thenReturn(java.util.List.of(user));
+        when(jwtUtil.generateToken(username, role)).thenReturn("token-" + username);
+
+        LoginResponse byUsername = authService.authenticate(new LoginRequest(username, "password"));
+        LoginResponse byEmail = authService.authenticate(new LoginRequest(username + "@hotel.com", "password"));
+
+        for (LoginResponse response : java.util.List.of(byUsername, byEmail)) {
+            assertEquals("token-" + username, response.getToken());
+            assertEquals(username, response.getUsername(), "The token is for the account's username, never the email typed");
+            assertEquals(role, response.getRole());
+            assertFalse(response.isEmailVerificationRequired());
+        }
+        verify(jwtUtil, times(2)).generateToken(username, role);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Staff1@Hotel.com", "STAFF1@HOTEL.COM", "staff1@hotel.com", "  staff1@hotel.com  "})
+    @DisplayName("Email is matched ignoring case and surrounding spaces")
+    public void testEmailLoginIgnoresCase(String typed) {
+        User user = account("staff1", "staff1@hotel.com", Role.STAFF);
+        when(userRepository.findByUsername(typed)).thenReturn(Optional.empty());
+        when(userRepository.findAllByEmailIgnoreCase(typed.trim())).thenReturn(java.util.List.of(user));
+        when(jwtUtil.generateToken("staff1", Role.STAFF)).thenReturn("staff-token");
+
+        LoginResponse response = authService.authenticate(new LoginRequest(typed, "password"));
+
+        assertEquals("staff1", response.getUsername());
+        verify(userRepository).findAllByEmailIgnoreCase(typed.trim());
+    }
+
+    @Test
+    @DisplayName("Wrong password, unknown username and unknown email all fail with the same generic message")
+    public void testFailuresAreGeneric() {
+        User user = account("admin", "admin@hotel.com", Role.ADMIN);
+        when(userRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+        when(userRepository.findAllByEmailIgnoreCase("admin@hotel.com")).thenReturn(java.util.List.of(user));
+
+        for (LoginRequest request : java.util.List.of(
+                new LoginRequest("admin", "wrong"),              // username, wrong password
+                new LoginRequest("admin@hotel.com", "wrong"),    // email, wrong password
+                new LoginRequest("nobody", "password"),          // unknown username
+                new LoginRequest("nobody@hotel.com", "password"),// unknown email
+                new LoginRequest("", "password"))) {
+            InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(request));
+            assertEquals("Invalid username/email or password", ex.getMessage());
+        }
+        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("A username match wins; only identifiers containing @ are looked up as emails")
+    public void testUsernameTakesPriority() {
+        User user = account("frontdesk", "frontdesk@hotel.com", Role.STAFF);
+        when(userRepository.findByUsername("frontdesk")).thenReturn(Optional.of(user));
+        when(jwtUtil.generateToken("frontdesk", Role.STAFF)).thenReturn("t");
+
+        authService.authenticate(new LoginRequest("frontdesk", "password"));
+        assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(new LoginRequest("unknown", "password")));
+
+        verify(userRepository, never()).findAllByEmailIgnoreCase(any());
+    }
+
+    @Test
+    @DisplayName("Two accounts whose emails differ only in case: neither can sign in by email")
+    public void testAmbiguousEmailIsRefused() {
+        User first = account("first", "Shared@hotel.com", Role.STAFF);
+        User second = account("second", "shared@hotel.com", Role.ADMIN);
+        when(userRepository.findByUsername(any())).thenReturn(Optional.empty());
+        when(userRepository.findAllByEmailIgnoreCase("shared@hotel.com")).thenReturn(java.util.List.of(first, second));
+
+        InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class,
+                () -> authService.authenticate(new LoginRequest("shared@hotel.com", "password")));
+        assertEquals("Invalid username/email or password", ex.getMessage());
+        verify(jwtUtil, never()).generateToken(any(), any());
+    }
+
+    @Test
+    @DisplayName("Another account's email never signs in with this account's password")
+    public void testEmailOfAnotherAccountUsesThatAccountsPassword() {
+        User admin = account("admin", "admin@hotel.com", Role.ADMIN);
+        User staff = account("staff1", "staff1@hotel.com", Role.STAFF);
+        staff.setPassword(passwordEncoder.encode("staff-only-password"));
+        when(userRepository.findByUsername(any())).thenReturn(Optional.empty());
+        when(userRepository.findAllByEmailIgnoreCase("admin@hotel.com")).thenReturn(java.util.List.of(admin));
+        when(userRepository.findAllByEmailIgnoreCase("staff1@hotel.com")).thenReturn(java.util.List.of(staff));
+
+        assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(new LoginRequest("admin@hotel.com", "staff-only-password")));
+        verify(jwtUtil, never()).generateToken(any(), any());
+    }
+
+    @Test
+    @DisplayName("Email login keeps the account checks: disabled accounts and unverified staff")
+    public void testEmailLoginKeepsAccountChecks() {
+        User disabled = account("gone", "gone@hotel.com", Role.STAFF);
+        disabled.setActive(false);
+        User unverified = account("newstaff", "newstaff@hotel.com", Role.STAFF);
+        unverified.setEmailVerified(false);
+        when(userRepository.findByUsername(any())).thenReturn(Optional.empty());
+        when(userRepository.findAllByEmailIgnoreCase("gone@hotel.com")).thenReturn(java.util.List.of(disabled));
+        when(userRepository.findAllByEmailIgnoreCase("newstaff@hotel.com")).thenReturn(java.util.List.of(unverified));
+
+        assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(new LoginRequest("gone@hotel.com", "password")));
+        LoginResponse response = authService.authenticate(new LoginRequest("newstaff@hotel.com", "password"));
+
+        assertTrue(response.isEmailVerificationRequired());
+        assertNull(response.getToken());
+        verify(verificationCodeService).sendVerificationCode("newstaff");
+        verify(jwtUtil, never()).generateToken(any(), any());
+    }
 }
 

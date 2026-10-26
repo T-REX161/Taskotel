@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PlusIcon } from '../components/icons/Icons';
+import PageSizeToggle from '../components/common/PageSizeToggle';
 import {
   getTasks,
   getAssignments,
@@ -46,6 +47,7 @@ export default function TasksPage() {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE); // rows per page, chosen with the toggle
 
   // Staff state for assignment (loaded dynamically from backend)
   const [allStaff, setAllStaff] = useState([]);
@@ -216,21 +218,22 @@ export default function TasksPage() {
   // Reset pagination to page 1 whenever any filter or search term changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedDepartment, selectedPriority, selectedStatus]);
+  }, [searchTerm, selectedDepartment, selectedPriority, selectedStatus, pageSize]);
 
-  // Clamp currentPage if filtered list shrinks (e.g. after delete or status change)
-  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / ITEMS_PER_PAGE));
+  // Clamp currentPage if filtered list shrinks (e.g. after delete or status change). Built on the latest value,
+  // so a reset to page 1 in the same render (new filter or page size) is kept.
+  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
   useEffect(() => {
     if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
+      setCurrentPage((page) => Math.min(page, totalPages));
     }
   }, [currentPage, totalPages]);
 
   // Slice the filtered list for the current page
   const paginatedTasks = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredTasks.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredTasks, currentPage]);
+    const start = (currentPage - 1) * pageSize;
+    return filteredTasks.slice(start, start + pageSize);
+  }, [filteredTasks, currentPage, pageSize]);
 
   // Build page number array (show at most 5 page buttons with ellipsis-like clamping)
   const pageNumbers = useMemo(() => {
@@ -516,69 +519,72 @@ export default function TasksPage() {
             <p className="text-xs text-gray-500 shrink-0">
               Showing{' '}
               <span className="font-medium text-gray-700">
-                {(currentPage - 1) * ITEMS_PER_PAGE + 1}
+                {(currentPage - 1) * pageSize + 1}
               </span>
               {'–'}
               <span className="font-medium text-gray-700">
-                {Math.min(currentPage * ITEMS_PER_PAGE, filteredTasks.length)}
+                {Math.min(currentPage * pageSize, filteredTasks.length)}
               </span>
               {' '}of{' '}
               <span className="font-medium text-gray-700">{filteredTasks.length}</span>
               {' '}{filteredTasks.length === 1 ? 'task' : 'tasks'}
             </p>
 
-            {/* Page buttons */}
-            {totalPages > 1 && (
-              <div className="flex items-center gap-1">
-                {/* Previous */}
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="inline-flex items-center justify-center h-8 px-3 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
-                  aria-label="Previous page"
-                >
-                  ‹ Prev
-                </button>
+            {/* Rows-per-page toggle and page buttons */}
+            <div className="flex flex-wrap items-center gap-2">
+              <PageSizeToggle value={pageSize} onChange={setPageSize} />
+              {totalPages > 1 && (
+                <div className="flex flex-wrap items-center gap-1">
+                  {/* Previous */}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="inline-flex items-center justify-center h-8 px-3 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                    aria-label="Previous page"
+                  >
+                    ‹ Prev
+                  </button>
 
-                {/* Numbered pages */}
-                {pageNumbers.map((page, idx) => {
-                  const prev = pageNumbers[idx - 1];
-                  const showEllipsis = prev !== undefined && page - prev > 1;
-                  return (
-                    <React.Fragment key={page}>
-                      {showEllipsis && (
-                        <span className="px-1 text-xs text-gray-400 select-none">…</span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage(page)}
-                        className={`inline-flex items-center justify-center h-8 w-8 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
-                          page === currentPage
-                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
-                        }`}
-                        aria-label={`Page ${page}`}
-                        aria-current={page === currentPage ? 'page' : undefined}
-                      >
-                        {page}
-                      </button>
-                    </React.Fragment>
-                  );
-                })}
+                  {/* Numbered pages */}
+                  {pageNumbers.map((page, idx) => {
+                    const prev = pageNumbers[idx - 1];
+                    const showEllipsis = prev !== undefined && page - prev > 1;
+                    return (
+                      <React.Fragment key={page}>
+                        {showEllipsis && (
+                          <span className="px-1 text-xs text-gray-400 select-none">…</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(page)}
+                          className={`inline-flex items-center justify-center h-8 w-8 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${
+                            page === currentPage
+                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                          }`}
+                          aria-label={`Page ${page}`}
+                          aria-current={page === currentPage ? 'page' : undefined}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
 
-                {/* Next */}
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="inline-flex items-center justify-center h-8 px-3 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
-                  aria-label="Next page"
-                >
-                  Next ›
-                </button>
-              </div>
-            )}
+                  {/* Next */}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="inline-flex items-center justify-center h-8 px-3 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                    aria-label="Next page"
+                  >
+                    Next ›
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

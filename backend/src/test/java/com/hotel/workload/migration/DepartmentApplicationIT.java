@@ -31,6 +31,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -212,11 +213,71 @@ public class DepartmentApplicationIT {
     }
 
     @Test
+    @WithMockUser(username = "rehearsal_admin", roles = "ADMIN")
+    @DisplayName("On the real data: DELETE /api/departments/{code} removes an unused department and refuses built-in or in-use ones (rolled back afterwards)")
+    public void removeDepartmentOnRealData() throws Exception {
+        User admin = new User();
+        admin.setUsername("rehearsal_admin");
+        admin.setEmail("rehearsal_admin@example.invalid");
+        admin.setPassword(passwordEncoder.encode("password"));
+        admin.setRole(Role.ADMIN);
+        admin.setActive(true);
+        userRepository.saveAndFlush(admin);
+        long staffBefore = jdbc.queryForObject("SELECT count(*) FROM staff", Long.class);
+        long tasksBefore = jdbc.queryForObject("SELECT count(*) FROM tasks", Long.class);
+        long assignmentsBefore = jdbc.queryForObject("SELECT count(*) FROM assignments", Long.class);
+
+        // An unused department is removed, and the list no longer has it
+        String valet = json(mockMvc.perform(post("/api/departments").contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"Valet Parking\"}"))
+                .andExpect(status().isCreated()).andReturn()).get("code").asText();
+        assertEquals(204, mockMvc.perform(delete("/api/departments/" + valet)).andReturn().getResponse().getStatus());
+        assertEquals(0, jdbc.queryForObject("SELECT count(*) FROM departments WHERE code = ?", Integer.class, valet));
+        assertEquals(6, json(mockMvc.perform(get("/api/departments")).andReturn()).size());
+        assertEquals(404, mockMvc.perform(delete("/api/departments/" + valet)).andReturn().getResponse().getStatus(), "Already removed");
+
+        // A built-in department with real staff is refused and untouched
+        MvcResult builtIn = mockMvc.perform(delete("/api/departments/MAINTENANCE")).andReturn();
+        assertEquals(409, builtIn.getResponse().getStatus());
+        assertTrue(json(builtIn).get("message").asText().contains("built-in"));
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM departments WHERE code = 'MAINTENANCE'", Integer.class));
+
+        // A custom department with staff, a task and an assignment is refused, naming every blocker
+        String pool = json(mockMvc.perform(post("/api/departments").contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"Pool Deck\"}"))
+                .andExpect(status().isCreated()).andReturn()).get("code").asText();
+        UUID staffId = UUID.fromString(json(mockMvc.perform(post("/api/staff").contentType(MediaType.APPLICATION_JSON).content(
+                "{\"fullName\": \"Rehearsal Lifeguard\", \"email\": \"rehearsal_pool@example.invalid\", \"phone\": \"555-0100\", \"department\": \"" + pool
+                        + "\", \"availability\": \"AVAILABLE\", \"username\": \"rehearsal_pool\", \"temporaryPassword\": \"TempPass@123\"}"))
+                .andExpect(status().isCreated()).andReturn()).get("id").asText());
+        UUID taskId = UUID.fromString(json(mockMvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(
+                "{\"title\": \"Check pool chemistry\", \"category\": \"General\", \"priority\": \"MEDIUM\", \"estimatedDuration\": 20, \"dueDate\": \"2026-12-31\", \"department\": \"" + pool + "\"}"))
+                .andExpect(status().isCreated()).andReturn()).get("id").asText());
+        mockMvc.perform(post("/api/assignments").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"taskId\": \"" + taskId + "\", \"staffId\": \"" + staffId + "\"}")).andExpect(status().isCreated());
+        MvcResult inUse = mockMvc.perform(delete("/api/departments/" + pool)).andReturn();
+        assertEquals(409, inUse.getResponse().getStatus());
+        assertEquals("\"Pool Deck\" cannot be removed because it still has 1 staff member, 1 task and 1 assignment. "
+                + "Move them to another department first, or mark the department Inactive.", json(inUse).get("message").asText());
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM departments WHERE code = ?", Integer.class, pool));
+        assertEquals(staffBefore + 1, jdbc.queryForObject("SELECT count(*) FROM staff", Long.class), "Nothing was deleted with it");
+        assertEquals(tasksBefore + 1, jdbc.queryForObject("SELECT count(*) FROM tasks", Long.class));
+        assertEquals(assignmentsBefore + 1, jdbc.queryForObject("SELECT count(*) FROM assignments", Long.class));
+        System.out.println("REMOVE OK: unused removed (204), built-in refused (409), in-use refused (409): " + json(inUse).get("message").asText());
+    }
+
+    @Test
     @WithMockUser(roles = "STAFF")
-    @DisplayName("Authorization on the real stack: staff can read departments but not create them")
+    @DisplayName("Authorization on the real stack: staff can read departments but not create or remove them")
     public void staffRoleIsReadOnly() throws Exception {
         mockMvc.perform(get("/api/departments")).andExpect(status().isOk());
         mockMvc.perform(post("/api/departments").contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"Nope\"}"))
                 .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/departments/SECURITY")).andExpect(status().isForbidden());
+        assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM departments WHERE code = 'SECURITY'", Integer.class));
+    }
+
+    @Test
+    @DisplayName("Removing a department without signing in is refused (401) on the real stack")
+    public void removeRequiresAuthentication() throws Exception {
+        mockMvc.perform(delete("/api/departments/SECURITY")).andExpect(status().isUnauthorized());
     }
 }

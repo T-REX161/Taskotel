@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { DepartmentsIcon, StaffIcon, TasksIcon, PlusIcon, DotsVerticalIcon } from '../components/icons/Icons';
+import { DepartmentsIcon, StaffIcon, TasksIcon, PlusIcon, DotsVerticalIcon, TrashIcon } from '../components/icons/Icons';
 import { getDepartments, getUserRole } from '../services/api';
 import DepartmentIcon from '../components/common/DepartmentIcon';
 import DepartmentFormModal from '../components/departments/DepartmentFormModal';
+import RemoveDepartmentModal from '../components/departments/RemoveDepartmentModal';
 import { getDepartmentStyle } from '../utils/departmentStyles';
 
 const SUCCESS_MESSAGE_MS = 6000;
@@ -17,6 +18,7 @@ export default function DepartmentsPage() {
   const [editingDepartment, setEditingDepartment] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [openMenuCode, setOpenMenuCode] = useState(null);
+  const [removingDepartment, setRemovingDepartment] = useState(null);
   const menuRef = useRef(null);
 
   // Only ADMIN and MANAGER may create or edit departments; the server enforces this too
@@ -90,6 +92,20 @@ export default function DepartmentsPage() {
   const handleSaved = (saved, mode) => {
     closeForm();
     setSuccessMessage(mode === 'edit' ? `Department "${saved.name}" was updated.` : `Department "${saved.name}" was created.`);
+    fetchDepartments(true);
+  };
+
+  const openRemove = (department) => {
+    setOpenMenuCode(null);
+    setRemovingDepartment(department);
+  };
+
+  const closeRemove = useCallback(() => setRemovingDepartment(null), []);
+
+  // Only called after the server removed it: refresh the cards and summary counts from the API
+  const handleRemoved = (removed) => {
+    setRemovingDepartment(null);
+    setSuccessMessage(`Department "${removed.name}" was removed.`);
     fetchDepartments(true);
   };
 
@@ -234,7 +250,7 @@ export default function DepartmentsPage() {
                         <DotsVerticalIcon className="w-5 h-5" />
                       </button>
                       {openMenuCode === dept.code && (
-                        <div role="menu" className="absolute right-0 top-full mt-1 z-20 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+                        <div role="menu" className="absolute right-0 top-full mt-1 z-20 w-52 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
                           <button
                             type="button"
                             role="menuitem"
@@ -242,6 +258,16 @@ export default function DepartmentsPage() {
                             className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 cursor-pointer"
                           >
                             Edit department
+                          </button>
+                          <div className="my-1 border-t border-gray-100" role="separator" />
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => openRemove(dept)}
+                            className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 cursor-pointer flex items-center gap-2"
+                          >
+                            <TrashIcon className="w-4 h-4 shrink-0" />
+                            Remove Department
                           </button>
                         </div>
                       )}
@@ -276,6 +302,8 @@ export default function DepartmentsPage() {
         departments={departments}
         onSaved={handleSaved}
       />
+
+      <RemoveDepartmentModal department={removingDepartment} onClose={closeRemove} onRemoved={handleRemoved} />
     </div>
   );
 }

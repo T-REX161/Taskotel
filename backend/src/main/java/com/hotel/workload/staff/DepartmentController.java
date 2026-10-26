@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Reading is open to every signed-in role. Creating and editing is limited to ADMIN and MANAGER by
+ * Reading is open to every signed-in role. Creating, editing and removing is limited to ADMIN and MANAGER by
  * SecurityConfig, like the other management endpoints.
  */
 @RestController
@@ -44,6 +45,13 @@ public class DepartmentController {
     public ResponseEntity<DepartmentDto> updateDepartment(@PathVariable String code,
                                                           @Valid @RequestBody UpdateDepartmentRequest request) {
         return ResponseEntity.ok(departmentService.updateDepartment(code, request));
+    }
+
+    /** 204 when removed; 409 with a message when the department is built in or still has staff or tasks. */
+    @DeleteMapping("/{code}")
+    public ResponseEntity<Void> deleteDepartment(@PathVariable String code) {
+        departmentService.deleteDepartment(code);
+        return ResponseEntity.noContent().build();
     }
 
     /** A readable message for the form instead of the framework's empty default body. */

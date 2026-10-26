@@ -1,14 +1,21 @@
 package com.hotel.workload.security;
 
 import com.hotel.workload.verification.VerificationCodeService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
 
 @Service
 public class AuthService {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
+    // The same message whether the username/email or the password was wrong
+    private static final String INVALID_LOGIN = "Invalid username/email or password";
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -36,10 +43,10 @@ public class AuthService {
     }
 
     public LoginResponse authenticate(LoginRequest loginRequest) {
-        Optional<User> optionalUser = userRepository.findByUsername(loginRequest.getUsername());
+        Optional<User> optionalUser = findByUsernameOrEmail(loginRequest.getUsername());
 
         if (optionalUser.isEmpty()) {
-            throw new InvalidCredentialsException("Invalid username or password");
+            throw new InvalidCredentialsException(INVALID_LOGIN);
         }
 
         User user = optionalUser.get();
@@ -49,7 +56,7 @@ public class AuthService {
         }
 
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-            throw new InvalidCredentialsException("Invalid username or password");
+            throw new InvalidCredentialsException(INVALID_LOGIN);
         }
 
         if (user.getRole() == Role.STAFF && !user.isEmailVerified()) {
@@ -70,6 +77,32 @@ public class AuthService {
 
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
         return new LoginResponse(token, user.getUsername(), user.getRole());
+    }
+
+    /**
+     * The sign-in identifier is a username or a registered email address. A username match wins, so existing
+     * username logins behave exactly as before; otherwise the identifier is matched against emails, ignoring case
+     * and surrounding spaces. If more than one account has that email (differing only in case), nobody is signed
+     * in by email: the login fails like any other and a warning is logged without the address.
+     */
+    private Optional<User> findByUsernameOrEmail(String identifier) {
+        if (identifier == null || identifier.isBlank()) {
+            return Optional.empty();
+        }
+        Optional<User> byUsername = userRepository.findByUsername(identifier);
+        if (byUsername.isPresent()) {
+            return byUsername;
+        }
+        String email = identifier.trim();
+        if (!email.contains("@")) {
+            return Optional.empty();
+        }
+        List<User> byEmail = userRepository.findAllByEmailIgnoreCase(email);
+        if (byEmail.size() > 1) {
+            logger.warn("Email sign-in refused: {} accounts share the same email address, differing only in case", byEmail.size());
+            return Optional.empty();
+        }
+        return byEmail.stream().findFirst();
     }
 
     public LoginResponse setupCredentials(SetupCredentialsRequest request) {

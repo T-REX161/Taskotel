@@ -138,6 +138,16 @@ export const updateDepartment = async (code, request) => {
 };
 
 /**
+ * Remove a department (ADMIN or MANAGER). The server refuses with 409 and an explanation while staff or tasks
+ * still belong to it, or for a built-in department; nothing else is changed.
+ */
+export const deleteDepartment = (code) => {
+  return apiFetch(`/api/departments/${encodeURIComponent(code)}`, {
+    method: 'DELETE',
+  });
+};
+
+/**
  * Get the list of all tasks.
  */
 export const getTasks = async () => {

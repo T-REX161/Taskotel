@@ -6,7 +6,7 @@
  * message never says which of the two was wrong.
  */
 export const LOGIN_MESSAGES = {
-  invalid: 'Invalid username or password. Please try again.',
+  invalid: 'Invalid username/email or password. Please try again.',
   server: 'An unexpected error occurred. Please try again.',
   network: 'Network error. Please check your connection and try again.',
 };

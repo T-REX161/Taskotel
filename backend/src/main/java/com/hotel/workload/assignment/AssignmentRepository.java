@@ -32,6 +32,10 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     @Query("SELECT COUNT(a) FROM Assignment a WHERE a.task.status IN :statuses")
     long countActiveAssignments(@Param("statuses") List<TaskStatus> statuses);
 
+    /** Assignments tied to the department through their task or their staff member. */
+    @Query("SELECT COUNT(a) FROM Assignment a WHERE a.task.department = :department OR a.staff.department = :department")
+    long countByDepartment(@Param("department") com.hotel.workload.staff.Department department);
+
     List<Assignment> findByStaffId(UUID staffId);
 
     @EntityGraph(attributePaths = {"task", "staff"})

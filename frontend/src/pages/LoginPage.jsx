@@ -167,10 +167,10 @@ export default function LoginPage() {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Username Field */}
+            {/* Username or Email Field (sent as `username`; the server accepts either) */}
             <div>
               <label htmlFor="username" className="sr-only">
-                Username
+                Username or Email
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
@@ -183,7 +183,7 @@ export default function LoginPage() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Username"
+                  placeholder="Username or Email"
                   autoComplete="username"
                   className="w-full h-[43px] pl-10 pr-4 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
                 />

@@ -33,11 +33,13 @@ describe('Staff Alphabetical Sorting and Filtering Integration', () => {
       );
       // Verify pagination slices from the sorted list
       assert.ok(
-        /paginatedStaffList\s*=\s*useMemo\(\(\)\s*=>\s*\{[\s\S]*?filteredStaffList\.slice\(start,\s*start\s*\+\s*ITEMS_PER_PAGE\)/.test(
+        /paginatedStaffList\s*=\s*useMemo\(\(\)\s*=>\s*\{[\s\S]*?filteredStaffList\.slice\(start,\s*start\s*\+\s*pageSize\)/.test(
           staffPageSource
         ),
         'paginatedStaffList must slice from filteredStaffList which has been sorted before pagination'
       );
+      // ...with the chosen rows per page, 10 unless the user picks another size
+      assert.ok(staffPageSource.includes('const ITEMS_PER_PAGE = 10;') && staffPageSource.includes('useState(ITEMS_PER_PAGE)'), 'Default page size stays 10');
     });
   });
 

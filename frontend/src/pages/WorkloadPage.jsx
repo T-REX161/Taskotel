@@ -24,6 +24,10 @@ import {
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import DepartmentBadge from '../components/workload/DepartmentBadge';
 import UtilizationMeter from '../components/workload/UtilizationMeter';
+import PageSizeToggle from '../components/common/PageSizeToggle';
+
+// Staff rows per page by default (this list has always shown 5); the toggle offers 5, 10 or 15
+const ITEMS_PER_PAGE = 5;
 
 // How often the workload refreshes itself in the background
 const WORKLOAD_REFRESH_MS = 30000;
@@ -38,6 +42,7 @@ export default function WorkloadPage() {
   const [error, setError] = useState('');
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE); // rows per page, chosen with the toggle
   const isFetchingRef = useRef(false);
   const isMountedRef = useRef(true);
   const lastFetchRef = useRef(0);
@@ -130,8 +135,7 @@ export default function WorkloadPage() {
     return sortWorkloadAlphabetically(workload);
   }, [workload]);
 
-  const ITEMS_PER_PAGE = 5;
-  const totalPages = Math.max(1, Math.ceil(sortedWorkload.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(sortedWorkload.length / pageSize));
 
   // If the staff dataset changes and the current page becomes invalid, return to a valid page
   useEffect(() => {
@@ -140,11 +144,17 @@ export default function WorkloadPage() {
     }
   }, [currentPage, totalPages]);
 
-  // Paginated staff slice (5 rows per page)
+  // Paginated staff slice (pageSize rows per page)
   const paginatedWorkload = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return sortedWorkload.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [sortedWorkload, currentPage]);
+    const startIndex = (currentPage - 1) * pageSize;
+    return sortedWorkload.slice(startIndex, startIndex + pageSize);
+  }, [sortedWorkload, currentPage, pageSize]);
+
+  // A new page size starts again at page 1
+  const handlePageSizeChange = (size) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  };
 
 
   // Helper to open staff details modal
@@ -368,11 +378,21 @@ export default function WorkloadPage() {
 
       {/* 3. Workload by Department: full width container with one card per department */}
       <section className="min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department">
-        <div>
-          <h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>
-          <p className="text-2xs sm:text-xs text-gray-500 mt-0.5">
-            Operational load across hotel functional units
-          </p>
+        {/* Heading on the left, total department load on the right; stacks on narrow screens */}
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0">
+            <h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>
+            <p className="text-2xs sm:text-xs text-gray-500 mt-0.5">
+              Operational load across hotel functional units
+            </p>
+          </div>
+          <div className="min-w-0 sm:ml-auto sm:text-right">
+            <p className="flex flex-wrap items-baseline gap-x-2.5 sm:justify-end text-xs sm:text-sm">
+              <span className="font-medium text-gray-500">Total Department Load</span>
+              <span className="font-bold text-gray-900 whitespace-nowrap">{summary.totalWorkload} mins</span>
+            </p>
+            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">Calculated from active staff workloads.</p>
+          </div>
         </div>
 
         {/* One card per department, generated from the data. auto-fill keeps every card the same width and
@@ -411,19 +431,6 @@ export default function WorkloadPage() {
             );
           })}
         </div>
-
-        {/* Total Department Workload Callout: one compact line, wraps cleanly on small screens */}
-        <div className="pt-2.5 border-t border-gray-100">
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-0.5 bg-gray-50/70 px-3 py-2 rounded-xl border border-gray-100">
-            <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5 min-w-0">
-              <span className="text-xs font-semibold text-gray-600">Total Department Load</span>
-              <span className="text-2xs text-gray-400">Calculated from active staff workloads.</span>
-            </div>
-            <span className="ml-auto text-sm font-bold text-gray-900 whitespace-nowrap">
-              {summary.totalWorkload} mins
-            </span>
-          </div>
-        </div>
       </section>
 
       {/* 4. Staff Workload Distribution: full width, below Workload by Department */}
@@ -435,12 +442,13 @@ export default function WorkloadPage() {
               Active load, task count, and shift utilization
             </p>
           </div>
-          <div className="flex items-center gap-2.5 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
               {sortedWorkload.length} Staff
             </span>
             {sortedWorkload.length > 0 && (
               <div className="flex items-center gap-1.5 pl-2.5 border-l border-gray-200">
+                <PageSizeToggle value={pageSize} onChange={handlePageSizeChange} placement="bottom" />
                 <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
                   Page {currentPage} of {totalPages}
                 </span>

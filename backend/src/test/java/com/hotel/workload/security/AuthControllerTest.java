@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import static org.hamcrest.Matchers.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import com.hotel.workload.verification.VerificationResponse;
@@ -505,5 +506,109 @@ public class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ---------------- Username or email sign-in ----------------
+
+    @Autowired
+    private JwtUtil jwtUtil;
+
+    private void saveAccount(String username, String email, Role role, String password) {
+        User user = new User();
+        user.setUsername(username);
+        user.setEmail(email);
+        user.setPassword(passwordEncoder.encode(password));
+        user.setRole(role);
+        user.setActive(true);
+        user.setEmailVerified(true);
+        user.setCredentialsSetupRequired(false);
+        userRepository.save(user);
+    }
+
+    private String loginToken(String identifier, String password, String expectedUsername, Role expectedRole) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest(identifier, password))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.username").value(expectedUsername))
+                .andExpect(jsonPath("$.role").value(expectedRole.name()))
+                .andExpect(jsonPath("$.emailVerificationRequired").value(false))
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).get("token").asText();
+    }
+
+    @Test
+    @Transactional
+    @DisplayName("Admin, Manager and Staff sign in with username or email: same identity, role and permissions in the JWT")
+    public void testLogin_UsernameOrEmail_EveryRole() throws Exception {
+        saveAccount("uoe_admin", "uoe_admin@hotel.com", Role.ADMIN, "adminpass123");
+        saveAccount("uoe_manager", "uoe_manager@hotel.com", Role.MANAGER, "managerpass123");
+        saveAccount("uoe_staff", "uoe_staff@hotel.com", Role.STAFF, "staffpass123");
+
+        Object[][] cases = {
+                {"uoe_admin", "UOE_Admin@Hotel.com", "adminpass123", Role.ADMIN, 200, 200},
+                {"uoe_manager", "uoe_manager@HOTEL.com", "managerpass123", Role.MANAGER, 403, 200},
+                {"uoe_staff", "uoe_staff@hotel.com", "staffpass123", Role.STAFF, 403, 200},
+        };
+        for (Object[] c : cases) {
+            String username = (String) c[0];
+            Role role = (Role) c[3];
+            for (String identifier : new String[]{username, (String) c[1]}) {
+                String token = loginToken(identifier, (String) c[2], username, role);
+                assertTrue(jwtUtil.validateToken(token), identifier + ": valid JWT");
+                assertEquals(username, jwtUtil.extractUsername(token), identifier + ": token belongs to the account, not the typed email");
+                assertEquals(role.name(), jwtUtil.extractRole(token), identifier + ": same role");
+                // Existing authorization rules apply unchanged to either token
+                mockMvc.perform(get("/api/test/admin").header("Authorization", "Bearer " + token)).andExpect(status().is((int) c[4]));
+                mockMvc.perform(get("/api/test/staff").header("Authorization", "Bearer " + token)).andExpect(status().is((int) c[5]));
+            }
+        }
+    }
+
+    @Test
+    @Transactional
+    @DisplayName("Unverified Staff signing in by email gets the email-verification flow, not a JWT")
+    public void testLogin_UnverifiedStaffByEmail_TriggersVerification() throws Exception {
+        User staff = new User();
+        staff.setUsername("uoe_unverified_staff");
+        staff.setEmail("uoe_unverified_staff@hotel.com");
+        staff.setPassword(passwordEncoder.encode("tempPass123"));
+        staff.setRole(Role.STAFF);
+        staff.setActive(true);
+        staff.setEmailVerified(false);
+        userRepository.save(staff);
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new LoginRequest("UOE_Unverified_Staff@hotel.com", "tempPass123"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").doesNotExist())
+                .andExpect(jsonPath("$.emailVerificationRequired").value(true))
+                .andExpect(jsonPath("$.username").value("uoe_unverified_staff"))
+                .andExpect(jsonPath("$.email").value("uoe_unverified_staff@hotel.com"));
+
+        User reloaded = userRepository.findByUsername("uoe_unverified_staff").orElseThrow();
+        assertNotNull(reloaded.getVerificationCodeHash(), "A verification code was issued for the account found by email");
+        assertFalse(reloaded.isEmailVerified());
+    }
+
+    @Test
+    @Transactional
+    @DisplayName("Email sign-in rejects a wrong password, an unknown email, and another account's password with 401")
+    public void testLogin_Email_Failures() throws Exception {
+        saveAccount("uoe_fail_admin", "uoe_fail_admin@hotel.com", Role.ADMIN, "adminpass123");
+        saveAccount("uoe_fail_staff", "uoe_fail_staff@hotel.com", Role.STAFF, "staffpass123");
+
+        for (LoginRequest request : new LoginRequest[]{
+                new LoginRequest("uoe_fail_admin@hotel.com", "wrongpass"),
+                new LoginRequest("uoe_fail_admin", "wrongpass"),
+                new LoginRequest("nobody_here@hotel.com", "adminpass123"),
+                new LoginRequest("uoe_fail_admin@hotel.com", "staffpass123")}) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.token").doesNotExist());
+        }
     }
 }

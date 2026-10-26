@@ -26,7 +26,7 @@ describe('LoginPage result indicators', () => {
 
     it('invalid credentials: only a 401, with a message that does not say which field was wrong', () => {
       const outcome = getLoginOutcome({ ok: false, status: 401 });
-      assert.deepStrictEqual(outcome, { kind: 'invalid', message: 'Invalid username or password. Please try again.' });
+      assert.deepStrictEqual(outcome, { kind: 'invalid', message: 'Invalid username/email or password. Please try again.' });
       assert.strictEqual(/\bthe (username|password)\b|username is|password is/i.test(outcome.message), false);
     });
 
@@ -160,6 +160,13 @@ describe('LoginPage result indicators', () => {
       assert.ok(pageSource.includes('<label htmlFor="password" className="sr-only">'), 'Password keeps a label');
       assert.ok(/<\/main>\s*\{\/\* Footer info \*\/\}\s*<p className="text-center text-xs/.test(pageSource), 'Footer sits below the container');
       assert.ok(pageSource.includes("fetch('/api/auth/login'") && pageSource.includes('JSON.stringify({ username, password })'), 'Login request unchanged');
+    });
+
+    it('one field takes a username or an email, sent through the same login request', () => {
+      assert.ok(/<label htmlFor="username" className="sr-only">\s*Username or Email\s*<\/label>/.test(pageSource), 'Label says username or email');
+      assert.ok(pageSource.includes('placeholder="Username or Email"') && pageSource.includes('autoComplete="username"'));
+      assert.strictEqual((pageSource.match(/<input/g) || []).length, 3, 'Still only the identifier, password and Remember me inputs');
+      assert.ok(!/type="email"/.test(pageSource), 'No separate email field');
     });
   });
 

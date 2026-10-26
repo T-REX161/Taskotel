@@ -5,7 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const read = (...parts) => fs.readFileSync(path.join(__dirname, ...parts), 'utf8');
+// Line endings are normalised: git stores LF, but a Windows checkout (core.autocrlf=true) writes CRLF, and the
+// multi-line source checks below must give the same result either way
+const read = (...parts) => fs.readFileSync(path.join(__dirname, ...parts), 'utf8').replace(/\r\n/g, '\n');
 const pageSource = read('DepartmentsPage.jsx');
 const modalSource = read('..', 'components', 'departments', 'DepartmentFormModal.jsx');
 const pickerSource = read('..', 'components', 'departments', 'PickerDropdown.jsx');
@@ -117,6 +119,44 @@ describe('DepartmentFormModal', () => {
     const early = modalSource.indexOf('if (!isOpen) return null;');
     assert.ok(early > 0);
     assert.ok(!/use(State|Effect|Memo)\(/.test(modalSource.slice(early)), 'No hook after the early return');
+  });
+});
+
+describe('Remove Department', () => {
+  const removeSource = read('..', 'components', 'departments', 'RemoveDepartmentModal.jsx');
+
+  it('the card menu offers Remove Department in red with a trash icon, below Edit', () => {
+    assert.ok(pageSource.indexOf('Edit department') < pageSource.indexOf('Remove Department'));
+    assert.ok(pageSource.includes('onClick={() => openRemove(dept)}'));
+    assert.ok(/text-red-600 hover:bg-red-50[^"]*"\s*>\s*<TrashIcon/.test(pageSource), 'Red, with a trash icon');
+    assert.ok(/const openRemove = \(department\) => \{\s*setOpenMenuCode\(null\);/.test(pageSource), 'The menu closes before the dialog opens');
+  });
+
+  it('asks for confirmation with the department name, and only the confirm button deletes', () => {
+    assert.ok(removeSource.includes('Remove Department?'));
+    assert.ok(removeSource.includes('Are you sure you want to remove the &quot;') && removeSource.includes('{department.name}'));
+    assert.ok(removeSource.includes('action may affect staff and task assignments associated with it.'));
+    assert.ok(removeSource.includes('bg-red-50 text-red-600') && removeSource.includes('<TrashIcon'), 'Trash icon in a red-tinted tile');
+    assert.strictEqual((removeSource.match(/deleteDepartment\(/g) || []).length, 1, 'One call site');
+    const handleClose = removeSource.slice(removeSource.indexOf('const handleClose'), removeSource.indexOf('const handleRemove'));
+    assert.ok(!handleClose.includes('deleteDepartment'), 'Cancel, close and outside clicks never delete');
+    assert.ok(/onClick=\{handleClose\}[\s\S]*?Cancel/.test(removeSource) && removeSource.includes('onClick={handleRemove}'));
+    assert.ok(removeSource.includes("if (event.key === 'Escape' && !isRemoving) onClose();"), 'Escape and outside clicks are ignored while removing');
+  });
+
+  it('shows progress, reports the server explanation on failure, and refreshes after success', () => {
+    assert.ok(removeSource.includes('Removing...') && removeSource.includes('animate-spin'));
+    assert.ok(removeSource.includes('err.status === 409') && removeSource.includes('setError(err.message'), 'In-use / built-in explanation from the server');
+    assert.ok(/await deleteDepartment\(department\.code\);\s*inFlight\.current = false;\s*onRemoved\(department\);/.test(removeSource), 'Success only after the server confirms');
+    assert.ok(/const handleRemoved = \(removed\) => \{[\s\S]*?was removed\.[\s\S]*?fetchDepartments\(true\);/.test(pageSource), 'Cards and counts refresh from the API');
+    assert.ok(apiSource.includes('export const deleteDepartment = (code)') && /method: 'DELETE'/.test(apiSource));
+  });
+
+  it('sends at most one request per confirmation, and no placeholder remains', () => {
+    assert.ok(/if \(inFlight\.current\) return;\s*inFlight\.current = true;/.test(removeSource), 'A second click is ignored immediately');
+    assert.ok(/disabled=\{isRemoving\}/.test(removeSource), 'The buttons are disabled while removing');
+    assert.ok(!removeSource.includes('does not support removing departments'), 'The real endpoint is used');
+    assert.ok(removeSource.includes('err.status === 405') && removeSource.includes('Restart the backend'), 'An outdated server is explained, not shown as a bare "Method Not Allowed"');
   });
 });
 

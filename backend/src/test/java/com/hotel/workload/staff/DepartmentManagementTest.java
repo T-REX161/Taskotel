@@ -542,4 +542,101 @@ public class DepartmentManagementTest {
         }
         assertEquals(codes.size(), seen);
     }
+
+    // ── removing ─────────────────────────────────────────────────────────────
+
+    private MvcResult deleteDepartment(String code) throws Exception {
+        return mockMvc.perform(delete("/api/departments/" + code)).andReturn();
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("An unused custom department can be removed; it disappears from the list")
+    public void testRemoveUnusedDepartment() throws Exception {
+        String code = newDepartment("Valet Parking");
+        MvcResult result = deleteDepartment(code);
+        assertEquals(204, result.getResponse().getStatus(), result.getResponse().getContentAsString());
+        assertTrue(departmentRepository.findByCode(code).isEmpty());
+        mockMvc.perform(get("/api/departments")).andExpect(jsonPath("$.length()").value(6));
+        assertEquals(404, deleteDepartment(code).getResponse().getStatus(), "Already gone");
+    }
+
+    @Test
+    @WithMockUser(username = "testadmin", roles = "ADMIN")
+    @DisplayName("A department that still has staff (even inactive) or tasks is not removed, and nothing is changed")
+    public void testRemoveRefusedWhileInUse() throws Exception {
+        String withStaff = newDepartment("Concierge Desk");
+        Staff inactive = savedStaff("concierge1", withStaff, false);
+        MvcResult refused = deleteDepartment(withStaff);
+        assertEquals(409, refused.getResponse().getStatus());
+        String message = refused.getResponse().getContentAsString() + " " + refused.getResponse().getErrorMessage();
+        assertTrue(message.contains("still has 1 staff member. Move them to another department first, or mark the department Inactive."),
+                refused.getResponse().getContentAsString() + refused.getResponse().getErrorMessage());
+        assertTrue(departmentRepository.findByCode(withStaff).isPresent());
+        assertEquals(withStaff, staffRepository.findById(inactive.getId()).orElseThrow().getDepartment().getCode(), "Staff untouched");
+
+        String withTask = newDepartment("Laundry");
+        assertEquals(201, mockMvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(taskJson("Fold towels", withTask, 30)))
+                .andReturn().getResponse().getStatus());
+        MvcResult refusedTask = deleteDepartment(withTask);
+        assertEquals(409, refusedTask.getResponse().getStatus());
+        assertTrue(departmentRepository.findByCode(withTask).isPresent());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("The built-in departments cannot be removed, even when empty")
+    public void testBuiltInDepartmentsCannotBeRemoved() throws Exception {
+        for (DepartmentCatalog.BuiltIn builtIn : DepartmentCatalog.BUILT_IN) {
+            assertEquals(409, deleteDepartment(builtIn.code()).getResponse().getStatus(), builtIn.code());
+            assertTrue(departmentRepository.findByCode(builtIn.code()).isPresent());
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = "STAFF")
+    @DisplayName("Staff users cannot remove departments")
+    public void testStaffCannotRemoveDepartment() throws Exception {
+        assertEquals(403, deleteDepartment("HOUSEKEEPING").getResponse().getStatus());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("Removing an unknown department is a 404")
+    public void testRemoveUnknownDepartment() throws Exception {
+        assertEquals(404, deleteDepartment("NO_SUCH_DEPARTMENT").getResponse().getStatus());
+    }
+
+    @Test
+    @DisplayName("Removing a department without signing in is refused (401) and changes nothing")
+    public void testRemoveRequiresAuthentication() throws Exception {
+        long before = departmentRepository.count();
+        assertEquals(401, deleteDepartment("SECURITY").getResponse().getStatus());
+        assertEquals(before, departmentRepository.count());
+    }
+
+    @Test
+    @WithMockUser(username = "testadmin", roles = "ADMIN")
+    @DisplayName("A department with an assigned task names every blocker; the staff, task and assignment are untouched")
+    public void testRemoveRefusedWithAssignment() throws Exception {
+        String code = newDepartment("Pool Deck");
+        Staff lifeguard = savedStaff("lifeguard1", code, true);
+        MvcResult task = mockMvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(taskJson("Check pool chemistry", code, 20)))
+                .andExpect(status().isCreated()).andReturn();
+        UUID taskId = UUID.fromString(body(task).get("id").asText());
+        mockMvc.perform(post("/api/assignments").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"taskId\": \"" + taskId + "\", \"staffId\": \"" + lifeguard.getId() + "\"}"))
+                .andExpect(status().isCreated());
+        long assignmentsBefore = assignmentRepository.count();
+
+        MvcResult refused = deleteDepartment(code);
+        assertEquals(409, refused.getResponse().getStatus());
+        assertEquals("\"Pool Deck\" cannot be removed because it still has 1 staff member, 1 task and 1 assignment. "
+                + "Move them to another department first, or mark the department Inactive.", body(refused).get("message").asText());
+
+        assertTrue(departmentRepository.findByCode(code).isPresent());
+        assertTrue(staffRepository.existsById(lifeguard.getId()));
+        assertEquals(assignmentsBefore, assignmentRepository.count());
+        mockMvc.perform(get("/api/tasks")).andExpect(status().isOk());
+    }
 }

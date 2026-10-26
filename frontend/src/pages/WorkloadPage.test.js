@@ -310,8 +310,8 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
         'WorkloadPage must configure ITEMS_PER_PAGE = 5'
       );
       assert.ok(
-        pageSource.includes('Math.ceil(sortedWorkload.length / ITEMS_PER_PAGE)'),
-        'WorkloadPage must compute totalPages based on ITEMS_PER_PAGE'
+        pageSource.includes('Math.ceil(sortedWorkload.length / pageSize)') && pageSource.includes('useState(ITEMS_PER_PAGE)'),
+        'WorkloadPage must compute totalPages from the chosen page size, which starts at ITEMS_PER_PAGE (5)'
       );
       assert.ok(
         pageSource.includes('paginatedWorkload.map'),
@@ -477,8 +477,18 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
     it('keeps a short note that the department total comes from the active staff workloads', () => {
       assert.ok(
         pageSource.includes('Calculated from active staff workloads.') && !pageSource.includes('mathematical consistency') && pageSource.includes('{summary.totalWorkload} mins'),
-        'Footer shows the short note and the unchanged total'
+        'Shows the short note and the unchanged total'
       );
+    });
+
+    it('shows the total in the section header, top-right, and no longer in a bar under the cards', () => {
+      const section = pageSource.slice(pageSource.indexOf('aria-label="Workload by department"'), pageSource.indexOf('{/* 4. Staff Workload Distribution'));
+      const total = section.indexOf('{summary.totalWorkload} mins');
+      assert.ok(total > section.indexOf('Workload by Department</h2>') && total < section.indexOf('departmentWorkloads.map('), 'Total sits in the header, above the cards');
+      assert.ok(section.includes('justify-between') && section.includes('sm:ml-auto sm:text-right'), 'Heading left, total right; stacks on small screens');
+      assert.ok(/Total Department Load<\/span>\s*<span className="font-bold[^"]*">\{summary\.totalWorkload\} mins/.test(section) && section.includes('gap-x-2.5'), 'Label then bold value on one line, ~10px apart');
+      assert.strictEqual(section.split('Total Department Load').length, 2, 'Only one total: the bottom bar is gone');
+      assert.ok(!section.includes('Total Department Workload Callout') && !/\b422\b/.test(pageSource), 'No old bar and no hardcoded total');
     });
   });
 

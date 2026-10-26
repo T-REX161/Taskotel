@@ -26,6 +26,9 @@ public class DepartmentServiceImplTest {
     @Mock
     private TaskRepository taskRepository;
 
+    @Mock
+    private com.hotel.workload.assignment.AssignmentRepository assignmentRepository;
+
     @InjectMocks
     private DepartmentServiceImpl departmentService;
 

@@ -26,6 +26,7 @@ import {
 } from '../utils/assignmentUtils';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import AssignTaskModal from '../components/tasks/AssignTaskModal';
+import PageSizeToggle from '../components/common/PageSizeToggle';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
 
 const ASSIGN_TASK_BUTTON_CLASS =
@@ -153,10 +154,17 @@ export default function AssignmentsPage() {
 
   // Client-side pagination of the fetched assignments (summary cards keep using the full list)
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(ASSIGNMENTS_PER_PAGE); // rows per page, chosen with the toggle
   const pagination = useMemo(
-    () => getPaginationState({ totalItems: assignments.length, currentPage, pageSize: ASSIGNMENTS_PER_PAGE }),
-    [assignments.length, currentPage]
+    () => getPaginationState({ totalItems: assignments.length, currentPage, pageSize }),
+    [assignments.length, currentPage, pageSize]
   );
+
+  // A new page size starts again at page 1
+  const handlePageSizeChange = (size) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  };
 
   // Keep the stored page valid when the list shrinks (the render already uses the clamped page)
   useEffect(() => {
@@ -730,54 +738,57 @@ export default function AssignmentsPage() {
               {' '}{assignments.length === 1 ? 'assignment' : 'assignments'}
             </p>
 
-            {pagination.totalPages > 1 && (
-              <nav className="flex flex-wrap items-center gap-1" aria-label="Assignments pagination">
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage(pagination.page - 1)}
-                  disabled={!pagination.hasPrevious}
-                  className={`inline-flex items-center justify-center h-8 px-3 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer ${PAGINATION_BUTTON_FOCUS_CLASS}`}
-                  aria-label="Previous page"
-                >
-                  ‹ Prev
-                </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <PageSizeToggle value={pageSize} onChange={handlePageSizeChange} />
+              {pagination.totalPages > 1 && (
+                <nav className="flex flex-wrap items-center gap-1" aria-label="Assignments pagination">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(pagination.page - 1)}
+                    disabled={!pagination.hasPrevious}
+                    className={`inline-flex items-center justify-center h-8 px-3 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer ${PAGINATION_BUTTON_FOCUS_CLASS}`}
+                    aria-label="Previous page"
+                  >
+                    ‹ Prev
+                  </button>
 
-                {pageNumbers.map((page, idx) => {
-                  const prev = pageNumbers[idx - 1];
-                  const showEllipsis = prev !== undefined && page - prev > 1;
-                  return (
-                    <React.Fragment key={page}>
-                      {showEllipsis && (
-                        <span className="px-1 text-xs text-gray-400 select-none" aria-hidden="true">…</span>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setCurrentPage(page)}
-                        className={`inline-flex items-center justify-center h-8 w-8 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${PAGINATION_BUTTON_FOCUS_CLASS} ${
-                          page === pagination.page
-                            ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
-                            : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
-                        }`}
-                        aria-label={`Page ${page}`}
-                        aria-current={page === pagination.page ? 'page' : undefined}
-                      >
-                        {page}
-                      </button>
-                    </React.Fragment>
-                  );
-                })}
+                  {pageNumbers.map((page, idx) => {
+                    const prev = pageNumbers[idx - 1];
+                    const showEllipsis = prev !== undefined && page - prev > 1;
+                    return (
+                      <React.Fragment key={page}>
+                        {showEllipsis && (
+                          <span className="px-1 text-xs text-gray-400 select-none" aria-hidden="true">…</span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(page)}
+                          className={`inline-flex items-center justify-center h-8 w-8 rounded-lg border text-xs font-medium transition-colors cursor-pointer ${PAGINATION_BUTTON_FOCUS_CLASS} ${
+                            page === pagination.page
+                              ? 'bg-emerald-600 border-emerald-600 text-white shadow-sm'
+                              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300'
+                          }`}
+                          aria-label={`Page ${page}`}
+                          aria-current={page === pagination.page ? 'page' : undefined}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
 
-                <button
-                  type="button"
-                  onClick={() => setCurrentPage(pagination.page + 1)}
-                  disabled={!pagination.hasNext}
-                  className={`inline-flex items-center justify-center h-8 px-3 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer ${PAGINATION_BUTTON_FOCUS_CLASS}`}
-                  aria-label="Next page"
-                >
-                  Next ›
-                </button>
-              </nav>
-            )}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(pagination.page + 1)}
+                    disabled={!pagination.hasNext}
+                    className={`inline-flex items-center justify-center h-8 px-3 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 hover:border-gray-300 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer ${PAGINATION_BUTTON_FOCUS_CLASS}`}
+                    aria-label="Next page"
+                  >
+                    Next ›
+                  </button>
+                </nav>
+              )}
+            </div>
           </div>
         )}
       </div>

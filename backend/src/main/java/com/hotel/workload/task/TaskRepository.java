@@ -11,6 +11,9 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     long countByStatus(TaskStatus status);
     long countByDepartmentAndStatusIn(com.hotel.workload.staff.Department department, Collection<TaskStatus> statuses);
 
+    /** Every task in the department, whatever its status (they all reference it). */
+    long countByDepartment(com.hotel.workload.staff.Department department);
+
     @Query("SELECT DISTINCT a.task FROM Assignment a WHERE a.staff.id = :staffId")
     List<Task> findTasksByStaffId(@Param("staffId") UUID staffId);
 

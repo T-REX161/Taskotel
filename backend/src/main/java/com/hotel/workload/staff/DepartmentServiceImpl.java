@@ -1,5 +1,6 @@
 package com.hotel.workload.staff;
 
+import com.hotel.workload.assignment.AssignmentRepository;
 import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -22,13 +23,16 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final DepartmentRepository departmentRepository;
     private final StaffRepository staffRepository;
     private final TaskRepository taskRepository;
+    private final AssignmentRepository assignmentRepository;
 
     public DepartmentServiceImpl(DepartmentRepository departmentRepository,
                                  StaffRepository staffRepository,
-                                 TaskRepository taskRepository) {
+                                 TaskRepository taskRepository,
+                                 AssignmentRepository assignmentRepository) {
         this.departmentRepository = departmentRepository;
         this.staffRepository = staffRepository;
         this.taskRepository = taskRepository;
+        this.assignmentRepository = assignmentRepository;
     }
 
     @Override
@@ -89,7 +93,51 @@ public class DepartmentServiceImpl implements DepartmentService {
         }
     }
 
+    @Override
+    @Transactional
+    public void deleteDepartment(String code) {
+        Department department = departmentRepository.findByCode(code)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Department not found"));
+        String name = department.getName();
+
+        // The built-ins are part of the product (and are re-created at startup outside production)
+        if (DepartmentCatalog.BUILT_IN.stream().anyMatch(builtIn -> builtIn.code().equals(department.getCode()))) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "\"" + name + "\" is one of Taskotel's built-in departments and cannot be removed. You can mark it Inactive instead.");
+        }
+
+        // Staff and tasks reference the department (and assignments hang off them); nothing is deleted or
+        // reassigned on their behalf
+        long staff = staffRepository.countByDepartment(department);
+        long tasks = taskRepository.countByDepartment(department);
+        long assignments = assignmentRepository.countByDepartment(department);
+        if (staff > 0 || tasks > 0 || assignments > 0) {
+            List<String> parts = new java.util.ArrayList<>();
+            if (staff > 0) parts.add(staff + (staff == 1 ? " staff member" : " staff members"));
+            if (tasks > 0) parts.add(tasks + (tasks == 1 ? " task" : " tasks"));
+            if (assignments > 0) parts.add(assignments + (assignments == 1 ? " assignment" : " assignments"));
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "\"" + name + "\" cannot be removed because it still has " + joinParts(parts)
+                            + ". Move them to another department first, or mark the department Inactive.");
+        }
+
+        try {
+            departmentRepository.delete(department);
+            departmentRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            // Something started using it in the meantime; the database refused, so nothing was removed
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "\"" + name + "\" is still in use and was not removed. Refresh the page and try again.");
+        }
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    /** "a", "a and b", "a, b and c" */
+    private static String joinParts(List<String> parts) {
+        if (parts.size() <= 1) return String.join("", parts);
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
+    }
 
     private DepartmentDto toDto(Department department) {
         long staffCount = staffRepository.countByDepartmentAndActiveTrue(department);

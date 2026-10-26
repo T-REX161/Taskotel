@@ -430,9 +430,10 @@ describe('AssignmentsPage Component Integration', () => {
     it('paginates the fetched list client-side with 10 rows per page', () => {
       assert.ok(pageSource.includes('const ASSIGNMENTS_PER_PAGE = 10;'), 'Page size must be 10');
       assert.ok(
-        pageSource.includes('getPaginationState({ totalItems: assignments.length, currentPage, pageSize: ASSIGNMENTS_PER_PAGE })'),
+        pageSource.includes('getPaginationState({ totalItems: assignments.length, currentPage, pageSize })'),
         'Pagination state must come from getPaginationState over the full assignments list'
       );
+      assert.ok(pageSource.includes('useState(ASSIGNMENTS_PER_PAGE)'), 'The chosen page size starts at 10');
       assert.ok(
         pageSource.includes('assignments.slice(pagination.startIndex, pagination.endIndex)'),
         'Rows must be a slice of the fetched list (no new API call)'
