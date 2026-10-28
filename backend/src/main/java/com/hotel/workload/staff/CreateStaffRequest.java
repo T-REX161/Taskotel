@@ -1,5 +1,6 @@
 package com.hotel.workload.staff;
 
+import com.hotel.workload.security.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -26,6 +27,9 @@ public class CreateStaffRequest {
 
     @NotBlank(message = "Temporary password is required")
     private String temporaryPassword;
+
+    // Optional: STAFF when omitted. Only an administrator may create MANAGER or ADMIN accounts.
+    private Role role;
 
     public String getFullName() {
         return fullName;
@@ -81,5 +85,13 @@ public class CreateStaffRequest {
 
     public void setTemporaryPassword(String temporaryPassword) {
         this.temporaryPassword = temporaryPassword;
+    }
+
+    public Role getRole() {
+        return role;
+    }
+
+    public void setRole(Role role) {
+        this.role = role;
     }
 }

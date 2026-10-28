@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V4 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V7 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -70,7 +70,10 @@ public class MigrationFilesTest {
                 "V1__initial_schema.sql",
                 "V2__add_credentials_setup_required.sql",
                 "V3__assignment_task_unique.sql",
-                "V4__departments_table.sql"), names);
+                "V4__departments_table.sql",
+                "V5__support_assignments.sql",
+                "V6__support_manual_end_reason.sql",
+                "V7__support_archive.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -78,7 +81,44 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4), versions, "Versions must be 1, 2, 3, 4 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7), versions, "Versions must be 1 to 7 with no gaps or duplicates");
+    }
+
+    @Test
+    @DisplayName("V7 only adds two nullable columns to support_assignments: no data, constraint or other table is touched")
+    public void testV7OnlyAddsTwoNullableColumns() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V7__support_archive.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|CASCADE|RENAME|DROP|NOT\\s+NULL|DEFAULT|CONSTRAINT|INDEX)\\b").matcher(code).find(),
+                "V7 must not change data, constraints or indexes, and the new columns must be nullable with no default");
+        assertEquals(2, Pattern.compile("(?i)ADD COLUMN IF NOT EXISTS").matcher(executable).results().count());
+        assertTrue(executable.contains("ALTER TABLE support_assignments ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP;"));
+        assertTrue(executable.contains("ALTER TABLE support_assignments ADD COLUMN IF NOT EXISTS archived_by_username VARCHAR(255);"));
+        assertEquals(2, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only support_assignments is altered");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+    }
+
+    @Test
+    @DisplayName("V6 only swaps two constraints on support_assignments (end-reason check, task uniqueness); no data is touched")
+    public void testV6OnlySwapsTheEndReasonConstraint() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V6__support_manual_end_reason.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|CASCADE|RENAME|DROP\\s+(TABLE|COLUMN|INDEX))\\b").matcher(code).find(),
+                "V6 must not remove or rewrite data or objects other than the one constraint");
+        assertEquals(3, Pattern.compile("(?i)DROP CONSTRAINT IF EXISTS").matcher(executable).results().count(),
+                "V6 drops the Flyway-named and the Hibernate-named end-reason check, and the old task uniqueness, if present");
+        assertTrue(executable.contains("DROP CONSTRAINT IF EXISTS uk_support_assignments_task"));
+        assertTrue(executable.contains("CREATE UNIQUE INDEX IF NOT EXISTS uk_support_assignments_active_task ON support_assignments (task_id) WHERE status = 'ACTIVE'"));
+        assertTrue(executable.indexOf("CREATE UNIQUE INDEX") < executable.indexOf("DROP CONSTRAINT IF EXISTS uk_support_assignments_task"),
+                "the new guard exists before the old one is dropped");
+        assertTrue(executable.contains("DROP CONSTRAINT IF EXISTS ck_support_assignments_end_reason"));
+        assertTrue(executable.contains("DROP CONSTRAINT IF EXISTS support_assignments_end_reason_check"));
+        assertEquals(1, Pattern.compile("(?i)ADD CONSTRAINT").matcher(executable).results().count());
+        // Every reason that V5 allowed must still be allowed, plus the new one
+        for (String reason : List.of("TASK_COMPLETED", "TASK_CANCELLED", "TASK_DELETED", "TASK_REASSIGNED", "TASK_MOVED", "MANUALLY_ENDED")) {
+            assertTrue(executable.contains("'" + reason + "'"), "V6 must allow " + reason);
+        }
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
     }
 
     @Test

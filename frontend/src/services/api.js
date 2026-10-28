@@ -240,6 +240,17 @@ export const createStaff = (request) => {
 };
 
 /**
+ * Whether a username is free. Resolves true only when the server says so; anything else throws.
+ */
+export const checkUsernameAvailability = async (username, signal) => {
+  const result = await apiFetch(`/api/staff/username-availability?username=${encodeURIComponent(username)}`, { signal });
+  if (typeof result?.available !== 'boolean') {
+    throw new Error('Unexpected username availability response.');
+  }
+  return result.available;
+};
+
+/**
  * Update an existing staff member.
  */
 export const updateStaff = (id, request) => {
@@ -284,6 +295,54 @@ export const getWorkload = async () => {
   const workload = await apiFetch('/api/workload');
   registerDepartmentNames(workload);
   return workload;
+};
+
+/**
+ * Read-only suggestions for lending staff between departments (ADMIN or MANAGER; STAFF receives 403).
+ * Nothing is assigned or moved by this call.
+ */
+export const getWorkloadRecommendations = () => {
+  return apiFetch('/api/workload/recommendations');
+};
+
+/**
+ * Temporary cross-department support (ADMIN or MANAGER; STAFF receive 403).
+ * Options: the waiting tasks of the receiving department and the staff who could help.
+ */
+export const getSupportOptions = (receivingDepartment) => {
+  return apiFetch(`/api/support/options?receivingDepartment=${encodeURIComponent(receivingDepartment)}`);
+};
+
+/** Validates a plan and returns its workload impact. Changes nothing. Request: { receivingDepartment, items: [{ staffId, taskId }] } */
+export const previewSupportPlan = (request) => {
+  return apiFetch('/api/support/preview', { method: 'POST', body: JSON.stringify(request) });
+};
+
+/** Revalidates the plan on the server and, if everything still holds, creates the assignments. */
+export const confirmSupportPlan = (request) => {
+  return apiFetch('/api/support/assignments', { method: 'POST', body: JSON.stringify(request) });
+};
+
+/**
+ * Ends one active support by hand (ADMIN or MANAGER). Resolves with the ended record; rejects with err.status 404 (gone),
+ * 409 (already ended, in progress, or changed at the same moment; err.data.problems[0].code says which).
+ */
+export const endSupportAssignment = (supportId) => {
+  return apiFetch(`/api/support/assignments/${encodeURIComponent(supportId)}/end`, { method: 'POST' });
+};
+
+/**
+ * Removes one ended support record from the history list (ADMIN or MANAGER). The server archives it: the record is kept
+ * but no longer listed. Rejects with err.status 409 (still active or already removed; err.data.problems[0].code says
+ * which) or 404.
+ */
+export const archiveSupportAssignment = (supportId) => {
+  return apiFetch(`/api/support/assignments/${encodeURIComponent(supportId)}/archive`, { method: 'POST' });
+};
+
+/** Support history, newest first. status: ACTIVE, COMPLETED or CANCELLED; omit for all. */
+export const getSupportAssignments = (status) => {
+  return apiFetch(`/api/support/assignments${status ? `?status=${encodeURIComponent(status)}` : ''}`);
 };
 
 /**

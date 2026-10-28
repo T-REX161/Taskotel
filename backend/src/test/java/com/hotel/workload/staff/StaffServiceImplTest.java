@@ -138,6 +138,20 @@ public class StaffServiceImplTest {
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = Role.class, names = { "MANAGER", "ADMIN" })
+    @DisplayName("createStaff: a manager cannot create manager or admin accounts")
+    public void testCreateStaff_ManagerCannotGrantElevatedRole(Role role) {
+        setSecurityContextRole("ROLE_MANAGER");
+        CreateStaffRequest request = createValidRequest();
+        request.setRole(role);
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> staffService.createStaff(request));
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        verify(userRepository, never()).save(any());
+        verify(staffRepository, never()).save(any());
+    }
+
     @Test
     @DisplayName("removeStaff throws FORBIDDEN when user does not have ADMIN role")
     public void testRemoveStaff_NotAdmin_ThrowsForbidden() {
@@ -518,5 +532,31 @@ public class StaffServiceImplTest {
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> staffService.activateStaff(staffId));
         assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("A duplicate username that slips past the exists check becomes a clean 409 and no staff record is saved")
+    public void createStaff_ConcurrentDuplicateUsername_ReturnsConflict() {
+        when(userRepository.existsByUsername(any())).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(passwordEncoder.encode(any())).thenReturn("encoded");
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("could not execute statement",
+                new RuntimeException("duplicate key value violates unique constraint users_username_key"))).when(userRepository).flush();
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> staffService.createStaff(createValidRequest()));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        assertEquals("Username already exists", ex.getReason());
+        verify(staffRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Username availability: free, taken and blank")
+    public void isUsernameAvailable_ReportsFreeTakenAndRejectsBlank() {
+        when(userRepository.existsByUsername("free")).thenReturn(false);
+        when(userRepository.existsByUsername("taken")).thenReturn(true);
+        assertTrue(staffService.isUsernameAvailable("free"));
+        assertFalse(staffService.isUsernameAvailable("taken"));
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(ResponseStatusException.class, () -> staffService.isUsernameAvailable(" ")).getStatusCode());
     }
 }

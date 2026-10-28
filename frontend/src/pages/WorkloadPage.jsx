@@ -6,7 +6,7 @@ import {
   TasksIcon,
   EyeIcon,
 } from '../components/icons/Icons';
-import { getWorkload, getDepartments, getStaff } from '../services/api';
+import { getWorkload, getDepartments, getStaff, getUserRole } from '../services/api';
 import {
   calculateWorkloadSummary,
   calculateDepartmentWorkloads,
@@ -24,6 +24,7 @@ import {
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import DepartmentBadge from '../components/workload/DepartmentBadge';
 import UtilizationMeter from '../components/workload/UtilizationMeter';
+import CrossDepartmentSupportPanel from '../components/workload/CrossDepartmentSupportPanel';
 import PageSizeToggle from '../components/common/PageSizeToggle';
 
 // Staff rows per page by default (this list has always shown 5); the toggle offers 5, 10 or 15
@@ -433,6 +434,9 @@ export default function WorkloadPage() {
         </div>
       </section>
 
+      {/* Cross-department support suggestions: administrators and managers only (the endpoint refuses staff) */}
+      {['ADMIN', 'MANAGER'].includes(getUserRole()) && <CrossDepartmentSupportPanel onChanged={() => fetchData(true)} />}
+
       {/* 4. Staff Workload Distribution: full width, below Workload by Department */}
       <div className="min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 overflow-hidden">
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
@@ -572,6 +576,11 @@ export default function WorkloadPage() {
                       {/* 2. Department */}
                       <td className="px-4 py-2 min-w-0 align-middle">
                         <DepartmentBadge department={item.department} />
+                        {item.supportDepartment && (
+                          <span className="mt-1 block text-[11px] leading-4 text-amber-700" title="Temporary cross-department support. Their home department has not changed.">
+                            Supporting {item.supportDepartmentName || item.supportDepartment}
+                          </span>
+                        )}
                       </td>
 
                       {/* 3. Tasks */}

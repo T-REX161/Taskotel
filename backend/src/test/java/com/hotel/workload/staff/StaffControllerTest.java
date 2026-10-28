@@ -1242,4 +1242,83 @@ public class StaffControllerTest {
 
                 assertStaffAndLoginUnchanged(before);
         }
+
+        // ---------------- Role chosen in Add New Staff ----------------
+
+        private String createJson(String username, String role) {
+                String roleLine = role == null ? "" : ",\n    \"role\": \"" + role + "\"";
+                return """
+                                {
+                                    "fullName": "Role Test %s",
+                                    "email": "%s@hotel.com",
+                                    "department": "FRONT_DESK",
+                                    "availability": "AVAILABLE",
+                                    "username": "%s",
+                                    "temporaryPassword": "TempPass@123"%s
+                                }
+                                """.formatted(username, username, username, roleLine);
+        }
+
+        private org.springframework.test.web.servlet.ResultActions create(String username, String role) throws Exception {
+                return mockMvc.perform(post("/api/staff")
+                                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                                .content(createJson(username, role)));
+        }
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        @org.springframework.transaction.annotation.Transactional
+        public void testAdminCreatesEveryRole_RoleIsSavedAndUsedAtLogin() throws Exception {
+                for (String role : new String[] { "STAFF", "MANAGER", "ADMIN" }) {
+                        String username = "role_" + role.toLowerCase();
+                        create(username, role)
+                                        .andExpect(status().isCreated())
+                                        .andExpect(jsonPath("$.role").value(role))
+                                        .andExpect(jsonPath("$.department").value("FRONT_DESK"));
+
+                        com.hotel.workload.security.User user = userRepository.findByUsername(username).orElseThrow();
+                        org.junit.jupiter.api.Assertions.assertEquals(role, user.getRole().name());
+                        org.junit.jupiter.api.Assertions.assertTrue(staffRepository.findAll().stream()
+                                        .anyMatch(s -> s.getUser() != null && username.equals(s.getUser().getUsername())), "Has a staff record");
+                        // Staff go through email verification and credential setup; managers and admins do not
+                        boolean staff = role.equals("STAFF");
+                        org.junit.jupiter.api.Assertions.assertEquals(!staff, user.isEmailVerified());
+                        org.junit.jupiter.api.Assertions.assertEquals(staff, user.isCredentialsSetupRequired());
+                }
+
+                // The saved role is the one the server signs in with
+                mockMvc.perform(post("/api/auth/login")
+                                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                                .content("{\"username\":\"role_manager\",\"password\":\"TempPass@123\"}"))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.role").value("MANAGER"))
+                                .andExpect(jsonPath("$.token").isNotEmpty());
+        }
+
+        @Test
+        @WithMockUser(roles = "MANAGER")
+        @org.springframework.transaction.annotation.Transactional
+        public void testManagerCannotCreateManagerOrAdmin() throws Exception {
+                long usersBefore = userRepository.count();
+                long staffBefore = staffRepository.count();
+                create("escalate_admin", "ADMIN").andExpect(status().isForbidden());
+                create("escalate_manager", "MANAGER").andExpect(status().isForbidden());
+                org.junit.jupiter.api.Assertions.assertEquals(usersBefore, userRepository.count(), "No account was created");
+                org.junit.jupiter.api.Assertions.assertEquals(staffBefore, staffRepository.count());
+
+                create("mgr_made_staff", "STAFF").andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("STAFF"));
+        }
+
+        @Test
+        @WithMockUser(roles = "ADMIN")
+        @org.springframework.transaction.annotation.Transactional
+        public void testRoleOmittedMeansStaff_UnknownRoleRejected() throws Exception {
+                create("no_role_given", null).andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("STAFF"));
+                com.hotel.workload.security.User user = userRepository.findByUsername("no_role_given").orElseThrow();
+                org.junit.jupiter.api.Assertions.assertFalse(user.isEmailVerified());
+                org.junit.jupiter.api.Assertions.assertTrue(user.isCredentialsSetupRequired());
+
+                create("bad_role", "SUPERUSER").andExpect(status().isBadRequest());
+                org.junit.jupiter.api.Assertions.assertTrue(userRepository.findByUsername("bad_role").isEmpty());
+        }
 }

@@ -8,6 +8,7 @@ import com.hotel.workload.staff.Department;
 import com.hotel.workload.staff.DepartmentResolver;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
+import com.hotel.workload.support.SupportLifecycle;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -29,17 +30,20 @@ public class TaskServiceImpl implements TaskService {
     private final StaffRepository staffRepository;
     private final AssignmentRepository assignmentRepository;
     private final DepartmentResolver departmentResolver;
+    private final SupportLifecycle supportLifecycle;
 
     public TaskServiceImpl(TaskRepository taskRepository,
                            UserRepository userRepository,
                            StaffRepository staffRepository,
                            AssignmentRepository assignmentRepository,
-                           DepartmentResolver departmentResolver) {
+                           DepartmentResolver departmentResolver,
+                           SupportLifecycle supportLifecycle) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
         this.assignmentRepository = assignmentRepository;
         this.departmentResolver = departmentResolver;
+        this.supportLifecycle = supportLifecycle;
     }
 
     @Override
@@ -126,6 +130,8 @@ public class TaskServiceImpl implements TaskService {
         task.setDepartment(requestedDepartment);
 
         task = taskRepository.saveAndFlush(task);
+        // Temporary cross-department support ends when its task is completed, cancelled or moved
+        supportLifecycle.onTaskChanged(task);
         return mapToDto(task);
     }
 
@@ -198,6 +204,7 @@ public class TaskServiceImpl implements TaskService {
     public void deleteTask(UUID id) {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+        supportLifecycle.onTaskDeleted(id);
         List<Assignment> assignments = assignmentRepository.findAllByTaskId(id);
         if (!assignments.isEmpty()) {
             assignmentRepository.deleteAll(assignments);

@@ -1,6 +1,7 @@
 import React from 'react';
 
-export default function PasswordRequirements({ rules }) {
+// compact: tighter padding and line spacing, for side panels in dense forms
+export default function PasswordRequirements({ rules, compact = false }) {
   const {
     ruleMinLength = false,
     ruleUppercase = false,
@@ -18,8 +19,8 @@ export default function PasswordRequirements({ rules }) {
   ];
 
   return (
-    <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 text-xs space-y-1.5">
-      <span className="block font-semibold text-gray-700 mb-1">Password requirements:</span>
+    <div className={`bg-gray-50/80 rounded-xl border border-gray-100 text-xs ${compact ? 'px-3 py-1.5 space-y-0' : 'p-3 space-y-1.5'}`}>
+      <span className={`block font-semibold text-gray-700 ${compact ? 'mb-0.5' : 'mb-1'}`}>Password requirements:</span>
       
       {requirementList.map((req) => (
         <div key={req.key} className="flex items-center gap-2">

@@ -17,6 +17,9 @@ public class WorkloadDto {
     private int activeTaskCount;
     private int totalEstimatedDuration;
     private WorkloadStatus workloadStatus;
+    // Set while the person is on temporary cross-department support: the department they are helping
+    private String supportDepartment;
+    private String supportDepartmentName;
 
     public WorkloadDto() {}
 
@@ -66,6 +69,12 @@ public class WorkloadDto {
     public void setTotalEstimatedDuration(int totalEstimatedDuration) {
         this.totalEstimatedDuration = totalEstimatedDuration;
     }
+
+    public String getSupportDepartment() { return supportDepartment; }
+    public void setSupportDepartment(String supportDepartment) { this.supportDepartment = supportDepartment; }
+
+    public String getSupportDepartmentName() { return supportDepartmentName; }
+    public void setSupportDepartmentName(String supportDepartmentName) { this.supportDepartmentName = supportDepartmentName; }
 
     public WorkloadStatus getWorkloadStatus() { return workloadStatus; }
     public void setWorkloadStatus(WorkloadStatus workloadStatus) {

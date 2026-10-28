@@ -10,6 +10,7 @@ import com.hotel.workload.task.Task;
 import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -83,21 +84,35 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffDto createStaff(CreateStaffRequest request) {
+        // Managers may add staff only; manager and admin accounts can be created by an administrator
+        Role role = request.getRole() != null ? request.getRole() : Role.STAFF;
+        if (role != Role.STAFF && !currentUserIsAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators can create manager or admin accounts");
+        }
+
         passwordValidatorService.validate(request.getTemporaryPassword());
 
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
 
+        // Staff verify their email and set their own credentials; the account model skips that for managers and admins
+        boolean staffOnboarding = role == Role.STAFF;
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getTemporaryPassword()));
-        user.setRole(Role.STAFF);
+        user.setRole(role);
         user.setActive(true);
-        user.setEmailVerified(false);
-        user.setCredentialsSetupRequired(true);
-        user = userRepository.save(user);
+        user.setEmailVerified(!staffOnboarding);
+        user.setCredentialsSetupRequired(staffOnboarding);
+        try {
+            user = userRepository.save(user);
+            // Flush now so a duplicate created concurrently surfaces here as a clean conflict, not at commit
+            userRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw duplicateAccount(e);
+        }
 
         Staff staff = new Staff();
         staff.setUser(user);
@@ -108,9 +123,31 @@ public class StaffServiceImpl implements StaffService {
         staff.setAvailability(request.getAvailability());
         staff.setActive(true);
         
-        staff = staffRepository.save(staff);
+        try {
+            staff = staffRepository.save(staff);
+            staffRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw duplicateAccount(e);
+        }
 
         return StaffDto.fromEntity(staff);
+    }
+
+    @Override
+    public boolean isUsernameAvailable(String username) {
+        if (username == null || username.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Username is required");
+        }
+        return !userRepository.existsByUsername(username);
+    }
+
+    // The database unique constraints are the final authority when two requests race past the exists checks
+    private ResponseStatusException duplicateAccount(DataIntegrityViolationException e) {
+        String cause = String.valueOf(e.getMostSpecificCause().getMessage()).toLowerCase();
+        String message = cause.contains("username") ? "Username already exists"
+                : cause.contains("email") ? "Email already exists"
+                : "Username or email already exists";
+        return new ResponseStatusException(HttpStatus.CONFLICT, message);
     }
 
     @Override
@@ -216,8 +253,7 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public void removeStaff(UUID id) {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated() || auth.getAuthorities().stream().noneMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"))) {
+        if (!currentUserIsAdmin()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators are authorized to remove staff members");
         }
 
@@ -279,5 +315,11 @@ public class StaffServiceImpl implements StaffService {
                 .filter(task -> task != null && ACTIVE_TASK_STATUSES.contains(task.getStatus()))
                 .filter(task -> task.getDepartment() != null && !task.getDepartment().equals(department))
                 .collect(Collectors.toList());
+    }
+
+    private boolean currentUserIsAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.isAuthenticated()
+                && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"));
     }
 }

@@ -21,6 +21,14 @@ public class StaffController {
         return ResponseEntity.ok(staffService.getAllStaff());
     }
 
+    // Answers only whether the username is free; no account details are returned
+    @GetMapping("/username-availability")
+    public ResponseEntity<java.util.Map<String, Boolean>> checkUsernameAvailability(@org.springframework.web.bind.annotation.RequestParam String username) {
+        return ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(java.util.Map.of("available", staffService.isUsernameAvailable(username)));
+    }
+
     @org.springframework.web.bind.annotation.PostMapping
     public ResponseEntity<StaffDto> createStaff(@jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody CreateStaffRequest request) {
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(staffService.createStaff(request));

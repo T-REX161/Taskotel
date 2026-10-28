@@ -133,7 +133,12 @@ public class AuthService {
         user.setSetupToken(null);
         user.setFirstLogin(false);
         
-        userRepository.save(user);
+        try {
+            userRepository.save(user);
+            userRepository.flush();
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new CredentialsSetupException("Username already exists");
+        }
 
         // Generate standard JWT now that setup is complete
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole());

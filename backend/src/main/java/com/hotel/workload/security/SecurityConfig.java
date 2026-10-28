@@ -77,6 +77,10 @@ public class SecurityConfig {
                 }
 
                 authz
+                    // No HTTP method here on purpose: HEAD is served by the GET handler, so a GET-only rule would let any signed-in user run it
+                    .requestMatchers("/api/workload/recommendations").hasAnyRole("ADMIN", "MANAGER")
+                    // Temporary cross-department support: preview and confirm are for Admin and Manager only, whatever the method
+                    .requestMatchers("/api/support", "/api/support/**").hasAnyRole("ADMIN", "MANAGER")
                     .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/workload").hasAnyRole("ADMIN", "MANAGER", "STAFF")
                     .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/dashboard", "/api/dashboard/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")
                     .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/departments", "/api/departments/**").hasAnyRole("ADMIN", "MANAGER", "STAFF")

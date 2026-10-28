@@ -2,7 +2,12 @@ package com.hotel.workload.workload;
 
 import com.hotel.workload.assignment.Assignment;
 import com.hotel.workload.assignment.AssignmentRepository;
+import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.DepartmentRepository;
 import com.hotel.workload.staff.Staff;
+import com.hotel.workload.support.SupportAssignment;
+import com.hotel.workload.support.SupportAssignmentRepository;
+import com.hotel.workload.support.SupportStatus;
 import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.task.TaskStatus;
 import org.springframework.stereotype.Service;
@@ -32,11 +37,17 @@ public class WorkloadServiceImpl implements WorkloadService {
 
     private final StaffRepository staffRepository;
     private final AssignmentRepository assignmentRepository;
+    private final SupportAssignmentRepository supportRepository;
+    private final DepartmentRepository departmentRepository;
 
     public WorkloadServiceImpl(StaffRepository staffRepository,
-                               AssignmentRepository assignmentRepository) {
+                               AssignmentRepository assignmentRepository,
+                               SupportAssignmentRepository supportRepository,
+                               DepartmentRepository departmentRepository) {
         this.staffRepository = staffRepository;
         this.assignmentRepository = assignmentRepository;
+        this.supportRepository = supportRepository;
+        this.departmentRepository = departmentRepository;
     }
 
     @Override
@@ -63,6 +74,16 @@ public class WorkloadServiceImpl implements WorkloadService {
             byStaff.computeIfAbsent(staffId, k -> new ArrayList<>()).add(assignment);
         }
 
+        // Staff on temporary cross-department support, and the department they are helping
+        Map<UUID, SupportAssignment> supportByStaff = new HashMap<>();
+        for (SupportAssignment support : supportRepository.findByStatus(SupportStatus.ACTIVE)) {
+            supportByStaff.put(support.getStaffId(), support);
+        }
+        Map<String, String> departmentNames = new HashMap<>();
+        if (!supportByStaff.isEmpty()) {
+            for (Department department : departmentRepository.findAll()) departmentNames.put(department.getCode(), department.getName());
+        }
+
         // 4. Build one WorkloadDto per staff member.
         List<WorkloadDto> result = new ArrayList<>();
         for (Staff staff : targetStaff) {
@@ -87,6 +108,11 @@ public class WorkloadServiceImpl implements WorkloadService {
             dto.setActiveTaskCount(activeTaskCount);
             dto.setTotalEstimatedDuration(totalDuration);
             dto.setWorkloadStatus(WorkloadDto.deriveStatus(totalDuration));
+            SupportAssignment support = activeTaskCount > 0 ? supportByStaff.get(staff.getId()) : null;
+            if (support != null) {
+                dto.setSupportDepartment(support.getReceivingDepartmentCode());
+                dto.setSupportDepartmentName(departmentNames.getOrDefault(support.getReceivingDepartmentCode(), support.getReceivingDepartmentCode()));
+            }
 
             result.add(dto);
         }

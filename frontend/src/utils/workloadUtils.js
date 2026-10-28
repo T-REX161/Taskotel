@@ -300,7 +300,8 @@ export function calculateDepartmentWorkloads(workloadList = [], departmentList =
 
   safeWorkload.forEach((w) => {
     if (!w) return;
-    const rawDept = String(w.department || '').toUpperCase();
+    // Someone on temporary cross-department support counts under the department they are helping (their home department is unchanged)
+    const rawDept = String(w.supportDepartment || w.department || '').toUpperCase();
     const duration =
       typeof w.totalEstimatedDuration === 'number'
         ? w.totalEstimatedDuration

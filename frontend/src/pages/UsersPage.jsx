@@ -441,7 +441,7 @@ export default function UsersPage() {
         onClose={() => setIsAddOpen(false)}
         onSuccess={handleAddSuccess}
         title="Add User"
-        description="Creates a staff member with their own Staff login. Admin and manager accounts cannot be created here."
+        description="Create a login and staff record with the role you choose"
         submitLabel="Add User"
       />
 

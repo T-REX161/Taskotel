@@ -32,13 +32,16 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final AssignmentRepository assignmentRepository;
     private final TaskRepository taskRepository;
     private final StaffRepository staffRepository;
+    private final com.hotel.workload.support.SupportLifecycle supportLifecycle;
 
     public AssignmentServiceImpl(AssignmentRepository assignmentRepository,
                                  TaskRepository taskRepository,
-                                 StaffRepository staffRepository) {
+                                 StaffRepository staffRepository,
+                                 com.hotel.workload.support.SupportLifecycle supportLifecycle) {
         this.assignmentRepository = assignmentRepository;
         this.taskRepository = taskRepository;
         this.staffRepository = staffRepository;
+        this.supportLifecycle = supportLifecycle;
     }
 
     @Override
@@ -167,6 +170,8 @@ public class AssignmentServiceImpl implements AssignmentService {
         assignment.setStaff(targetStaff);
         assignment.setAssignedAt(LocalDateTime.now());
         assignment = assignmentRepository.saveAndFlush(assignment);
+        // If this task was being supported from another department, that support ends: someone else holds it now
+        if (task != null) supportLifecycle.onTaskReassigned(task.getId(), targetStaff.getId());
 
         return AssignmentDto.fromEntity(assignment);
     }
