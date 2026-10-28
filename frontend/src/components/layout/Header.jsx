@@ -1,38 +1,21 @@
 import React from 'react';
 import TaskotelLogo from '../brand/TaskotelLogo';
-import {
-  SearchIcon,
-  MessageIcon,
-  BellIcon,
-  SettingsIcon,
-  MenuIcon,
-  SunIcon,
-  MoonIcon,
-} from '../icons/Icons';
+import { SearchIcon, MenuIcon, SunIcon, MoonIcon } from '../icons/Icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { getUsername, getUserRole } from '../../services/api';
 
-export default function Header({
-  onMenuClick,
-  onSettingsClick,
-  onNotificationClick,
-  onMessagesClick,
-  onProfileClick,
-  onLogoClick,
-}) {
-  const { isDark, toggleTheme } = useTheme();
-  const username = getUsername() || 'Administrator';
-  const role = getUserRole() || 'ADMIN';
+/** Display name, initials and role label for the signed-in user (from the stored login; nothing is assumed when it is missing). */
+export function describeUser(username, role) {
+  const name = String(username || '').trim();
+  const displayName = name ? name.charAt(0).toUpperCase() + name.slice(1) : 'Account';
+  const initials = (name || 'Account').slice(0, 2).toUpperCase();
+  const roleLabel = { ADMIN: 'Admin', MANAGER: 'Manager', STAFF: 'Staff' }[role] || '';
+  return { displayName, initials, roleLabel };
+}
 
-  // Format display name and initials
-  const displayName = username.charAt(0).toUpperCase() + username.slice(1);
-  const initials = username.slice(0, 2).toUpperCase();
-  const roleLabel =
-    role === 'ADMIN'
-      ? 'Hotel Administrator'
-      : role === 'MANAGER'
-      ? 'Hotel Manager'
-      : 'Hotel Staff';
+export default function Header({ onMenuClick, onProfileClick, onLogoClick }) {
+  const { isDark, toggleTheme } = useTheme();
+  const { displayName, initials, roleLabel } = describeUser(getUsername(), getUserRole());
 
   return (
     <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-surface-chrome flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">
@@ -80,41 +63,8 @@ export default function Header({
         </div>
       </div>
 
-      {/* Right: Messages, Notifications, Settings & User Avatar */}
+      {/* Right: theme toggle & current user */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-        {/* Messages Icon */}
-        <button
-          type="button"
-          onClick={onMessagesClick}
-          className="w-8.5 h-8.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
-          aria-label="Messages"
-          title="Messages"
-        >
-          <MessageIcon className="w-4.5 h-4.5" />
-        </button>
-
-        {/* Notifications Icon */}
-        <button
-          type="button"
-          onClick={onNotificationClick}
-          className="relative w-8.5 h-8.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
-          aria-label="Notifications"
-          title="Notifications"
-        >
-          <BellIcon className="w-4.5 h-4.5" />
-        </button>
-
-        {/* Settings Icon */}
-        <button
-          type="button"
-          onClick={onSettingsClick}
-          className="w-8.5 h-8.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 flex items-center justify-center transition-colors cursor-pointer"
-          aria-label="Settings"
-          title="Settings"
-        >
-          <SettingsIcon className="w-4.5 h-4.5" />
-        </button>
-
         {/* Theme toggle: Sun in light mode, Moon in dark mode */}
         <button
           type="button"
@@ -136,23 +86,19 @@ export default function Header({
         {/* Current User Avatar */}
         <div
           onClick={onProfileClick}
-          className="flex items-center gap-2 pl-1 cursor-pointer hover:opacity-85 transition-opacity select-none"
+          className="flex items-center gap-2.5 pl-1 cursor-pointer hover:opacity-85 transition-opacity select-none"
           title="View Profile"
         >
           <div className="relative">
-            <div className="w-8 h-8 rounded-full bg-slate-800 text-white font-medium text-xs flex items-center justify-center shadow-2xs ring-1 ring-slate-200">
+            <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-xs flex items-center justify-center ring-1 ring-emerald-200">
               {initials}
             </div>
             {/* Online Status Dot */}
-            <span className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-emerald-500 ring-1.5 ring-white" />
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
           </div>
           <div className="hidden md:flex flex-col text-left">
-            <span className="text-xs font-semibold text-slate-800 leading-tight">
-              {displayName}
-            </span>
-            <span className="text-[10px] font-medium text-slate-400">
-              {roleLabel}
-            </span>
+            <span className="text-sm font-semibold text-slate-800 leading-tight">{displayName}</span>
+            {roleLabel && <span className="text-xs font-medium text-slate-500 leading-tight">{roleLabel}</span>}
           </div>
         </div>
       </div>

@@ -18,7 +18,7 @@ const DEFAULT_DEPARTMENTS = [
  */
 export default function DepartmentOverview({ departments = DEFAULT_DEPARTMENTS }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 sm:p-6">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-bold text-gray-900">Department Overview</h2>
       </div>

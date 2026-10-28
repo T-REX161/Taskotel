@@ -10,7 +10,7 @@ import { StaffIcon, AssignmentsIcon } from '../icons/Icons';
  */
 export default function AssignmentsOverview({ data, isStaff }) {
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 sm:p-6">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-lg font-bold text-gray-900">
           {isStaff ? 'Recent Assignments' : 'Active Assignments'}

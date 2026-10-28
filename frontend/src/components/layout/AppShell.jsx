@@ -65,10 +65,7 @@ export default function AppShell({ children, activeNav, onNavChange }) {
       {/* White Top Navigation Bar */}
       <Header
         onMenuClick={() => setIsSidebarOpen(true)}
-        onSettingsClick={() => handleNavClick('Settings')}
         onProfileClick={() => handleNavClick('Profile')}
-        onNotificationClick={() => {}}
-        onMessagesClick={() => {}}
         onLogoClick={() => handleNavClick('Dashboard')}
       />
 

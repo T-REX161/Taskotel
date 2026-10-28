@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardSummary, getUserRole } from '../services/api';
+import { getDashboardSummary, getUserRole, getUsername, getWorkload } from '../services/api';
+import { describeUser } from '../components/layout/Header';
+import { greetingFor } from '../utils/dashboardView';
 import SummaryCards from '../components/dashboard/SummaryCards';
 import WorkloadOverview from '../components/dashboard/WorkloadOverview';
 import DepartmentOverview from '../components/dashboard/DepartmentOverview';
@@ -12,6 +14,8 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  // Per-person workload: only Admin and Manager load it (the backend returns just their own record to Staff)
+  const [staffWorkload, setStaffWorkload] = useState({ status: 'loading', data: [] });
 
   const fetchDashboardData = async () => {
     setIsLoading(true);
@@ -30,8 +34,17 @@ export default function Dashboard() {
     }
   };
 
+  const loadStaffWorkload = async () => {
+    try {
+      setStaffWorkload({ status: 'ready', data: await getWorkload() });
+    } catch {
+      setStaffWorkload({ status: 'error', data: [] });
+    }
+  };
+
   useEffect(() => {
     fetchDashboardData();
+    if (getUserRole() !== 'STAFF') loadStaffWorkload();
   }, []);
 
   if (isLoading) {
@@ -101,15 +114,18 @@ export default function Dashboard() {
     userRole === 'STAFF' ||
     (data && data.workload !== undefined && data.totalStaff === undefined);
 
+  const welcomeName = describeUser(getUsername(), userRole).displayName;
+
   return (
     <div className="w-full space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
         <p className="text-gray-500 mt-1">
+          {greetingFor(new Date().getHours())}, <span className="font-semibold text-gray-700">{welcomeName}</span>.{' '}
           {isStaff
-            ? 'View your personal workload, assignments, and task status.'
-            : 'Monitor hotel staff availability, tasks and workload.'}
+            ? 'Here is your personal workload, assignments and task status.'
+            : 'Here is how your hotel staff, tasks and workload look today.'}
         </p>
       </div>
 
@@ -119,7 +135,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column (Workload & Departments) */}
         <div className="lg:col-span-2 space-y-6">
-          <WorkloadOverview data={data} isStaff={isStaff} />
+          <WorkloadOverview data={data} isStaff={isStaff} staffWorkload={isStaff ? undefined : staffWorkload} />
           <DepartmentOverview />
         </div>
 
