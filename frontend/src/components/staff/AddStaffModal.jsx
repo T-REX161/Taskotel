@@ -24,6 +24,7 @@ import DepartmentOptions from '../common/DepartmentOptions';
 import useDepartments from '../../hooks/useDepartments';
 import useUsernameAvailability from '../../hooks/useUsernameAvailability';
 import { generateUsername, validateUsername, USERNAME_INVALID_MESSAGES } from '../../utils/username';
+import { generateTemporaryPassword, copyText } from '../../utils/passwordGenerator';
 import UsernameFeedback from './UsernameFeedback';
 
 const initialFormState = {
@@ -46,6 +47,9 @@ const ROLE_OPTIONS = [
 
 const INPUT_CLASS =
   'w-full h-10 pl-10 pr-4 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent disabled:opacity-60';
+
+const PASSWORD_ACTION_BUTTON =
+  'h-9 flex items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-emerald-600 hover:bg-gray-50 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-500';
 
 /** A bordered form section with an icon, a title and a short subtitle. */
 function FormSection({ icon: Icon, title, subtitle, aside, children }) {
@@ -118,6 +122,15 @@ export default function AddStaffModal({
   // Until the user types their own username it follows the full name; after that it is never overwritten
   const [usernameEdited, setUsernameEdited] = useState(false);
   const [recheckKey, setRecheckKey] = useState(0);
+  // The temporary password follows the full name until the admin types their own or regenerates it
+  const [passwordLocked, setPasswordLocked] = useState(false);
+  const [copyState, setCopyState] = useState('idle');
+  // The Copied / Copy failed message disappears by itself
+  useEffect(() => {
+    if (copyState === 'idle') return undefined;
+    const timer = setTimeout(() => setCopyState('idle'), 2500);
+    return () => clearTimeout(timer);
+  }, [copyState]);
 
   // Managers can add staff only; administrators can also create manager and admin accounts
   const canChooseRole = getUserRole() === 'ADMIN';
@@ -154,12 +167,27 @@ export default function AddStaffModal({
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'username') setUsernameEdited(value !== '');
+    if (name === 'temporaryPassword') setPasswordLocked(value !== '');
+    if (name === 'temporaryPassword' || name === 'fullName') setCopyState('idle');
     setFormData((prev) => ({
       ...prev,
       [name]: value,
       ...(name === 'fullName' && !usernameEdited ? { username: generateUsername(value) } : {}),
+      ...(name === 'fullName' && !passwordLocked ? { temporaryPassword: value.trim() ? generateTemporaryPassword(value) : '' } : {}),
     }));
     if (formError) setFormError('');
+  };
+
+  const regeneratePassword = () => {
+    setPasswordLocked(true);
+    setCopyState('idle');
+    setFormData((prev) => ({ ...prev, temporaryPassword: generateTemporaryPassword(prev.fullName) }));
+    if (formError) setFormError('');
+  };
+
+  const copyPassword = async () => {
+    if (!formData.temporaryPassword) return;
+    setCopyState((await copyText(formData.temporaryPassword)) ? 'copied' : 'failed');
   };
 
   const regenerateUsername = () => {
@@ -177,6 +205,8 @@ export default function AddStaffModal({
   const handleClose = () => {
     if (isSubmitting) return;
     setUsernameEdited(false);
+    setPasswordLocked(false);
+    setCopyState('idle');
     setFormData(initialFormState);
     setShowTemporaryPassword(false);
     setFormError('');
@@ -243,6 +273,8 @@ export default function AddStaffModal({
 
       setFormData(initialFormState);
       setUsernameEdited(false);
+      setPasswordLocked(false);
+      setCopyState('idle');
       setShowTemporaryPassword(false);
       setFormError('');
       onSuccess(newStaff, payload.fullName);
@@ -487,7 +519,44 @@ export default function AddStaffModal({
                       className={`${INPUT_CLASS} bg-gray-50 text-gray-500 cursor-not-allowed`}
                     />
                   </Field>
-                  <Field label="Temporary Password *" htmlFor="add-staff-password" icon={LockIcon}>
+                  <Field
+                    label="Temporary Password *"
+                    htmlFor="add-staff-password"
+                    icon={LockIcon}
+                    labelExtra={
+                      <span role="status" aria-live="polite" className={`text-[11px] leading-4 font-medium ${copyState === 'failed' ? 'text-red-600' : 'text-emerald-700'}`}>
+                        {copyState === 'copied' ? 'Copied' : copyState === 'failed' ? 'Copy failed' : ''}
+                      </span>
+                    }
+                    footer={
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={copyPassword}
+                          disabled={isSubmitting || !formData.temporaryPassword}
+                          title="Copy password"
+                          aria-label="Copy password"
+                          className={PASSWORD_ACTION_BUTTON}
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={regeneratePassword}
+                          disabled={isSubmitting}
+                          title="Regenerate password"
+                          aria-label="Regenerate password"
+                          className={PASSWORD_ACTION_BUTTON}
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        </button>
+                      </div>
+                    }
+                  >
                     <input
                       id="add-staff-password"
                       type={showTemporaryPassword ? 'text' : 'password'}
@@ -496,14 +565,14 @@ export default function AddStaffModal({
                       value={formData.temporaryPassword}
                       onChange={handleInputChange}
                       disabled={isSubmitting}
-                      className={`${INPUT_CLASS} pr-10`}
+                      className={`${INPUT_CLASS} pr-11`}
                       placeholder="••••••••"
                     />
                     <button
                       type="button"
                       onClick={() => setShowTemporaryPassword(!showTemporaryPassword)}
-                      tabIndex={-1}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors cursor-pointer"
+                      title={showTemporaryPassword ? 'Hide password' : 'Show password'}
+                      className="absolute inset-y-0 right-1.5 my-auto w-7 h-7 flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
                       aria-label={
                         showTemporaryPassword ? 'Hide password' : 'Show password'
                       }

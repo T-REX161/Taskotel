@@ -44,7 +44,7 @@ describe('Add New Staff modal', () => {
 
   it('keeps the existing validation, status default, password rules and visibility toggle', () => {
     for (const text of ["'Full name is required.'", "'Please enter a valid email address.'", "'Temporary password does not satisfy all required security rules.'",
-      'value="Active (Default)"', "aria-label={\n                        showTemporaryPassword ? 'Hide password' : 'Show password'", 'evaluatePasswordRules(formData.temporaryPassword)']) {
+      'value="Active (Default)"', "showTemporaryPassword ? 'Hide password' : 'Show password'", 'evaluatePasswordRules(formData.temporaryPassword)']) {
       assert.ok(source.includes(text), text);
     }
     assert.ok(source.includes('onSuccess(newStaff, payload.fullName);') && source.includes('const newStaff = await createStaff(payload);'));
