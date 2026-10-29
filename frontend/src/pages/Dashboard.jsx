@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardSummary, getUserRole, getUsername, getWorkload } from '../services/api';
+import { getDashboardSummary, getUserRole, getUsername, getWorkload, getWorkloadRecommendations, getTasks } from '../services/api';
 import { describeUser } from '../components/layout/Header';
-import { greetingFor } from '../utils/dashboardView';
+import { buildInsights, formatDashboardDate } from '../utils/dashboardView';
+import { keepIfSame, singleFlight, startPolling } from '../utils/polling';
+import { normalizeRecommendations } from '../utils/supportRecommendations';
+import OperationsInsights from '../components/dashboard/OperationsInsights';
 import SummaryCards from '../components/dashboard/SummaryCards';
 import WorkloadOverview from '../components/dashboard/WorkloadOverview';
-import DepartmentOverview from '../components/dashboard/DepartmentOverview';
 import TaskStatusSummary from '../components/dashboard/TaskStatusSummary';
 import AssignmentsOverview from '../components/dashboard/AssignmentsOverview';
+
+// How often the dashboard re-reads its data while it is open and the tab is visible
+const DASHBOARD_REFRESH_MS = 30000;
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -16,35 +21,81 @@ export default function Dashboard() {
   const [error, setError] = useState('');
   // Per-person workload: only Admin and Manager load it (the backend returns just their own record to Staff)
   const [staffWorkload, setStaffWorkload] = useState({ status: 'loading', data: [] });
+  // Sources for Operations Insights, all Admin / Manager only (Staff never request them): departments that may need support,
+  // from the existing recommendations API, and the task list (the backend returns only a Staff member's own tasks to Staff)
+  const [recommendations, setRecommendations] = useState({ status: 'loading', data: null });
+  const [tasks, setTasks] = useState({ status: 'loading', data: [] });
 
-  const fetchDashboardData = async () => {
-    setIsLoading(true);
-    setError('');
+  // `silent` refreshes (polling, tab return) never show the spinner or the error screen: a failed refresh keeps what is on screen
+  const fetchDashboardData = async (silent = false) => {
+    if (!silent) {
+      setIsLoading(true);
+      setError('');
+    }
     try {
       const summary = await getDashboardSummary();
-      setData(summary);
+      setData((prev) => (JSON.stringify(prev) === JSON.stringify(summary) ? prev : summary));
+      setError('');
     } catch (err) {
       if (err.message && err.message.includes('Redirecting to login')) {
         navigate('/login');
         return;
       }
-      setError('Unable to load dashboard data. Please try again.');
+      if (!silent) setError('Unable to load dashboard data. Please try again.');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
+
+  // The three loaders below serve the first load and every refresh. On a failure they keep data that already loaded
+  // (status 'ready') and only report an error when there is nothing to show.
+  const failed = (prev) => (prev.status === 'ready' ? prev : { status: 'error', data: prev.data });
 
   const loadStaffWorkload = async () => {
     try {
-      setStaffWorkload({ status: 'ready', data: await getWorkload() });
+      const next = { status: 'ready', data: await getWorkload() };
+      setStaffWorkload((prev) => keepIfSame(prev, next));
     } catch {
-      setStaffWorkload({ status: 'error', data: [] });
+      setStaffWorkload(failed);
     }
   };
 
+  const loadRecommendations = async () => {
+    try {
+      const next = { status: 'ready', data: normalizeRecommendations(await getWorkloadRecommendations()) };
+      setRecommendations((prev) => keepIfSame(prev, next));
+    } catch {
+      setRecommendations(failed);
+    }
+  };
+
+  const loadTasks = async () => {
+    try {
+      const next = { status: 'ready', data: await getTasks() };
+      setTasks((prev) => keepIfSame(prev, next));
+    } catch {
+      setTasks(failed);
+    }
+  };
+
+  // One refresh of everything the page shows, each source fetched once. Staff only ever load their own summary.
+  const refreshAll = (silent) =>
+    Promise.all([
+      fetchDashboardData(silent),
+      ...(getUserRole() !== 'STAFF' ? [loadStaffWorkload(), loadRecommendations(), loadTasks()] : []),
+    ]);
+
+  // The guard is created once, so only one refresh runs at a time across renders; it always calls the latest closure
+  const latestRefresh = useRef(refreshAll);
+  latestRefresh.current = refreshAll;
+  const refreshRef = useRef(null);
+  if (refreshRef.current === null) refreshRef.current = singleFlight((silent) => latestRefresh.current(silent));
+
   useEffect(() => {
-    fetchDashboardData();
-    if (getUserRole() !== 'STAFF') loadStaffWorkload();
+    // Visiting (or revisiting) the Dashboard mounts it, which loads fresh data right away; after that the page keeps itself
+    // current every 30 seconds, and on returning to the tab, and stops all of it when it unmounts.
+    refreshRef.current(false);
+    return startPolling({ refresh: () => refreshRef.current(true), intervalMs: DASHBOARD_REFRESH_MS });
   }, []);
 
   if (isLoading) {
@@ -98,7 +149,7 @@ export default function Dashboard() {
           <p className="text-sm">{error}</p>
           <button
             type="button"
-            onClick={fetchDashboardData}
+            onClick={() => fetchDashboardData()}
             className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
           >
             Try Again
@@ -114,37 +165,36 @@ export default function Dashboard() {
     userRole === 'STAFF' ||
     (data && data.workload !== undefined && data.totalStaff === undefined);
 
+  const insights = buildInsights({ isStaff, own: data?.workload, staffWorkload, tasks, recommendations });
   const welcomeName = describeUser(getUsername(), userRole).displayName;
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-500 mt-1">
-          {greetingFor(new Date().getHours())}, <span className="font-semibold text-gray-700">{welcomeName}</span>.{' '}
-          {isStaff
-            ? 'Here is your personal workload, assignments and task status.'
-            : 'Here is how your hotel staff, tasks and workload look today.'}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-1">
+        <div>
+          <h1 className="text-2xl sm:text-[1.75rem] font-bold tracking-tight text-gray-900">Dashboard</h1>
+          <p className="text-gray-600 mt-0.5">Welcome back, {welcomeName}!</p>
+        </div>
+        <p className="text-sm font-medium text-gray-700 sm:pt-1.5">{formatDashboardDate(new Date())}</p>
       </div>
 
-      {/* Summary Cards */}
+      {/* KPI cards */}
       <SummaryCards data={data} isStaff={isStaff} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Column (Workload & Departments) */}
-        <div className="lg:col-span-2 space-y-6">
+      {/* items-start: each panel keeps the height its content needs, so the chart card is not stretched to the workload list */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        <div className="lg:col-span-7">
           <WorkloadOverview data={data} isStaff={isStaff} staffWorkload={isStaff ? undefined : staffWorkload} />
-          <DepartmentOverview />
         </div>
-
-        {/* Right Column (Task Status & Recent Items) */}
-        <div className="space-y-6">
+        <div className="lg:col-span-5 space-y-5">
           <TaskStatusSummary data={data} isStaff={isStaff} />
-          <AssignmentsOverview data={data} isStaff={isStaff} />
+          <OperationsInsights insights={insights} />
         </div>
       </div>
+
+      {/* Staff also see their recent assignments (their summary carries them) */}
+      {isStaff && <AssignmentsOverview data={data} isStaff={isStaff} />}
     </div>
   );
 }

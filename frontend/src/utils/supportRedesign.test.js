@@ -137,7 +137,7 @@ describe('second redesign: composition', () => {
 
   it('does not use a sticky plan, because the page shell cannot make it work', () => {
     const shell = read('components', 'layout', 'AppShell.jsx');
-    assert.ok(shell.includes('<main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto'), 'main is overflow-y-auto, so sticky inside it never engages while the window scrolls');
+    assert.ok(shell.includes('className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto'), 'main is overflow-y-auto, so sticky inside it never engages while the window scrolls');
     assert.ok(!/sticky/.test(builder.replace(/\/\*[\s\S]*?\*\//g, '')), 'no sticky classes: they would do nothing and mislead');
   });
 

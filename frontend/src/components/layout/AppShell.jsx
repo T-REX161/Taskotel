@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { clearAuth } from '../../services/api';
 import Sidebar from './Sidebar';
@@ -8,6 +8,18 @@ export default function AppShell({ children, activeNav, onNavChange }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const mainRef = useRef(null);
+
+  // Reloading must not bring back an old offset into a page whose content loads afterwards
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual';
+  }, []);
+
+  // A page always opens at its top: neither the window nor <main> keeps the previous page's scroll offset
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    mainRef.current?.scrollTo?.(0, 0);
+  }, [location.pathname]);
 
   // Compute active navigation based on the actual current route
   const getActiveNavFromPath = (path) => {
@@ -79,7 +91,7 @@ export default function AppShell({ children, activeNav, onNavChange }) {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto bg-surface-page">
+        <main ref={mainRef} data-page={currentNav} className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto bg-surface-page">
           <div className="max-w-[1440px] mx-auto w-full">
             {children || <Outlet />}
           </div>

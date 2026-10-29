@@ -158,3 +158,23 @@ describe('what the dialog says', () => {
     assert.equal(stageOf('CANCELLED'), 'cancelled');
   });
 });
+
+describe('regression: ending a second support while the first success banner is still showing', () => {
+  it('END_OPEN is accepted from the done state and replaces the banner with the new dialog', () => {
+    const done = run({ type: 'END_OPEN', row: active }, { type: 'END_START' }, { type: 'END_SUCCEEDED', row: ended });
+    assert.equal(done.status, 'done');
+    const next = endReducer(done, { type: 'END_OPEN', row: { ...active, id: 's2', staffName: 'Kenji Watanabe' } });
+    assert.equal(next.status, 'reviewing');
+    assert.equal(next.row.id, 's2');
+    assert.equal(next.result, null, 'the previous outcome is cleared');
+  });
+
+  it('still refuses to open while another dialog is open or a request is running, and never for non-active records', () => {
+    const reviewing = run({ type: 'END_OPEN', row: active });
+    assert.equal(endReducer(reviewing, { type: 'END_OPEN', row: { ...active, id: 's2' } }).row.id, 's1');
+    const submitting = endReducer(reviewing, { type: 'END_START' });
+    assert.equal(endReducer(submitting, { type: 'END_OPEN', row: { ...active, id: 's2' } }), submitting);
+    const done = endReducer(submitting, { type: 'END_SUCCEEDED', row: ended });
+    assert.equal(endReducer(done, { type: 'END_OPEN', row: ended }), done);
+  });
+});

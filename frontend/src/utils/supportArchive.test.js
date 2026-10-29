@@ -172,3 +172,13 @@ describe('wiring', () => {
     assert.ok(panel.includes("const canEnd = ['ADMIN', 'MANAGER'].includes(getUserRole());"));
   });
 });
+
+describe('regression: removing a second record while the first success banner is still showing', () => {
+  it('ARCHIVE_OPEN is accepted from the done state', () => {
+    const done = run({ type: 'ARCHIVE_OPEN', row: ended }, { type: 'ARCHIVE_START' }, { type: 'ARCHIVE_SUCCEEDED', row: { ...ended, archivedAt: '2026-10-27T13:00:00' } });
+    assert.equal(done.status, 'done');
+    const next = archiveReducer(done, { type: 'ARCHIVE_OPEN', row: completed });
+    assert.equal(next.status, 'reviewing');
+    assert.equal(next.row.id, completed.id);
+  });
+});

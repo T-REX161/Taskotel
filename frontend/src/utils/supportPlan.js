@@ -285,7 +285,8 @@ export const describeArchiveOutcome = (row) => `Removed from the history: ${row.
 export function archiveReducer(state, action) {
   switch (action.type) {
     case 'ARCHIVE_OPEN':
-      return state.status === 'idle' && canArchiveSupport(action.row) ? { ...initialArchiveState, status: 'reviewing', row: action.row } : state;
+      // Also from 'done', for the same reason as END_OPEN
+      return (state.status === 'idle' || state.status === 'done') && canArchiveSupport(action.row) ? { ...initialArchiveState, status: 'reviewing', row: action.row } : state;
     case 'ARCHIVE_CANCEL':
       // Never while the request is running
       return state.status === 'reviewing' || state.status === 'error' ? initialArchiveState : state;
@@ -402,7 +403,8 @@ export function describeEndFailure(message, code, httpStatus) {
 export function endReducer(state, action) {
   switch (action.type) {
     case 'END_OPEN':
-      return state.status === 'idle' && canEndSupport(action.row) ? { ...initialEndState, status: 'reviewing', row: action.row } : state;
+      // Also from 'done': the success banner of the previous end stays on screen until dismissed, and must not block the next one
+      return (state.status === 'idle' || state.status === 'done') && canEndSupport(action.row) ? { ...initialEndState, status: 'reviewing', row: action.row } : state;
     case 'END_CANCEL':
       // Never while the request is running: it cannot be taken back once sent
       return state.status === 'reviewing' || state.status === 'error' ? initialEndState : state;

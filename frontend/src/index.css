@@ -162,3 +162,18 @@ html.theme-transition *::placeholder {
 html.dark ::-webkit-scrollbar-thumb {
   background: rgba(148, 163, 184, 0.3);
 }
+
+/* Dashboard only: a very pale green-tinted page behind the white cards (light theme; dark keeps its own surface) */
+html:not(.dark) main[data-page='Dashboard'] {
+  background-color: #f3faf6;
+}
+
+/* The header is sticky (64px): anything scrolled into view (keyboard focus, anchors, scrollIntoView) stops below it, not under it */
+html {
+  scroll-padding-top: 5rem;
+}
+
+@keyframes insightIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}

@@ -15,14 +15,9 @@ import StaffWorkloadList from './StaffWorkloadList';
 export default function WorkloadOverview({ data, isStaff, staffWorkload }) {
   const listReady = !isStaff && staffWorkload?.status === 'ready';
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex justify-between items-center gap-3">
-        <h2 className="text-base font-semibold text-gray-900">{isStaff ? 'My Workload' : 'Staff Workload'}</h2>
-        {!isStaff && (
-          <span className="text-xs sm:text-sm text-gray-500 font-medium">
-            Staff with workload: <strong className="text-gray-900">{data?.totalStaffWithWorkload ?? 0}</strong>
-          </span>
-        )}
+    <div className="bg-white rounded-xl border border-gray-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] overflow-hidden h-full flex flex-col">
+      <div className="px-5 sm:px-6 pt-4 pb-3 border-b border-gray-100 flex justify-between items-center gap-3">
+        <h2 className="text-lg font-semibold text-gray-900">{isStaff ? 'My Workload' : 'Staff Workload'}</h2>
       </div>
 
       {!isStaff && staffWorkload?.status === 'loading' && <p role="status" className="px-5 py-8 text-center text-sm text-gray-500">Loading staff workload…</p>}
