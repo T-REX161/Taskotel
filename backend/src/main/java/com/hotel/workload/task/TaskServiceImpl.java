@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -108,6 +109,9 @@ public class TaskServiceImpl implements TaskService {
     @Override
     @Transactional
     public TaskDto updateTask(UUID id, UpdateTaskRequest request) {
+        // Lock the task before reading it, as assignment, reassignment and support do (task first, then staff / support), so a
+        // status change and an assignment of this task are applied one after the other, each seeing what the other committed
+        taskRepository.lockByIds(Set.of(id));
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
 
@@ -202,6 +206,7 @@ public class TaskServiceImpl implements TaskService {
     @Override
     @Transactional
     public void deleteTask(UUID id) {
+        taskRepository.lockByIds(Set.of(id)); // see updateTask
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
         supportLifecycle.onTaskDeleted(id);

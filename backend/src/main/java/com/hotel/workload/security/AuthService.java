@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class AuthService {
@@ -22,6 +23,8 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final VerificationCodeService verificationCodeService;
     private final PasswordValidatorService passwordValidatorService;
+    // A hash of a random value nobody knows, only used to spend the same time on a username that does not exist
+    private final String unknownUserHash;
 
     @Autowired
     public AuthService(UserRepository userRepository,
@@ -34,6 +37,7 @@ public class AuthService {
         this.jwtUtil = jwtUtil;
         this.verificationCodeService = verificationCodeService;
         this.passwordValidatorService = passwordValidatorService != null ? passwordValidatorService : new PasswordValidatorService();
+        this.unknownUserHash = passwordEncoder == null ? null : passwordEncoder.encode(UUID.randomUUID().toString());
     }
 
     public AuthService(UserRepository userRepository,
@@ -46,28 +50,40 @@ public class AuthService {
         Optional<User> optionalUser = findByUsernameOrEmail(loginRequest.getUsername());
 
         if (optionalUser.isEmpty()) {
+            // Do the same amount of hashing work as for a real account, so response time does not tell which usernames exist
+            if (unknownUserHash != null) {
+                passwordEncoder.matches(loginRequest.getPassword() == null ? "" : loginRequest.getPassword(), unknownUserHash);
+            }
             throw new InvalidCredentialsException(INVALID_LOGIN);
         }
 
         User user = optionalUser.get();
 
-        if (!user.isActive()) {
-            throw new InvalidCredentialsException("User account is disabled");
-        }
-
+        // The password is checked first, so a wrong password gets the same answer for every account, active or not. Only someone
+        // who knows the password learns that the account is disabled.
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             throw new InvalidCredentialsException(INVALID_LOGIN);
         }
 
-        if (user.getRole() == Role.STAFF && !user.isEmailVerified()) {
+        if (!user.isActive()) {
+            throw new InvalidCredentialsException("User account is disabled");
+        }
+
+        // Every role must verify its email before it gets a session: no token is issued until it has
+        if (!user.isEmailVerified()) {
             if (verificationCodeService != null) {
                 verificationCodeService.sendVerificationCode(user.getUsername());
             }
-            return LoginResponse.verificationRequired(user.getUsername(), user.getEmail());
+            return LoginResponse.verificationRequired(user.getUsername(), user.getEmail(), user.getRole());
         }
 
+        // Verified but the first password is not set yet: no session. A fresh code is sent so the user can verify again and get a new
+        // setup token (the earlier one is short-lived and single-use); it leads to the same password setup page.
         if (user.isCredentialsSetupRequired()) {
-            throw new InvalidCredentialsException("Account setup is required. Please follow the link sent to your email or use your setup token.");
+            if (verificationCodeService != null) {
+                verificationCodeService.sendVerificationCode(user.getUsername());
+            }
+            return LoginResponse.verificationRequired(user.getUsername(), user.getEmail(), user.getRole());
         }
 
         if (user.isFirstLogin()) {
@@ -113,7 +129,13 @@ public class AuthService {
         User user = userRepository.findBySetupToken(request.getSetupToken())
                 .orElseThrow(() -> new CredentialsSetupException("Invalid or expired setup token"));
 
-        if (!user.isCredentialsSetupRequired()) {
+        if (!SetupTokens.isLive(user.getSetupToken())) {
+            user.setSetupToken(null);
+            userRepository.save(user);
+            throw new CredentialsSetupException("Invalid or expired setup token");
+        }
+
+        if (!user.isCredentialsSetupRequired() || !user.isEmailVerified()) {
             throw new CredentialsSetupException("Credentials setup is not required for this user");
         }
 

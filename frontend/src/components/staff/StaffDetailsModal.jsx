@@ -1,6 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { CloseIcon } from '../icons/Icons';
+import UserAvatar from '../common/UserAvatar';
+import { avatarInitials } from '../../utils/profilePicture';
 import {
   formatDepartment,
   isAvailable,
@@ -33,13 +35,22 @@ export default function StaffDetailsModal({ staff, onClose }) {
       >
         {/* Header */}
         <div className="flex justify-between items-center border-b border-gray-100 pb-4">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">
-              {staff.fullName || staff.name || 'Staff Details'}
-            </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              @{staff.username || 'staff'} {staff.role ? `• ${staff.role}` : ''}
-            </p>
+          <div className="flex items-center gap-3 min-w-0">
+            <UserAvatar
+              imageUrl={staff.profileImageUrl}
+              initials={avatarInitials(staff.fullName || staff.name || staff.username)}
+              name={staff.fullName || staff.name || staff.username}
+              className="w-12 h-12 rounded-full shrink-0 border border-gray-200"
+              fallbackClassName="bg-gray-100 text-gray-600 font-semibold text-sm"
+            />
+            <div className="min-w-0">
+              <h2 className="text-xl font-bold text-gray-900">
+                {staff.fullName || staff.name || 'Staff Details'}
+              </h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                @{staff.username || 'staff'} {staff.role ? `• ${staff.role}` : ''}
+              </p>
+            </div>
           </div>
           <button
             type="button"

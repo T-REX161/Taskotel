@@ -60,10 +60,10 @@ public class DashboardServiceImpl implements DashboardService {
         AdminDashboardSummaryDto dto = new AdminDashboardSummaryDto();
 
         // Staff metrics
-        dto.setTotalStaff(staffRepository.count());
-        dto.setAvailableStaff(staffRepository.countByActiveTrueAndAvailability(Availability.AVAILABLE));
-        dto.setUnavailableStaff(staffRepository.countByActiveTrueAndAvailability(Availability.UNAVAILABLE));
-        dto.setInactiveStaff(staffRepository.countByActiveFalse());
+        dto.setTotalStaff(staffRepository.countOperational());
+        dto.setAvailableStaff(staffRepository.countOperationalActiveByAvailability(Availability.AVAILABLE));
+        dto.setUnavailableStaff(staffRepository.countOperationalActiveByAvailability(Availability.UNAVAILABLE));
+        dto.setInactiveStaff(staffRepository.countOperationalInactive());
 
         // Task metrics
         dto.setTotalTasks(taskRepository.count());

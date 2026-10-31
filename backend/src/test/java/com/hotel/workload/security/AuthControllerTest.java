@@ -96,7 +96,7 @@ public class AuthControllerTest {
 
     @Test
     @Transactional
-    @DisplayName("Valid Admin login returns JWT, role ADMIN, and does not require email verification")
+    @DisplayName("Valid, email-verified Admin login returns JWT and role ADMIN")
     public void testLogin_ValidAdmin_ReturnsJwt() throws Exception {
         User admin = new User();
         admin.setUsername("authctrl_admin_login");
@@ -104,6 +104,7 @@ public class AuthControllerTest {
         admin.setPassword(passwordEncoder.encode("adminpass123"));
         admin.setRole(Role.ADMIN);
         admin.setActive(true);
+        admin.setEmailVerified(true); // every role must verify its email first
         userRepository.save(admin);
 
         LoginRequest request = new LoginRequest("authctrl_admin_login", "adminpass123");
@@ -122,7 +123,7 @@ public class AuthControllerTest {
 
     @Test
     @Transactional
-    @DisplayName("Valid Manager login returns JWT, role MANAGER, and does not require email verification")
+    @DisplayName("Valid, email-verified Manager login returns JWT and role MANAGER")
     public void testLogin_ValidManager_ReturnsJwt() throws Exception {
         User manager = new User();
         manager.setUsername("authctrl_manager_login");
@@ -130,6 +131,7 @@ public class AuthControllerTest {
         manager.setPassword(passwordEncoder.encode("managerpass123"));
         manager.setRole(Role.MANAGER);
         manager.setActive(true);
+        manager.setEmailVerified(true); // every role must verify its email first
         userRepository.save(manager);
 
         LoginRequest request = new LoginRequest("authctrl_manager_login", "managerpass123");
@@ -319,10 +321,10 @@ public class AuthControllerTest {
     @Transactional
     @DisplayName("PUT /api/auth/credentials/setup with password shorter than 8 chars returns 400 Bad Request")
     public void testSetupCredentials_WeakPassword_TooShort_ReturnsBadRequest() throws Exception {
-        createStaffWithSetupToken("setup_short", "token-short");
+        createStaffWithSetupToken("setup_short", "token-short.4102444800000");
 
         SetupCredentialsRequest setupReq = new SetupCredentialsRequest();
-        setupReq.setSetupToken("token-short");
+        setupReq.setSetupToken("token-short.4102444800000");
         setupReq.setNewUsername("setup_short_new");
         setupReq.setNewPassword("Pass@1");
 
@@ -337,10 +339,10 @@ public class AuthControllerTest {
     @Transactional
     @DisplayName("PUT /api/auth/credentials/setup missing uppercase returns 400 Bad Request")
     public void testSetupCredentials_WeakPassword_MissingUppercase_ReturnsBadRequest() throws Exception {
-        createStaffWithSetupToken("setup_noupper", "token-noupper");
+        createStaffWithSetupToken("setup_noupper", "token-noupper.4102444800000");
 
         SetupCredentialsRequest setupReq = new SetupCredentialsRequest();
-        setupReq.setSetupToken("token-noupper");
+        setupReq.setSetupToken("token-noupper.4102444800000");
         setupReq.setNewUsername("setup_noupper_new");
         setupReq.setNewPassword("pass@1234");
 
@@ -355,10 +357,10 @@ public class AuthControllerTest {
     @Transactional
     @DisplayName("PUT /api/auth/credentials/setup missing lowercase returns 400 Bad Request")
     public void testSetupCredentials_WeakPassword_MissingLowercase_ReturnsBadRequest() throws Exception {
-        createStaffWithSetupToken("setup_nolower", "token-nolower");
+        createStaffWithSetupToken("setup_nolower", "token-nolower.4102444800000");
 
         SetupCredentialsRequest setupReq = new SetupCredentialsRequest();
-        setupReq.setSetupToken("token-nolower");
+        setupReq.setSetupToken("token-nolower.4102444800000");
         setupReq.setNewUsername("setup_nolower_new");
         setupReq.setNewPassword("PASS@1234");
 
@@ -373,10 +375,10 @@ public class AuthControllerTest {
     @Transactional
     @DisplayName("PUT /api/auth/credentials/setup missing digit returns 400 Bad Request")
     public void testSetupCredentials_WeakPassword_MissingDigit_ReturnsBadRequest() throws Exception {
-        createStaffWithSetupToken("setup_nodigit", "token-nodigit");
+        createStaffWithSetupToken("setup_nodigit", "token-nodigit.4102444800000");
 
         SetupCredentialsRequest setupReq = new SetupCredentialsRequest();
-        setupReq.setSetupToken("token-nodigit");
+        setupReq.setSetupToken("token-nodigit.4102444800000");
         setupReq.setNewUsername("setup_nodigit_new");
         setupReq.setNewPassword("Password@");
 
@@ -391,10 +393,10 @@ public class AuthControllerTest {
     @Transactional
     @DisplayName("PUT /api/auth/credentials/setup missing special char returns 400 Bad Request")
     public void testSetupCredentials_WeakPassword_MissingSpecialChar_ReturnsBadRequest() throws Exception {
-        createStaffWithSetupToken("setup_nospecial", "token-nospecial");
+        createStaffWithSetupToken("setup_nospecial", "token-nospecial.4102444800000");
 
         SetupCredentialsRequest setupReq = new SetupCredentialsRequest();
-        setupReq.setSetupToken("token-nospecial");
+        setupReq.setSetupToken("token-nospecial.4102444800000");
         setupReq.setNewUsername("setup_nospecial_new");
         setupReq.setNewPassword("Password123");
 
@@ -409,10 +411,10 @@ public class AuthControllerTest {
     @Transactional
     @DisplayName("PUT /api/auth/credentials/setup with valid password returns 200 OK")
     public void testSetupCredentials_ValidPassword_ReturnsOk() throws Exception {
-        createStaffWithSetupToken("setup_valid", "token-valid");
+        createStaffWithSetupToken("setup_valid", "token-valid.4102444800000");
 
         SetupCredentialsRequest setupReq = new SetupCredentialsRequest();
-        setupReq.setSetupToken("token-valid");
+        setupReq.setSetupToken("token-valid.4102444800000");
         setupReq.setNewUsername("setup_valid_new");
         setupReq.setNewPassword("ValidPass@123");
 

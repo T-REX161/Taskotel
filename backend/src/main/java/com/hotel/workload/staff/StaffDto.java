@@ -15,6 +15,7 @@ public class StaffDto {
     private UUID userId;
     private String username;
     private String role;
+    private String profileImageUrl;
 
     public StaffDto() {}
 
@@ -36,6 +37,7 @@ public class StaffDto {
             if (staff.getUser().getRole() != null) {
                 dto.setRole(staff.getUser().getRole().name());
             }
+            dto.setProfileImageUrl(staff.getUser().getProfileImageUrl());
         }
         return dto;
     }
@@ -63,4 +65,6 @@ public class StaffDto {
     public void setUsername(String username) { this.username = username; }
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
 }

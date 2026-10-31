@@ -38,6 +38,28 @@ describe('LoginPage result indicators', () => {
       assert.strictEqual(getLoginOutcome({ ok: true, status: 200, data: { username: 'u' } }).kind, 'server', 'OK without a token is not a success');
     });
 
+    it('rate limited: a 429 shows the backend message, not the generic server error', () => {
+      const backend = 'Too many sign-in attempts. Please wait a few minutes and try again.';
+      assert.deepStrictEqual(getLoginOutcome({ ok: false, status: 429, data: { message: backend } }), { kind: 'rateLimited', message: backend });
+      assert.deepStrictEqual(getLoginOutcome({ ok: false, status: 429, data: { message: '  Slow down.  ' } }), { kind: 'rateLimited', message: 'Slow down.' });
+      assert.notStrictEqual(getLoginOutcome({ ok: false, status: 429, data: { message: backend } }).kind, 'server');
+      assert.notStrictEqual(LOGIN_MESSAGES.rateLimited, LOGIN_MESSAGES.server);
+    });
+
+    it('a 429 with a missing, empty, non-string or oversized message falls back to the default text', () => {
+      const fallback = { kind: 'rateLimited', message: LOGIN_MESSAGES.rateLimited };
+      for (const data of [null, undefined, {}, { message: '' }, { message: '   ' }, { message: 42 }, { message: { text: 'x' } }, { message: ['x'] }, { message: 'x'.repeat(201) }, 'text', []]) {
+        assert.deepStrictEqual(getLoginOutcome({ ok: false, status: 429, data }), fallback, JSON.stringify(data));
+      }
+    });
+
+    it('a 429 body is ignored for every other status: 401 and 5xx keep their fixed messages', () => {
+      assert.deepStrictEqual(getLoginOutcome({ ok: false, status: 401, data: { message: 'Secret detail' } }), { kind: 'invalid', message: LOGIN_MESSAGES.invalid });
+      for (const status of [500, 502, 503]) {
+        assert.deepStrictEqual(getLoginOutcome({ ok: false, status, data: { message: 'stack trace' } }), { kind: 'server', message: LOGIN_MESSAGES.server }, `status ${status}`);
+      }
+    });
+
     it('network failures get their own message', () => {
       assert.deepStrictEqual(getLoginOutcome({ networkError: true }), { kind: 'network', message: LOGIN_MESSAGES.network });
       assert.notStrictEqual(LOGIN_MESSAGES.network, LOGIN_MESSAGES.invalid);
@@ -131,6 +153,13 @@ describe('LoginPage result indicators', () => {
       assert.ok(/\/\/ Invalid credentials \(401\) or a server-side failure\s*setLoginError\(outcome\);/.test(handleSubmit), 'Failure outcomes are shown');
       assert.ok(/catch \(err\) \{\s*setLoginError\(getLoginOutcome\(\{ networkError: true \}\)\);/.test(handleSubmit), 'Request failures are network errors');
       assert.ok(handleSubmit.includes('await response.json().catch(() => null)'), 'An unreadable OK body is a server error, not a network error');
+    });
+
+    it('reads the response body only for a success or a 429, shows a rate-limit message as text without the ✕, and never stores anything', () => {
+      assert.ok(handleSubmit.includes('response.ok || response.status === 429 ? await response.json().catch(() => null) : null'), 'Only OK and 429 bodies are read');
+      assert.ok(pageSource.includes("loginError.kind === 'invalid' && ("), 'the ✕ is for invalid credentials only, so a 429 is text only');
+      assert.ok(pageSource.includes('<span>{loginError.message}</span>'), 'the message is rendered as escaped text');
+      assert.ok(!/localStorage\.setItem[^\n]*loginError/.test(pageSource));
     });
 
     it('keeps the redirect, loading state, password toggle and remember-me behaviour', () => {

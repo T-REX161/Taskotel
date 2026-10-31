@@ -21,8 +21,17 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(com.hotel.workload.verification.EmailSendingException.class)
     public ResponseEntity<Map<String, Object>> handleEmailSendingException(com.hotel.workload.verification.EmailSendingException ex) {
+        // The cause stays in the server log (it holds a status code at most, never a key or a code); the client gets a fixed message
+        org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class).warn("Email could not be sent: {}", ex.getMessage());
         return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("success", false, "message", "Failed to send email"));
+                .body(Map.of("success", false, "message", "We could not send the email right now. Please try again in a few minutes."));
+    }
+
+    // A multipart upload over the configured size (spring.servlet.multipart) is refused before it reaches a controller
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleMaxUploadSizeExceeded(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(Map.of("status", 413, "message", com.hotel.workload.profile.ProfileImageValidator.TOO_LARGE_MESSAGE));
     }
 
     @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)

@@ -27,6 +27,16 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     List<String> departmentCodesOf(@Param("ids") Collection<UUID> ids);
     Optional<Staff> findByUserUsername(String username);
     
+    // Operational staff only: records linked to an admin or manager account are left out of the dashboard staff totals
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
+    long countOperational();
+
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.active = false AND s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
+    long countOperationalInactive();
+
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.active = true AND s.availability = :availability AND s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
+    long countOperationalActiveByAvailability(@Param("availability") Availability availability);
+
     long countByActiveFalse();
     long countByActiveTrueAndAvailability(Availability availability);
     long countByDepartmentAndActiveTrue(Department department);

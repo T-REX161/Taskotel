@@ -13,6 +13,7 @@ public class UserDto {
     private boolean emailVerified;
     private String fullName;
     private LocalDateTime createdAt;
+    private String profileImageUrl;
 
     public UserDto() {}
 
@@ -44,7 +45,7 @@ public class UserDto {
             resolvedFullName = deriveFallbackName(user);
         }
 
-        return new UserDto(
+        UserDto dto = new UserDto(
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
@@ -54,6 +55,8 @@ public class UserDto {
                 resolvedFullName,
                 user.getCreatedAt()
         );
+        dto.setProfileImageUrl(user.getProfileImageUrl());
+        return dto;
     }
 
     public static String deriveFallbackName(User user) {
@@ -151,6 +154,14 @@ public class UserDto {
 
     public String getFullName() {
         return fullName;
+    }
+
+    public String getProfileImageUrl() {
+        return profileImageUrl;
+    }
+
+    public void setProfileImageUrl(String profileImageUrl) {
+        this.profileImageUrl = profileImageUrl;
     }
 
     public void setFullName(String fullName) {

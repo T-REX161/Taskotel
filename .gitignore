@@ -13,6 +13,8 @@ npm-debug.log*
 .env
 .env.*
 !.env.example
+# Backend secrets (Cloudinary, and any other local settings), read on startup; already covered by .env above, listed explicitly
+backend/.env
 
 # IDE / editor settings
 .idea/

@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -47,6 +48,11 @@ public class AssignmentServiceImpl implements AssignmentService {
     @Override
     @Transactional
     public AssignmentDto createAssignment(CreateAssignmentRequest request) {
+        // Serialize with every other flow that touches this task or this staff member (support confirm, reassign, deactivation),
+        // always task first and staff second, then check the rules on what is committed now rather than on a stale read.
+        taskRepository.lockByIds(Set.of(request.getTaskId()));
+        staffRepository.lockByIds(Set.of(request.getStaffId()));
+
         Task task = taskRepository.findById(request.getTaskId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
 
@@ -55,6 +61,10 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         if (!staff.isActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Staff member is not active");
+        }
+
+        if (staff.isPrivilegedAccount()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tasks cannot be assigned to a manager or administrator account");
         }
 
         if (staff.getAvailability() != Availability.AVAILABLE) {
@@ -131,6 +141,11 @@ public class AssignmentServiceImpl implements AssignmentService {
     @Override
     @Transactional
     public AssignmentDto reassignTask(UUID assignmentId, UpdateAssignmentRequest request) {
+        // Same lock order as createAssignment: the task, then the target staff member. The assignment itself is read only after
+        // the locks, so a request that waited sees what the winner committed.
+        assignmentRepository.findTaskIdById(assignmentId).ifPresent(taskId -> taskRepository.lockByIds(Set.of(taskId)));
+        staffRepository.lockByIds(Set.of(request.getStaffId()));
+
         Assignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
 
@@ -139,6 +154,10 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         if (!targetStaff.isActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target staff member is not active");
+        }
+
+        if (targetStaff.isPrivilegedAccount()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Tasks cannot be assigned to a manager or administrator account");
         }
 
         if (targetStaff.getAvailability() != Availability.AVAILABLE) {

@@ -22,9 +22,16 @@ import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 
+/**
+ * Inserts sample users, staff and tasks into an empty database. The sample accounts share a well-known password, so seeding is
+ * opt-in: it only runs when {@value #ENABLED_PROPERTY} is true (default false, environment variable DEMO_DATA_ENABLED), never under the
+ * prod or production profile, and never when users already exist.
+ */
 @Component
 @Profile("!prod & !production")
 public class DemoDataSeeder implements CommandLineRunner {
+
+    public static final String ENABLED_PROPERTY = "app.demo-data.enabled";
 
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
@@ -66,6 +73,10 @@ public class DemoDataSeeder implements CommandLineRunner {
                 .orElseThrow(() -> new IllegalStateException("Built-in department missing: " + code));
     }
 
+    private boolean isDemoSeedingEnabled() {
+        return environment != null && Boolean.TRUE.equals(environment.getProperty(ENABLED_PROPERTY, Boolean.class, false));
+    }
+
     private boolean isProductionEnvironment() {
         if (environment == null) {
             return false;
@@ -82,6 +93,11 @@ public class DemoDataSeeder implements CommandLineRunner {
     public void run(String... args) throws Exception {
         if (isProductionEnvironment()) {
             System.out.println("Production profile detected. Demo data seeding is disabled.");
+            return;
+        }
+
+        if (!isDemoSeedingEnabled()) {
+            System.out.println("Demo data seeding is disabled (set " + ENABLED_PROPERTY + "=true to enable it on a local or test database). No demo users were created.");
             return;
         }
 

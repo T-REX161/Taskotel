@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
-  const [loginError, setLoginError] = useState(null); // { kind: 'invalid' | 'server' | 'network', message }
+  const [loginError, setLoginError] = useState(null); // { kind: 'invalid' | 'rateLimited' | 'server' | 'network', message }
   // Incremented per attempt and used as the result alerts' key, so each new result mounts (and animates) once
   const [attemptId, setAttemptId] = useState(0);
 
@@ -38,7 +38,8 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = response.ok ? await response.json().catch(() => null) : null;
+      // The body is read for a success and for a 429 (whose message is shown); other failures use fixed messages
+      const data = response.ok || response.status === 429 ? await response.json().catch(() => null) : null;
       const outcome = getLoginOutcome({ ok: response.ok, status: response.status, data });
 
       // If email verification is required for unverified Staff:

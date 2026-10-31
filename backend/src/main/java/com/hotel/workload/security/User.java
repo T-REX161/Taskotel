@@ -69,27 +69,22 @@ public class User {
     @Column(name = "first_login", columnDefinition = "boolean default true")
     private boolean firstLogin = true;
 
+    // The profile picture in Cloudinary: its HTTPS delivery URL and the public id needed to delete it. Both null without a picture.
+    @Column(name = "profile_image_url", length = 512)
+    private String profileImageUrl;
+
+    @Column(name = "profile_image_public_id")
+    private String profileImagePublicId;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        if (role == Role.ADMIN || role == Role.MANAGER) {
-            emailVerified = true;
-            credentialsSetupRequired = false;
-        }
     }
 
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
-    }
-
-    @PostLoad
-    protected void onPostLoad() {
-        if (role == Role.ADMIN || role == Role.MANAGER) {
-            emailVerified = true;
-            credentialsSetupRequired = false;
-        }
     }
 
     // Getters and Setters
@@ -105,18 +100,14 @@ public class User {
     public void setRole(Role role) { this.role = role; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
+    /** The stored state, for every role: nothing is assumed from the role. */
     public boolean isEmailVerified() {
-        if (role == Role.ADMIN || role == Role.MANAGER) {
-            return true;
-        }
         return emailVerified;
     }
     public Boolean getEmailVerified() { return isEmailVerified(); }
     public void setEmailVerified(boolean emailVerified) { this.emailVerified = emailVerified; }
     public boolean isCredentialsSetupRequired() {
-        if (role == Role.ADMIN || role == Role.MANAGER) {
-            return false;
-        }
+        // The stored state for every role: nothing is assumed from the role
         return credentialsSetupRequired != null ? credentialsSetupRequired : false;
     }
     public void setCredentialsSetupRequired(Boolean credentialsSetupRequired) { this.credentialsSetupRequired = credentialsSetupRequired; }
@@ -145,4 +136,8 @@ public class User {
     public void setPasswordResetLastSentAt(LocalDateTime passwordResetLastSentAt) { this.passwordResetLastSentAt = passwordResetLastSentAt; }
     public boolean isFirstLogin() { return firstLogin; }
     public void setFirstLogin(boolean firstLogin) { this.firstLogin = firstLogin; }
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
+    public String getProfileImagePublicId() { return profileImagePublicId; }
+    public void setProfileImagePublicId(String profileImagePublicId) { this.profileImagePublicId = profileImagePublicId; }
 }

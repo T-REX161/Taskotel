@@ -37,8 +37,13 @@ export const apiFetch = async (url, options = {}) => {
     throw new Error('No authentication token found. Please sign in.');
   }
 
+  const baseHeaders = getAuthHeaders();
+  // A file upload (FormData) must not carry the JSON content type: the browser sets multipart/form-data with its boundary
+  if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+    delete baseHeaders['Content-Type'];
+  }
   const headers = {
-    ...getAuthHeaders(),
+    ...baseHeaders,
     ...(options.headers || {}),
   };
 
@@ -221,6 +226,35 @@ export const getUsers = () => {
 };
 
 /**
+ * The signed-in user's own profile: { username, role, fullName, profileImageUrl }. Any role.
+ */
+export const getProfile = () => {
+  return apiFetch('/api/profile');
+};
+
+/**
+ * Upload a new profile picture for the signed-in user (multipart field "file"). The server keeps the current picture
+ * until the new one is stored and saved. Resolves with the updated profile.
+ */
+export const uploadProfilePicture = (file) => {
+  const body = new FormData();
+  body.append('file', file);
+  return apiFetch('/api/profile/picture', {
+    method: 'POST',
+    body,
+  });
+};
+
+/**
+ * Remove the signed-in user's profile picture. Resolves with the updated profile (profileImageUrl null).
+ */
+export const removeProfilePicture = () => {
+  return apiFetch('/api/profile/picture', {
+    method: 'DELETE',
+  });
+};
+
+/**
  * Get the list of all staff members.
  */
 export const getStaff = async () => {
@@ -346,57 +380,106 @@ export const getSupportAssignments = (status) => {
 };
 
 /**
- * Set permanent credentials using the one-time setupToken.
- * This does NOT use the standard JWT Bearer token and does NOT store the token.
+ * The public (no sign-in) authentication endpoints: credential setup, and password-reset request and confirm.
+ * They share one way of turning a failed response into a message the page can show:
+ *  - 429 (the backend rate limiter): its generic message when it is a usable string, otherwise a fixed fallback;
+ *  - 5xx: a fixed message, never the response body (which could hold internal details);
+ *  - other 4xx (validation): the backend's short message when it is a usable string, otherwise the caller's fallback;
+ *  - a request that never got an answer: a fixed network message.
+ * Reset codes, setup tokens, passwords and tokens are never put into an error message.
  */
-export const setupCredentials = async ({ setupToken, newUsername, newPassword, confirmPassword }) => {
-  const response = await fetch('/api/auth/credentials/setup', {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      setupToken,
-      newUsername,
-      newPassword,
-      confirmPassword,
-    }),
-  });
+export const RATE_LIMIT_MESSAGE = 'Too many requests. Please wait a few minutes and try again.';
+export const SERVER_ERROR_MESSAGE = 'A server error occurred. Please try again later.';
+export const NETWORK_ERROR_MESSAGE = 'Network error. Please check your connection and try again.';
+const MAX_BACKEND_MESSAGE_LENGTH = 200;
 
+/** A backend message is used only when it is a plain, non-empty, short string. */
+export const usableBackendMessage = (data) => {
+  const message = data && typeof data === 'object' ? data.message : undefined;
+  if (typeof message !== 'string') return '';
+  const text = message.trim();
+  return text && text.length <= MAX_BACKEND_MESSAGE_LENGTH ? text : '';
+};
+
+/** True when the text repeats a non-trivial secret that was just sent (a token, code or password); such text is never displayed. */
+const repeatsSecret = (text, secrets) => secrets.some((secret) => typeof secret === 'string' && secret.length >= 4 && text.includes(secret));
+
+/**
+ * The message to show for a failed public-auth response; `fallback` is used for a 4xx without a usable backend message.
+ * `secrets` are values that were sent in the request: a backend message that contains one of them is not shown.
+ */
+export const publicAuthErrorMessage = (status, data, fallback, secrets = []) => {
+  if (status >= 500 && status !== 429) return SERVER_ERROR_MESSAGE;
+  const message = usableBackendMessage(data);
+  const safe = message && !repeatsSecret(message, secrets) ? message : '';
+  if (status === 429) return safe || RATE_LIMIT_MESSAGE;
+  return safe || fallback;
+};
+
+/** The error thrown to the page. Only the status is kept besides the message: the response body is never attached. */
+const publicAuthError = (message, status) => {
+  const error = new Error(message);
+  error.status = status;
+  return error;
+};
+
+/** Sends a JSON request without the sign-in token and returns the response with its parsed body (null when there is none). */
+const sendPublicAuthRequest = async (url, method, payload) => {
+  let response;
+  try {
+    response = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    throw publicAuthError(NETWORK_ERROR_MESSAGE, 0);
+  }
   let data = null;
   try {
     data = await response.json();
   } catch (e) {
     // Response might not be JSON
   }
+  return { response, data };
+};
+
+/**
+ * Set permanent credentials using the one-time setupToken.
+ * This does NOT use the standard JWT Bearer token and does NOT store the token.
+ */
+export const setupCredentials = async ({ setupToken, newUsername, newPassword, confirmPassword }) => {
+  const { response, data } = await sendPublicAuthRequest('/api/auth/credentials/setup', 'PUT', {
+    setupToken,
+    newUsername,
+    newPassword,
+    confirmPassword,
+  });
 
   if (!response.ok) {
-    let errorMsg = data?.message || data?.error;
-    if (errorMsg) {
-      const lower = errorMsg.toLowerCase();
-      if (lower.includes('invalid or expired setup token') || lower.includes('setup token')) {
-        errorMsg = 'Your setup session is invalid or has expired. Please verify your email again.';
-      } else if (lower.includes('already exists') || lower.includes('duplicate')) {
-        errorMsg = 'This username is already taken. Please choose a different username.';
-      } else if (lower.includes('password') && (lower.includes('characters') || lower.includes('uppercase') || lower.includes('digit') || lower.includes('special'))) {
-        errorMsg = 'Password does not meet the security requirements.';
-      } else if (lower.includes('not required') || lower.includes('already completed')) {
-        errorMsg = 'Account setup has already been completed for this user. Please sign in.';
-      }
-    } else {
-      if (response.status === 400) {
-        errorMsg = 'Invalid request. Please verify your inputs and try again.';
-      } else if (response.status >= 500) {
-        errorMsg = 'A server error occurred. Please try again later.';
-      } else {
-        errorMsg = 'Failed to update credentials. Please try again.';
-      }
+    if (response.status === 429 || response.status >= 500) {
+      throw publicAuthError(publicAuthErrorMessage(response.status, data, '', [setupToken, newPassword, confirmPassword]), response.status);
     }
-
-    const error = new Error(errorMsg);
-    error.status = response.status;
-    error.data = data;
-    throw error;
+    // Known validation errors keep their friendly text. Anything else is shown only if it is a short, plain backend message that does
+    // not repeat a secret that was just sent; otherwise the safe fallback is used. The raw body is never attached to the error.
+    const recognised = [data?.message, data?.error].find((value) => typeof value === 'string' && value.trim());
+    const lower = recognised ? recognised.toLowerCase() : '';
+    let errorMsg;
+    if (lower.includes('invalid or expired setup token') || lower.includes('setup token')) {
+      errorMsg = 'Your setup session is invalid or has expired. Please verify your email again.';
+    } else if (lower.includes('already exists') || lower.includes('duplicate')) {
+      errorMsg = 'This username is already taken. Please choose a different username.';
+    } else if (lower.includes('password') && (lower.includes('characters') || lower.includes('uppercase') || lower.includes('digit') || lower.includes('special'))) {
+      errorMsg = 'Password does not meet the security requirements.';
+    } else if (lower.includes('not required') || lower.includes('already completed')) {
+      errorMsg = 'Account setup has already been completed for this user. Please sign in.';
+    } else {
+      const fallback = response.status === 400 ? 'Invalid request. Please verify your inputs and try again.' : 'Failed to update credentials. Please try again.';
+      errorMsg = publicAuthErrorMessage(response.status, data, fallback, [setupToken, newPassword, confirmPassword]);
+    }
+    throw publicAuthError(errorMsg, response.status);
   }
 
   return data;
@@ -406,24 +489,10 @@ export const setupCredentials = async ({ setupToken, newUsername, newPassword, c
  * Request a password reset email.
  */
 export const requestPasswordReset = async (email) => {
-  const response = await fetch('/api/auth/password-reset/request', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email }),
-  });
+  const { response, data } = await sendPublicAuthRequest('/api/auth/password-reset/request', 'POST', { email });
 
   if (!response.ok) {
-    let data = null;
-    try {
-      data = await response.json();
-    } catch (e) {
-      // Not JSON
-    }
-    const error = new Error(data?.message || 'Failed to request password reset. Please try again later.');
-    error.status = response.status;
-    throw error;
+    throw publicAuthError(publicAuthErrorMessage(response.status, data, 'Failed to request password reset. Please try again later.', [email]), response.status);
   }
   return null;
 };
@@ -432,30 +501,15 @@ export const requestPasswordReset = async (email) => {
  * Confirm a password reset using the emailed code.
  */
 export const confirmPasswordReset = async ({ email, code, newPassword, confirmPassword }) => {
-  const response = await fetch('/api/auth/password-reset/confirm', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      email,
-      code,
-      newPassword,
-      confirmPassword,
-    }),
+  const { response, data } = await sendPublicAuthRequest('/api/auth/password-reset/confirm', 'POST', {
+    email,
+    code,
+    newPassword,
+    confirmPassword,
   });
 
   if (!response.ok) {
-    let data = null;
-    try {
-      data = await response.json();
-    } catch (e) {
-      // Not JSON
-    }
-    const error = new Error(data?.message || 'Failed to reset password. Please check your inputs and try again.');
-    error.status = response.status;
-    throw error;
+    throw publicAuthError(publicAuthErrorMessage(response.status, data, 'Failed to reset password. Please check your inputs and try again.', [code, newPassword, confirmPassword]), response.status);
   }
   return null;
 };
-

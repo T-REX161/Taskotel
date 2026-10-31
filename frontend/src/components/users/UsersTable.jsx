@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DotsVerticalIcon, EyeIcon, TrashIcon } from '../icons/Icons';
 import { roleBadgeClass, normalizeRole, statusBadge, formatCreatedDate, isCurrentUser, getUserActions } from './userListUtils';
+import UserAvatar from '../common/UserAvatar';
+import { avatarInitials } from '../../utils/profilePicture';
 
 const MENU_LABELS = {
   view: 'View Details',
@@ -157,6 +159,13 @@ export default function UsersTable({ users, staffByUserId, currentUsername, isAd
                   <tr key={user.id} className="hover:bg-gray-50/60 transition-colors">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-2 min-w-0">
+                        <UserAvatar
+                          imageUrl={user.profileImageUrl}
+                          initials={avatarInitials(user.fullName || user.username)}
+                          name={user.fullName || user.username}
+                          className="w-8 h-8 rounded-full shrink-0 border border-gray-200"
+                          fallbackClassName="bg-gray-100 text-gray-600 font-semibold text-[11px]"
+                        />
                         <span className="font-bold text-[15px] text-gray-900 truncate" title={user.fullName ? `${user.username} (${user.fullName})` : user.username}>
                           {user.username}
                         </span>

@@ -33,13 +33,18 @@ public class LoginResponse {
     }
 
     public static LoginResponse verificationRequired(String username, String email) {
+        return verificationRequired(username, email, Role.STAFF);
+    }
+
+    /** No token: the account must verify its email first, whatever its role. */
+    public static LoginResponse verificationRequired(String username, String email, Role role) {
         LoginResponse response = new LoginResponse();
         response.setUsername(username);
         response.setEmail(email);
-        response.setRole(Role.STAFF);
+        response.setRole(role);
         response.setEmailVerificationRequired(true);
         response.setEmailVerified(false);
-        response.setMessage("Email verification required. A verification code has been sent to your email.");
+        response.setMessage("Email verification required. A verification code has been sent to your email. If it does not arrive, request a new code on the verification screen.");
         return response;
     }
 

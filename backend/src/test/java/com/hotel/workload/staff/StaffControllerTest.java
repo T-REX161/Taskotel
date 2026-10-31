@@ -21,6 +21,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 public class StaffControllerTest {
 
+        // Signing in with an unverified account sends a verification code; no real email is sent in tests
+        @org.springframework.test.context.bean.override.mockito.MockitoBean
+        private com.hotel.workload.verification.EmailService emailService;
+
         @Autowired
         private WebApplicationContext context;
 
@@ -1280,19 +1284,19 @@ public class StaffControllerTest {
                         org.junit.jupiter.api.Assertions.assertEquals(role, user.getRole().name());
                         org.junit.jupiter.api.Assertions.assertTrue(staffRepository.findAll().stream()
                                         .anyMatch(s -> s.getUser() != null && username.equals(s.getUser().getUsername())), "Has a staff record");
-                        // Staff go through email verification and credential setup; managers and admins do not
-                        boolean staff = role.equals("STAFF");
-                        org.junit.jupiter.api.Assertions.assertEquals(!staff, user.isEmailVerified());
-                        org.junit.jupiter.api.Assertions.assertEquals(staff, user.isCredentialsSetupRequired());
+                        // Every role starts unverified and must also set its own password after verifying
+                        org.junit.jupiter.api.Assertions.assertFalse(user.isEmailVerified(), role + " must verify its email first");
+                        org.junit.jupiter.api.Assertions.assertTrue(user.isCredentialsSetupRequired(), role + " must set its password after verifying");
                 }
 
-                // The saved role is the one the server signs in with
+                // The saved role is the one the server reports, but an unverified account gets no token until it verifies its email
                 mockMvc.perform(post("/api/auth/login")
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                                 .content("{\"username\":\"role_manager\",\"password\":\"TempPass@123\"}"))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.role").value("MANAGER"))
-                                .andExpect(jsonPath("$.token").isNotEmpty());
+                                .andExpect(jsonPath("$.emailVerificationRequired").value(true))
+                                .andExpect(jsonPath("$.token").doesNotExist());
         }
 
         @Test

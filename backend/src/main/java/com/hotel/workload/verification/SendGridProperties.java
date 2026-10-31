@@ -9,14 +9,14 @@ public class SendGridProperties {
 
     private String apiKey = "";
     private String fromEmail = "noreply@hotelwb.com";
-    private String fromName = "EquiFlow";
+    private String fromName = "Taskotel | Hotel Operations";
 
     public SendGridProperties() {}
 
     public SendGridProperties(String apiKey, String fromEmail, String fromName) {
         this.apiKey = apiKey != null ? apiKey : "";
         this.fromEmail = fromEmail != null ? fromEmail : "noreply@hotelwb.com";
-        this.fromName = fromName != null ? fromName : "EquiFlow";
+        this.fromName = fromName != null ? fromName : "Taskotel | Hotel Operations";
     }
 
     public String getApiKey() {

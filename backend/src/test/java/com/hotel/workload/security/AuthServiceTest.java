@@ -42,6 +42,7 @@ public class AuthServiceTest {
         user.setPassword(passwordEncoder.encode("password"));
         user.setRole(Role.ADMIN);
         user.setActive(true);
+        user.setEmailVerified(true); // every role must verify its email first
 
         when(userRepository.findByUsername("admin")).thenReturn(Optional.of(user));
         when(jwtUtil.generateToken("admin", Role.ADMIN)).thenReturn("mock-token");
@@ -69,6 +70,7 @@ public class AuthServiceTest {
         user.setPassword(passwordEncoder.encode("password"));
         user.setRole(Role.MANAGER);
         user.setActive(true);
+        user.setEmailVerified(true); // every role must verify its email first
 
         when(userRepository.findByUsername("manager1")).thenReturn(Optional.of(user));
         when(jwtUtil.generateToken("manager1", Role.MANAGER)).thenReturn("manager-token");
@@ -238,12 +240,13 @@ public class AuthServiceTest {
         user.setUsername("pending_user");
         user.setRole(Role.STAFF);
         user.setCredentialsSetupRequired(true);
-        user.setSetupToken("token123");
+        user.setEmailVerified(true);
+        user.setSetupToken("token123.4102444800000");
 
-        when(userRepository.findBySetupToken("token123")).thenReturn(Optional.of(user));
+        when(userRepository.findBySetupToken("token123.4102444800000")).thenReturn(Optional.of(user));
 
         SetupCredentialsRequest request = new SetupCredentialsRequest();
-        request.setSetupToken("token123");
+        request.setSetupToken("token123.4102444800000");
         request.setNewUsername("new_username");
         request.setNewPassword(weakPassword);
 
@@ -259,14 +262,15 @@ public class AuthServiceTest {
         user.setUsername("pending_user");
         user.setRole(Role.STAFF);
         user.setCredentialsSetupRequired(true);
-        user.setSetupToken("token123");
+        user.setEmailVerified(true);
+        user.setSetupToken("token123.4102444800000");
 
-        when(userRepository.findBySetupToken("token123")).thenReturn(Optional.of(user));
+        when(userRepository.findBySetupToken("token123.4102444800000")).thenReturn(Optional.of(user));
         when(userRepository.existsByUsername("new_username")).thenReturn(false);
         when(jwtUtil.generateToken("new_username", Role.STAFF)).thenReturn("new-jwt-token");
 
         SetupCredentialsRequest request = new SetupCredentialsRequest();
-        request.setSetupToken("token123");
+        request.setSetupToken("token123.4102444800000");
         request.setNewUsername("new_username");
         request.setNewPassword("SecurePass@123");
 

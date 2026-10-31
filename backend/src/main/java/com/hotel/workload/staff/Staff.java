@@ -57,6 +57,15 @@ public class Staff {
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public User getUser() { return user; }
+
+    /**
+     * True when this record belongs to a manager or an administrator. Such records exist for the people themselves, but they are not
+     * operational staff: they are not assigned tasks and are not counted in workload, dashboard staff totals or department capacity.
+     * A record with no account, or an account without a role, is treated as ordinary staff.
+     */
+    public boolean isPrivilegedAccount() {
+        return user != null && (user.getRole() == com.hotel.workload.security.Role.ADMIN || user.getRole() == com.hotel.workload.security.Role.MANAGER);
+    }
     public void setUser(User user) { this.user = user; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }

@@ -3,6 +3,8 @@ import TaskotelLogo from '../brand/TaskotelLogo';
 import { SearchIcon, MenuIcon, SunIcon, MoonIcon } from '../icons/Icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { getUsername, getUserRole } from '../../services/api';
+import UserAvatar from '../common/UserAvatar';
+import useCurrentUserProfile from '../../hooks/useCurrentUserProfile';
 
 /** Display name, initials and role label for the signed-in user (from the stored login; nothing is assumed when it is missing). */
 export function describeUser(username, role) {
@@ -16,6 +18,8 @@ export function describeUser(username, role) {
 export default function Header({ onMenuClick, onProfileClick, onLogoClick }) {
   const { isDark, toggleTheme } = useTheme();
   const { displayName, initials, roleLabel } = describeUser(getUsername(), getUserRole());
+  // Loaded once per sign-in and shared with the profile page, so a new picture shows here straight away
+  const { profile } = useCurrentUserProfile();
 
   return (
     <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-surface-chrome flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">
@@ -90,9 +94,13 @@ export default function Header({ onMenuClick, onProfileClick, onLogoClick }) {
           title="View Profile"
         >
           <div className="relative">
-            <div className="w-9 h-9 rounded-full bg-emerald-100 text-emerald-800 font-semibold text-xs flex items-center justify-center ring-1 ring-emerald-200">
-              {initials}
-            </div>
+            <UserAvatar
+              imageUrl={profile?.profileImageUrl}
+              initials={initials}
+              name={displayName}
+              className="w-9 h-9 rounded-full ring-1 ring-emerald-200"
+              fallbackClassName="bg-emerald-100 text-emerald-800 font-semibold text-xs"
+            />
             {/* Online Status Dot */}
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />
           </div>

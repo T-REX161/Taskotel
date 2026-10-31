@@ -15,6 +15,10 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     Optional<Assignment> findByTaskId(UUID taskId);
     List<Assignment> findAllByTaskId(UUID taskId);
 
+    /** The task of an assignment without loading the assignment, so it can be locked in the usual order before being read. */
+    @Query("SELECT a.task.id FROM Assignment a WHERE a.id = :id")
+    Optional<UUID> findTaskIdById(@Param("id") UUID id);
+
     @Modifying
     @Query("DELETE FROM Assignment a WHERE a.task.id = :taskId")
     void deleteByTaskId(@Param("taskId") UUID taskId);

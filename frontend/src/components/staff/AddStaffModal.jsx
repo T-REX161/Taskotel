@@ -589,12 +589,6 @@ export default function AddStaffModal({
           </div>
 
           <div className="shrink-0 px-5 py-3.5 sm:px-6 border-t border-gray-100 flex flex-wrap items-center justify-end gap-3">
-            {/* Shown beside the buttons (above them on phones) so it adds no height to the form */}
-            {formData.role !== 'STAFF' && (
-              <p className="basis-full sm:basis-auto sm:flex-1 min-w-0 text-xs text-gray-500">
-                Managers and admins skip email verification and sign in with this password.
-              </p>
-            )}
             <button
               type="button"
               onClick={handleClose}

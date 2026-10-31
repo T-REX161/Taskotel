@@ -300,8 +300,8 @@ public class VerificationCodeServiceTest {
     }
 
     @Test
-    @DisplayName("Admin and Manager users are email verified by default and cannot be locked out")
-    public void testAdminAndManager_EmailVerifiedByDefault() {
+    @DisplayName("Every role, Admin and Manager included, starts email-unverified; nothing assumes verification from the role")
+    public void testEveryRole_StartsEmailUnverified() {
         User admin = new User();
         admin.setUsername("admin");
         admin.setRole(Role.ADMIN);
@@ -314,8 +314,8 @@ public class VerificationCodeServiceTest {
         staff.setUsername("staff");
         staff.setRole(Role.STAFF);
 
-        assertTrue(admin.isEmailVerified(), "Admin must be email verified by default");
-        assertTrue(manager.isEmailVerified(), "Manager must be email verified by default");
+        assertFalse(admin.isEmailVerified(), "Admin must not be email verified by default");
+        assertFalse(manager.isEmailVerified(), "Manager must not be email verified by default");
         assertFalse(staff.isEmailVerified(), "Staff must not be email verified by default");
     }
 }

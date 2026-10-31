@@ -112,7 +112,7 @@ public class StaffCredentialSetupFlowTest {
         userRepository.save(admin);
 
         User savedAdmin = userRepository.findByUsername("admin_test_user").orElseThrow();
-        assertTrue(savedAdmin.isEmailVerified(), "Admin must have emailVerified = true");
+        assertFalse(savedAdmin.isEmailVerified(), "Admin starts unverified: every role verifies its email");
         assertFalse(savedAdmin.isCredentialsSetupRequired(), "Admin must have credentialsSetupRequired = false");
 
         User manager = new User();
@@ -124,7 +124,7 @@ public class StaffCredentialSetupFlowTest {
         userRepository.save(manager);
 
         User savedManager = userRepository.findByUsername("manager_test_user").orElseThrow();
-        assertTrue(savedManager.isEmailVerified(), "Manager must have emailVerified = true");
+        assertFalse(savedManager.isEmailVerified(), "Manager starts unverified: every role verifies its email");
         assertFalse(savedManager.isCredentialsSetupRequired(), "Manager must have credentialsSetupRequired = false");
     }
 }

@@ -57,7 +57,9 @@ public class VerificationCodeServiceImpl implements VerificationCodeService {
     }
 
     @Override
-    @Transactional
+    // The failed-attempt count and the invalidation of a used-up or expired code are saved even though the call ends with an
+    // exception; a rollback would silently undo them and the five-attempt limit would never take effect.
+    @Transactional(noRollbackFor = VerificationException.class)
     public String verifyCode(String userIdentifier, String rawCode) {
         User user = findUserByIdentifier(userIdentifier);
 
@@ -115,7 +117,7 @@ public class VerificationCodeServiceImpl implements VerificationCodeService {
         
         String setupToken = null;
         if (user.isCredentialsSetupRequired()) {
-            setupToken = java.util.UUID.randomUUID().toString();
+            setupToken = com.hotel.workload.security.SetupTokens.issue();
             user.setSetupToken(setupToken);
         }
         

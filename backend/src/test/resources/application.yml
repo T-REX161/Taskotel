@@ -26,5 +26,5 @@ jwt:
 sendgrid:
   api-key: ${SENDGRID_API_KEY:test-sendgrid-api-key}
   from-email: ${SENDGRID_FROM_EMAIL:noreply@hotelwb.com}
-  from-name: ${SENDGRID_FROM_NAME:EquiFlow}
+  from-name: ${SENDGRID_FROM_NAME:Taskotel | Hotel Operations}
 

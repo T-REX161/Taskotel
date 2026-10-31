@@ -1,6 +1,19 @@
 spring:
   application:
     name: workload-balancer
+  # Local secrets live in backend/.env (KEY=value lines, git-ignored; see backend/.env.example). Spring Boot does not read .env
+  # files by itself, so it is imported here as a properties file: ".env" when the backend starts from the backend folder
+  # (mvnw spring-boot:run), "backend/.env" when it starts from the repository root. Both are optional, and real environment
+  # variables always take precedence over the file, so deployments keep using plain environment variables.
+  config:
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:backend/.env[.properties]
+  # Profile pictures are at most 5 MB; the request may be slightly larger because of the multipart framing
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
   profiles:
     group:
       production:
@@ -29,6 +42,40 @@ spring:
 server:
   port: 8080
 
+# Sample users, staff and tasks with a shared well-known password. Off by default; never runs under the prod or production profile.
+app:
+  demo-data:
+    enabled: ${DEMO_DATA_ENABLED:false}
+
+# Failed-login limit (per application instance, in memory). Defaults: 5 attempts per client+account, 20 per client,
+# 30 per account, inside a 15 minute window; attempts age out of the window, nothing is locked permanently.
+auth:
+  login-rate-limit:
+    enabled: ${LOGIN_RATE_LIMIT_ENABLED:true}
+    window-seconds: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:900}
+    max-attempts-per-client-and-account: ${LOGIN_RATE_LIMIT_PER_CLIENT_ACCOUNT:5}
+    max-attempts-per-client: ${LOGIN_RATE_LIMIT_PER_CLIENT:20}
+    max-attempts-per-account: ${LOGIN_RATE_LIMIT_PER_ACCOUNT:30}
+  # Password-reset and credential-setup limits: same mechanism, separate counters for each endpoint. 0 switches a key off.
+  password-reset-request-rate-limit:
+    enabled: ${PASSWORD_RESET_REQUEST_RATE_LIMIT_ENABLED:true}
+    window-seconds: ${PASSWORD_RESET_REQUEST_RATE_LIMIT_WINDOW_SECONDS:3600}
+    max-attempts-per-client-and-account: ${PASSWORD_RESET_REQUEST_RATE_LIMIT_PER_CLIENT_ACCOUNT:3}
+    max-attempts-per-client: ${PASSWORD_RESET_REQUEST_RATE_LIMIT_PER_CLIENT:10}
+    max-attempts-per-account: ${PASSWORD_RESET_REQUEST_RATE_LIMIT_PER_ACCOUNT:10}
+  password-reset-confirm-rate-limit:
+    enabled: ${PASSWORD_RESET_CONFIRM_RATE_LIMIT_ENABLED:true}
+    window-seconds: ${PASSWORD_RESET_CONFIRM_RATE_LIMIT_WINDOW_SECONDS:900}
+    max-attempts-per-client-and-account: ${PASSWORD_RESET_CONFIRM_RATE_LIMIT_PER_CLIENT_ACCOUNT:5}
+    max-attempts-per-client: ${PASSWORD_RESET_CONFIRM_RATE_LIMIT_PER_CLIENT:20}
+    max-attempts-per-account: ${PASSWORD_RESET_CONFIRM_RATE_LIMIT_PER_ACCOUNT:30}
+  credential-setup-rate-limit:
+    enabled: ${CREDENTIAL_SETUP_RATE_LIMIT_ENABLED:true}
+    window-seconds: ${CREDENTIAL_SETUP_RATE_LIMIT_WINDOW_SECONDS:900}
+    max-attempts-per-client-and-account: ${CREDENTIAL_SETUP_RATE_LIMIT_PER_CLIENT:10}
+    max-attempts-per-client: ${CREDENTIAL_SETUP_RATE_LIMIT_PER_CLIENT_MAX:20}
+    max-attempts-per-account: 0
+
 jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000
@@ -36,4 +83,12 @@ jwt:
 sendgrid:
   api-key: ${SENDGRID_API_KEY:}
   from-email: ${SENDGRID_FROM_EMAIL:noreply@hotelwb.com}
-  from-name: ${SENDGRID_FROM_NAME:EquiFlow}
+  from-name: ${SENDGRID_FROM_NAME:Taskotel | Hotel Operations}
+
+# Profile pictures (Cloudinary). Values come only from the environment or backend/.env; never write credentials here.
+# While any of the three is missing the backend still starts, and profile picture uploads are simply unavailable.
+cloudinary:
+  cloud-name: ${CLOUDINARY_CLOUD_NAME:}
+  api-key: ${CLOUDINARY_API_KEY:}
+  api-secret: ${CLOUDINARY_API_SECRET:}
+  folder: taskotel/profile-pictures

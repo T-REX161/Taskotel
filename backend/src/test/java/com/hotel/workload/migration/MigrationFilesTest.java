@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V7 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V8 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -73,7 +73,8 @@ public class MigrationFilesTest {
                 "V4__departments_table.sql",
                 "V5__support_assignments.sql",
                 "V6__support_manual_end_reason.sql",
-                "V7__support_archive.sql"), names);
+                "V7__support_archive.sql",
+                "V8__user_profile_image.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -81,7 +82,21 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7), versions, "Versions must be 1 to 7 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8), versions, "Versions must be 1 to 8 with no gaps or duplicates");
+    }
+
+    @Test
+    @DisplayName("V8 only adds two nullable columns to users: no data, constraint or other table is touched")
+    public void testV8OnlyAddsTwoNullableColumns() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V8__user_profile_image.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|CASCADE|RENAME|DROP|NOT\\s+NULL|DEFAULT|CONSTRAINT|INDEX)\\b").matcher(code).find(),
+                "V8 must not change data, constraints or indexes, and the new columns must be nullable with no default");
+        assertEquals(2, Pattern.compile("(?i)ADD COLUMN IF NOT EXISTS").matcher(executable).results().count());
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_url VARCHAR(512);"));
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_image_public_id VARCHAR(255);"));
+        assertEquals(2, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
     }
 
     @Test

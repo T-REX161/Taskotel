@@ -76,7 +76,10 @@ public class StaffServiceImpl implements StaffService {
 
     @Override
     public List<StaffDto> getAllStaff() {
+        // Managers see ordinary staff only; records linked to manager or admin accounts are for administrators
+        boolean admin = currentUserIsAdmin();
         return staffRepository.findAll().stream()
+                .filter(staff -> admin || !hasPrivilegedAccount(staff))
                 .map(StaffDto::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -96,16 +99,15 @@ public class StaffServiceImpl implements StaffService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
 
-        // Staff verify their email and set their own credentials; the account model skips that for managers and admins
-        boolean staffOnboarding = role == Role.STAFF;
+        // Every account, whatever its role, starts unverified and must verify its email, then set its own password, before it can sign in
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getTemporaryPassword()));
         user.setRole(role);
         user.setActive(true);
-        user.setEmailVerified(!staffOnboarding);
-        user.setCredentialsSetupRequired(staffOnboarding);
+        user.setEmailVerified(false);
+        user.setCredentialsSetupRequired(true);
         try {
             user = userRepository.save(user);
             // Flush now so a duplicate created concurrently surfaces here as a clean conflict, not at commit
@@ -153,8 +155,12 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffDto updateStaff(java.util.UUID id, UpdateStaffRequest request) {
+        // Lock the row first, so a concurrent assignment cannot slip in between the active-assignment check and the save
+        staffRepository.lockByIds(java.util.Set.of(id));
         Staff staff = staffRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+
+        requireMayManage(staff);
 
         // Reject before any field changes so a refused deactivation leaves the record untouched
         if (staff.isActive() && !request.isActive() && hasActiveAssignments(staff.getId())) {
@@ -203,8 +209,11 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffDto deactivateStaff(java.util.UUID id) {
+        staffRepository.lockByIds(java.util.Set.of(id)); // see updateStaff
         Staff staff = staffRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+
+        requireMayManage(staff);
 
         if (!staff.isActive() && (staff.getUser() == null || !staff.getUser().isActive())) {
             return StaffDto.fromEntity(staff);
@@ -232,6 +241,8 @@ public class StaffServiceImpl implements StaffService {
     public StaffDto activateStaff(java.util.UUID id) {
         Staff staff = staffRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+
+        requireMayManage(staff);
 
         if (staff.isActive() && (staff.getUser() == null || staff.getUser().isActive())) {
             return StaffDto.fromEntity(staff);
@@ -315,6 +326,22 @@ public class StaffServiceImpl implements StaffService {
                 .filter(task -> task != null && ACTIVE_TASK_STATUSES.contains(task.getStatus()))
                 .filter(task -> task.getDepartment() != null && !task.getDepartment().equals(department))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Managers may manage ordinary staff accounts only. A staff record whose login belongs to a manager or an administrator can be
+     * changed, deactivated or reactivated by an administrator alone, whichever endpoint is used, so a manager cannot disable or
+     * re-email a higher-privileged account.
+     */
+    private void requireMayManage(Staff staff) {
+        if (hasPrivilegedAccount(staff) && !currentUserIsAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators can change manager or admin accounts");
+        }
+    }
+
+    private static boolean hasPrivilegedAccount(Staff staff) {
+        User account = staff.getUser();
+        return account != null && (account.getRole() == Role.ADMIN || account.getRole() == Role.MANAGER);
     }
 
     private boolean currentUserIsAdmin() {

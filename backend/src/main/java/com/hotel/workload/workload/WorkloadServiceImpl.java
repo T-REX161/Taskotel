@@ -56,7 +56,8 @@ public class WorkloadServiceImpl implements WorkloadService {
         // 1. Load staff to calculate for
         List<Staff> targetStaff = new ArrayList<>();
         if (isAdminOrManager) {
-            targetStaff = staffRepository.findAll();
+            // Managers and administrators are not operational staff, so they have no workload row
+            targetStaff = staffRepository.findAll().stream().filter(staff -> !staff.isPrivilegedAccount()).collect(java.util.stream.Collectors.toList());
         } else {
             Staff staff = staffRepository.findByUserUsername(username)
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(

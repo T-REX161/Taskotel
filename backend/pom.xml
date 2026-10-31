@@ -107,6 +107,13 @@
             <artifactId>sendgrid-java</artifactId>
             <version>4.10.3</version>
         </dependency>
+        <!-- Cloudinary (profile pictures). The http5 transport uses Apache HttpClient 5, whose version comes from the
+             Spring Boot BOM; nothing else in the application uses HttpClient 5. -->
+        <dependency>
+            <groupId>com.cloudinary</groupId>
+            <artifactId>cloudinary-http5</artifactId>
+            <version>2.5.0</version>
+        </dependency>
     </dependencies>
 
     <build>

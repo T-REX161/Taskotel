@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { formatDepartment, isAvailable, isActive } from './staffFormatters';
 import { DotsVerticalIcon, EyeIcon } from '../icons/Icons';
 import { getUserRole } from '../../services/api';
+import UserAvatar from '../common/UserAvatar';
 
 /**
  * Get two-letter initials from full name or username.
@@ -154,17 +155,13 @@ export default function StaffTable({
                     {/* 1. Name: Circular Avatar, Bold Name, Email underneath (truncated gracefully) */}
                     <td className="py-4 px-4 align-middle">
                       <div className="flex items-center gap-3 min-w-0">
-                        {staff.avatarUrl || staff.profileImage ? (
-                          <img
-                            src={staff.avatarUrl || staff.profileImage}
-                            alt={displayName}
-                            className="w-10 h-10 rounded-full object-cover shrink-0 border border-gray-200"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-gray-100 text-gray-600 font-semibold text-xs flex items-center justify-center shrink-0 border border-gray-200 select-none">
-                            {initials}
-                          </div>
-                        )}
+                        <UserAvatar
+                          imageUrl={staff.profileImageUrl || staff.avatarUrl || staff.profileImage}
+                          initials={initials}
+                          name={displayName}
+                          className="w-10 h-10 rounded-full shrink-0 border border-gray-200"
+                          fallbackClassName="bg-gray-100 text-gray-600 font-semibold text-xs"
+                        />
                         <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
                           <span
                             className="font-bold text-gray-900 text-sm truncate block"
