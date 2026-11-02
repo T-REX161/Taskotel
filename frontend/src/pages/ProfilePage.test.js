@@ -53,7 +53,7 @@ describe('profile page: change profile picture', () => {
 
   it('keeps the existing profile details and branding', () => {
     assert.ok(page.includes('Taskotel — Hotel Operations, Simplified'));
-    assert.ok(page.includes('Full Administrator Access') && page.includes('Active & Authenticated'));
+    assert.ok(page.includes('Full Administrator Access') && page.includes('Email Verified'));
   });
 });
 

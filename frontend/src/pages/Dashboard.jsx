@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardSummary, getUserRole, getUsername, getWorkload, getWorkloadRecommendations, getTasks } from '../services/api';
 import { describeUser } from '../components/layout/Header';
+import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
+import { preferredName } from '../utils/displayName';
 import { buildInsights, formatDashboardDate } from '../utils/dashboardView';
 import { keepIfSame, singleFlight, startPolling } from '../utils/polling';
 import { normalizeRecommendations } from '../utils/supportRecommendations';
@@ -16,6 +18,8 @@ const DASHBOARD_REFRESH_MS = 30000;
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  // The shared, once-loaded profile (also read by the header and the profile page): the welcome name follows a saved display name
+  const { profile } = useCurrentUserProfile();
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -166,7 +170,7 @@ export default function Dashboard() {
     (data && data.workload !== undefined && data.totalStaff === undefined);
 
   const insights = buildInsights({ isStaff, own: data?.workload, staffWorkload, tasks, recommendations });
-  const welcomeName = describeUser(getUsername(), userRole).displayName;
+  const welcomeName = preferredName(profile, describeUser(getUsername(), userRole).displayName);
 
   return (
     <div className="w-full space-y-5">

@@ -5,6 +5,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,6 +29,18 @@ public class ProfileController {
     @GetMapping
     public ProfileDto getProfile(Authentication authentication) {
         return profilePictureService.getProfile(nameOf(authentication));
+    }
+
+    /** Changes the signed-in user's display name. Only that name: username, role and picture are untouched. */
+    @PutMapping("/display-name")
+    public ProfileDto updateDisplayName(Authentication authentication, @RequestBody UpdateDisplayNameRequest request) {
+        return profilePictureService.updateDisplayName(nameOf(authentication), request.displayName());
+    }
+
+    /** Saves the signed-in user's own appearance, date format and time format. Nothing else on the account changes. */
+    @PutMapping("/preferences")
+    public ProfileDto updatePreferences(Authentication authentication, @RequestBody UserPreferences.Values request) {
+        return profilePictureService.updatePreferences(nameOf(authentication), request);
     }
 
     /** Uploads a new picture (multipart field "file"), replacing the current one only once the new one is stored and saved. */

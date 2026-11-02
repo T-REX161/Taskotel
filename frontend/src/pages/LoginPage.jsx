@@ -39,7 +39,7 @@ export default function LoginPage() {
       });
 
       // The body is read for a success and for a 429 (whose message is shown); other failures use fixed messages
-      const data = response.ok || response.status === 429 ? await response.json().catch(() => null) : null;
+      const data = response.ok || response.status === 429 || response.status >= 500 ? await response.json().catch(() => null) : null;
       const outcome = getLoginOutcome({ ok: response.ok, status: response.status, data });
 
       // If email verification is required for unverified Staff:

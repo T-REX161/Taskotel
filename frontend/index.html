@@ -3,9 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <script>
-      // Apply the saved theme before the first paint (same key as src/theme/ThemeContext.jsx)
+      // Apply the remembered appearance before the first paint (same key as src/theme/ThemeContext.jsx): 'dark', or 'system'
+      // while the operating system prefers dark. The signed-in user's saved preference replaces it once their profile loads.
       try {
-        if (localStorage.getItem('taskotel-theme') === 'dark') {
+        var remembered = localStorage.getItem('taskotel-theme');
+        if (remembered === 'dark' || (remembered === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
           document.documentElement.classList.add('dark');
           document.documentElement.style.colorScheme = 'dark';
         }

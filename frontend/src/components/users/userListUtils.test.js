@@ -79,11 +79,11 @@ describe('badges and dates', () => {
     assert.deepStrictEqual(statusBadge(false), { label: 'Inactive', className: 'bg-red-50 text-red-600' });
   });
 
-  it('created dates use the project date format and never shift with the timezone', () => {
-    assert.strictEqual(formatCreatedDate('2026-08-20T08:00:00'), 'Aug 20, 2026');
-    assert.strictEqual(formatCreatedDate('2026-09-01T23:59:59.123'), 'Sep 1, 2026');
-    assert.strictEqual(formatCreatedDate('2026-12-31T00:00:00Z'), 'Dec 31, 2026');
-    assert.strictEqual(formatCreatedDate([2026, 8, 25, 9, 0]), 'Aug 25, 2026');
+  it('created dates use the chosen date format (DD/MM/YYYY by default) and never shift with the timezone', () => {
+    assert.strictEqual(formatCreatedDate('2026-08-20T08:00:00'), '20/08/2026');
+    assert.strictEqual(formatCreatedDate('2026-09-01T23:59:59.123'), '01/09/2026');
+    assert.strictEqual(formatCreatedDate('2026-12-31T00:00:00Z'), '31/12/2026');
+    assert.strictEqual(formatCreatedDate([2026, 8, 25, 9, 0]), '25/08/2026');
     assert.strictEqual(formatCreatedDate(null), '—');
     assert.strictEqual(formatCreatedDate('not a date'), '—');
   });

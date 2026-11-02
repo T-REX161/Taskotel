@@ -64,6 +64,26 @@ public class ProfilePictureService {
         return toDto(currentUser(username));
     }
 
+    /** Sets the signed-in user's own display name (the account comes from the token; nothing else on the account changes). */
+    public ProfileDto updateDisplayName(String username, String requested) {
+        String displayName = DisplayNames.validate(requested);
+        User user = currentUser(username);
+        if (userRepository.updateDisplayName(user.getId(), displayName) == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found");
+        }
+        return toDto(userRepository.findById(user.getId()).orElse(user));
+    }
+
+    /** Saves the signed-in user's own appearance, date format and time format (the account comes from the token). */
+    public ProfileDto updatePreferences(String username, UserPreferences.Values requested) {
+        UserPreferences.Values values = UserPreferences.validate(requested);
+        User user = currentUser(username);
+        if (userRepository.updatePreferences(user.getId(), values.themePreference(), values.dateFormat(), values.timeFormat()) == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found");
+        }
+        return toDto(userRepository.findById(user.getId()).orElse(user));
+    }
+
     public ProfileDto uploadPicture(String username, MultipartFile file) {
         ProfileImageValidator.ValidatedImage image = ProfileImageValidator.validate(file);
         User user = currentUser(username);
@@ -157,7 +177,9 @@ public class ProfilePictureService {
                 .map(Staff::getName)
                 .filter(name -> !name.isBlank())
                 .orElseGet(() -> UserDto.deriveFallbackName(user));
-        return new ProfileDto(user.getUsername(), user.getRole() == null ? null : user.getRole().name(), fullName, user.getProfileImageUrl());
+        return new ProfileDto(user.getUsername(), user.getRole() == null ? null : user.getRole().name(), fullName, user.getProfileImageUrl(),
+                DisplayNames.effective(user), user.isActive(), user.isEmailVerified(),
+                user.getCreatedAt(), user.getLastLoginAt(), user.getPasswordChangedAt(), UserPreferences.of(user));
     }
 
     /** A new name for every upload, so a replacement never overwrites the picture that is still in use. */

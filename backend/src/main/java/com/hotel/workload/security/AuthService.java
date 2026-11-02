@@ -91,8 +91,19 @@ public class AuthService {
             userRepository.save(user);
         }
 
+        recordLogin(user);
+
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
         return new LoginResponse(token, user.getUsername(), user.getRole());
+    }
+
+    /** Remembers when this account last signed in. Failing to record it must never stop a valid sign-in. */
+    private void recordLogin(User user) {
+        try {
+            userRepository.updateLastLogin(user.getId(), java.time.LocalDateTime.now());
+        } catch (RuntimeException e) {
+            logger.warn("Could not record the last sign-in time: {}", e.getClass().getSimpleName());
+        }
     }
 
     /**
@@ -151,6 +162,7 @@ public class AuthService {
 
         user.setUsername(request.getNewUsername());
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChangedAt(java.time.LocalDateTime.now());
         user.setCredentialsSetupRequired(false);
         user.setSetupToken(null);
         user.setFirstLogin(false);

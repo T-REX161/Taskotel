@@ -76,6 +76,28 @@ public class User {
     @Column(name = "profile_image_public_id")
     private String profileImagePublicId;
 
+    // What the user chose to be called in the app. Null until they set one (the default, derived from the username, is applied when reading).
+    @Column(name = "display_name", length = 50)
+    private String displayName;
+
+    // Account activity shown to the user on their own profile. Null means "not recorded" (accounts that existed before tracking began
+    // and have not signed in / changed their password since); nothing is guessed or backfilled.
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;
+
+    @Column(name = "password_changed_at")
+    private LocalDateTime passwordChangedAt;
+
+    // Personal display preferences (see profile.UserPreferences): null until chosen, the defaults then apply when reading
+    @Column(name = "theme_preference", length = 10)
+    private String themePreference;
+
+    @Column(name = "date_format", length = 10)
+    private String dateFormat;
+
+    @Column(name = "time_format", length = 10)
+    private String timeFormat;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -140,4 +162,16 @@ public class User {
     public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
     public String getProfileImagePublicId() { return profileImagePublicId; }
     public void setProfileImagePublicId(String profileImagePublicId) { this.profileImagePublicId = profileImagePublicId; }
+    public LocalDateTime getLastLoginAt() { return lastLoginAt; }
+    public void setLastLoginAt(LocalDateTime lastLoginAt) { this.lastLoginAt = lastLoginAt; }
+    public LocalDateTime getPasswordChangedAt() { return passwordChangedAt; }
+    public void setPasswordChangedAt(LocalDateTime passwordChangedAt) { this.passwordChangedAt = passwordChangedAt; }
+    public String getThemePreference() { return themePreference; }
+    public void setThemePreference(String themePreference) { this.themePreference = themePreference; }
+    public String getDateFormat() { return dateFormat; }
+    public void setDateFormat(String dateFormat) { this.dateFormat = dateFormat; }
+    public String getTimeFormat() { return timeFormat; }
+    public void setTimeFormat(String timeFormat) { this.timeFormat = timeFormat; }
+    public String getDisplayName() { return displayName; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
 }

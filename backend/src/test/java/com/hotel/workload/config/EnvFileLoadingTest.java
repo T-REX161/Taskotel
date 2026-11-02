@@ -153,7 +153,7 @@ public class EnvFileLoadingTest {
             count++;
             assertTrue(setting.group(2).trim().startsWith("your_"), setting.group(1) + " must be a placeholder in .env.example");
         }
-        assertEquals(3, count, "the three Cloudinary settings");
+        assertEquals(5, count, "the three Cloudinary settings and the two SendGrid settings");
         List<String> ignored = Files.readAllLines(Path.of("../.gitignore"));
         assertTrue(ignored.contains("backend/.env") || ignored.contains(".env"), "backend/.env must be ignored by git");
     }

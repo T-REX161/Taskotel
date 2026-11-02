@@ -121,6 +121,7 @@ public class PasswordResetService {
         passwordValidatorService.validate(request.getNewPassword());
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChangedAt(java.time.LocalDateTime.now());
         clearResetFields(user);
         userRepository.save(user);
     }

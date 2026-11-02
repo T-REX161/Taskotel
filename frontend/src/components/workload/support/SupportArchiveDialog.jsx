@@ -1,4 +1,6 @@
 import React, { useEffect, useRef } from 'react';
+import { formatDate, formatTime } from '../../../utils/dateTimeFormat';
+import { getPreferences } from '../../../utils/preferences';
 import { describeEndReason } from '../../../utils/supportPlan';
 
 const FOCUSABLE = 'button:not([disabled])';
@@ -6,7 +8,9 @@ const FOCUSABLE = 'button:not([disabled])';
 const formatWhen = (value) => {
   if (!value) return '';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  if (Number.isNaN(date.getTime())) return '';
+  const { dateFormat, timeFormat } = getPreferences();
+  return `${formatDate(date, dateFormat)}, ${formatTime(date, timeFormat)}`;
 };
 
 const Detail = ({ label, children }) => (

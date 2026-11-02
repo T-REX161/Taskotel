@@ -157,22 +157,22 @@ describe('formatTime', () => {
 });
 
 describe('formatDueDate', () => {
-  it('formats a date and 5:00 PM together as "Oct 13, 2026, 5:00 PM"', () => {
-    assert.strictEqual(formatDueDate('2026-10-13', '17:00'), 'Oct 13, 2026, 5:00 PM');
-    assert.strictEqual(formatDueDate('2026-10-13', '17:00:00'), 'Oct 13, 2026, 5:00 PM');
-    assert.strictEqual(formatDueDate('2026-10-13', '05:00 PM'), 'Oct 13, 2026, 5:00 PM');
-    assert.strictEqual(formatDueDate('2026-10-13', '5:00 PM'), 'Oct 13, 2026, 5:00 PM');
+  it('formats a date and 5:00 PM together as "13/10/2026, 5:00 PM"', () => {
+    assert.strictEqual(formatDueDate('2026-10-13', '17:00'), '13/10/2026, 5:00 PM');
+    assert.strictEqual(formatDueDate('2026-10-13', '17:00:00'), '13/10/2026, 5:00 PM');
+    assert.strictEqual(formatDueDate('2026-10-13', '05:00 PM'), '13/10/2026, 5:00 PM');
+    assert.strictEqual(formatDueDate('2026-10-13', '5:00 PM'), '13/10/2026, 5:00 PM');
   });
 
-  it('formats a date and 2:30 PM together as "Oct 14, 2026, 2:30 PM"', () => {
-    assert.strictEqual(formatDueDate('2026-10-14', '14:30'), 'Oct 14, 2026, 2:30 PM');
-    assert.strictEqual(formatDueDate('2026-10-14', '14:30:00'), 'Oct 14, 2026, 2:30 PM');
+  it('formats a date and 2:30 PM together as "14/10/2026, 2:30 PM"', () => {
+    assert.strictEqual(formatDueDate('2026-10-14', '14:30'), '14/10/2026, 2:30 PM');
+    assert.strictEqual(formatDueDate('2026-10-14', '14:30:00'), '14/10/2026, 2:30 PM');
   });
 
   it('formats a date only when deadline time is omitted or null', () => {
-    assert.strictEqual(formatDueDate('2026-10-14'), 'Oct 14, 2026');
-    assert.strictEqual(formatDueDate('2026-10-14', null), 'Oct 14, 2026');
-    assert.strictEqual(formatDueDate('2026-10-14', ''), 'Oct 14, 2026');
+    assert.strictEqual(formatDueDate('2026-10-14'), '14/10/2026');
+    assert.strictEqual(formatDueDate('2026-10-14', null), '14/10/2026');
+    assert.strictEqual(formatDueDate('2026-10-14', ''), '14/10/2026');
   });
 
   it('returns "-" when neither date nor time is present', () => {
@@ -183,10 +183,10 @@ describe('formatDueDate', () => {
 
   it('supports passing a task object directly', () => {
     const taskWithBoth = { dueDate: '2026-10-13', deadlineTime: '17:00' };
-    assert.strictEqual(formatDueDate(taskWithBoth), 'Oct 13, 2026, 5:00 PM');
+    assert.strictEqual(formatDueDate(taskWithBoth), '13/10/2026, 5:00 PM');
 
     const taskDateOnly = { dueDate: '2026-10-14', deadlineTime: null };
-    assert.strictEqual(formatDueDate(taskDateOnly), 'Oct 14, 2026');
+    assert.strictEqual(formatDueDate(taskDateOnly), '14/10/2026');
 
     const taskNeither = { dueDate: null, deadlineTime: null };
     assert.strictEqual(formatDueDate(taskNeither), '-');
@@ -194,10 +194,10 @@ describe('formatDueDate', () => {
 });
 
 describe('formatDate', () => {
-  it('formats YYYY-MM-DD into "MMM D, YYYY"', () => {
-    assert.strictEqual(formatDate('2026-10-13'), 'Oct 13, 2026');
-    assert.strictEqual(formatDate('2026-01-01'), 'Jan 1, 2026');
-    assert.strictEqual(formatDate('2026-12-31'), 'Dec 31, 2026');
+  it('formats YYYY-MM-DD into "DD/MM/YYYY" (the default date format)', () => {
+    assert.strictEqual(formatDate('2026-10-13'), '13/10/2026');
+    assert.strictEqual(formatDate('2026-01-01'), '01/01/2026');
+    assert.strictEqual(formatDate('2026-12-31'), '31/12/2026');
   });
 
   it('returns null for null, undefined, or empty string', () => {

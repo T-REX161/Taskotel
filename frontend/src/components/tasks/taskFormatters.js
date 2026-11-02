@@ -4,6 +4,8 @@
  */
 
 import { displayDepartmentName } from '../../utils/departmentRegistry.js';
+import { formatDateParts, formatTimeParts } from '../../utils/dateTimeFormat.js';
+import { getPreferences } from '../../utils/preferences.js';
 
 
 export function getPriorityColor(priority) {
@@ -73,14 +75,13 @@ export function formatDepartment(dept) {
   return displayDepartmentName(dept);
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /**
- * Format a time string (e.g., "17:00", "17:00:00", "14:30") into a readable 12-hour format with AM/PM.
+ * Format a time string (e.g., "17:00", "17:00:00", "14:30") in the signed-in user's chosen time format (12-hour "5:00 PM" or 24-hour "17:00").
  * Returns null if input is empty or invalid.
  *
  * @param {string|null|undefined} timeStr
- * @returns {string|null} Formatted 12-hour time string (e.g. "5:00 PM", "2:30 PM") or null
+ * @returns {string|null} Formatted time string (e.g. "5:00 PM" or "17:00") or null
  */
 export function formatTime(timeStr) {
   if (!timeStr) return null;
@@ -94,7 +95,7 @@ export function formatTime(timeStr) {
     const minutes = match12[2];
     const period = match12[3].toUpperCase();
     if (hours >= 1 && hours <= 12) {
-      return `${hours}:${minutes} ${period}`;
+      return formatTimeParts((hours % 12) + (period === 'PM' ? 12 : 0), parseInt(minutes, 10), getPreferences().timeFormat);
     }
   }
 
@@ -106,18 +107,15 @@ export function formatTime(timeStr) {
   if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
     return null;
   }
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const h12 = hours % 12 === 0 ? 12 : hours % 12;
-  const padMinutes = minutes < 10 ? `0${minutes}` : `${minutes}`;
-  return `${h12}:${padMinutes} ${period}`;
+  return formatTimeParts(hours, minutes, getPreferences().timeFormat);
 }
 
 /**
- * Format a date string (e.g., "2026-10-13") into readable format "Oct 13, 2026".
+ * Format a date string (e.g., "2026-10-13") in the signed-in user's chosen date format ("13/10/2026", "10/13/2026" or "2026-10-13").
  * Returns null if input is empty or invalid.
  *
  * @param {string|null|undefined} dueDateStr
- * @returns {string|null} Formatted date (e.g. "Oct 13, 2026") or null
+ * @returns {string|null} Formatted date (e.g. "13/10/2026") or null
  */
 export function formatDate(dueDateStr) {
   if (!dueDateStr) return null;
@@ -127,7 +125,7 @@ export function formatDate(dueDateStr) {
     const month = parseInt(parts[1], 10) - 1;
     const day = parseInt(parts[2], 10);
     if (!isNaN(year) && month >= 0 && month < 12 && !isNaN(day)) {
-      return `${MONTHS[month]} ${day}, ${year}`;
+      return formatDateParts(year, month + 1, day, getPreferences().dateFormat);
     }
   }
   return String(dueDateStr);
@@ -137,9 +135,9 @@ export function formatDate(dueDateStr) {
  * Format due date and optional deadline time together.
  *
  * Examples:
- *  - "2026-10-13", "17:00" -> "Oct 13, 2026, 5:00 PM"
- *  - "2026-10-14", "14:30:00" -> "Oct 14, 2026, 2:30 PM"
- *  - "2026-10-14", null -> "Oct 14, 2026"
+ *  - "2026-10-13", "17:00" -> "13/10/2026, 5:00 PM" (default formats; they follow the user's preferences)
+ *  - "2026-10-14", "14:30:00" -> "14/10/2026, 2:30 PM"
+ *  - "2026-10-14", null -> "14/10/2026"
  *  - null, null -> "-"
  *
  * @param {string|object|null|undefined} dueDateInput - Date string in YYYY-MM-DD format, or a task object

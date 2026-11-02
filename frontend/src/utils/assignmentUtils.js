@@ -1,4 +1,6 @@
 import { formatDepartment } from '../components/tasks/taskFormatters.js';
+import { formatDate as formatDateValue, formatTime as formatTimeValue } from './dateTimeFormat.js';
+import { getPreferences } from './preferences.js';
 
 /**
  * Checks if a given date or timestamp represents "today" compared against referenceDate.
@@ -54,19 +56,14 @@ export function formatAssignedAt(assignedAt, referenceDate = new Date()) {
     return String(assignedAt);
   }
 
-  const hours = d.getHours();
-  const minutes = d.getMinutes();
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const h12 = hours % 12 === 0 ? 12 : hours % 12;
-  const padMin = minutes < 10 ? `0${minutes}` : `${minutes}`;
-  const timeStr = `${h12}:${padMin} ${period}`;
+  const prefs = getPreferences();
+  const timeStr = formatTimeValue(d, prefs.timeFormat);
 
   if (isToday(d, referenceDate)) {
     return `Today, ${timeStr}`;
   }
 
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const dateStr = `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  const dateStr = formatDateValue(d, prefs.dateFormat);
   return `${dateStr}, ${timeStr}`;
 }
 
@@ -83,7 +80,7 @@ export function formatAssignedAt(assignedAt, referenceDate = new Date()) {
  */
 export function splitAssignedAt(formatted) {
   const text = String(formatted ?? '');
-  const match = text.match(/^(.*\S),\s*(\d{1,2}:\d{2}\s*[AP]M)$/i);
+  const match = text.match(/^(.*\S),\s*(\d{1,2}:\d{2}(?:\s*[AP]M)?)$/i);
   return match ? { date: match[1], time: match[2] } : { date: text, time: '' };
 }
 

@@ -1,4 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
+import { preferencesLoaded, resolveTheme, savePreferences } from '../utils/preferences';
 
 // The chosen theme is remembered per browser. index.html reads the same key before the first paint,
 // so a page load or refresh never flashes the wrong theme.
@@ -9,17 +11,35 @@ export const THEME_STORAGE_KEY = 'taskotel-theme';
 const TRANSITION_FALLBACK_MS = 300;
 const TRANSITION_SLACK_MS = 250;
 
-export function readStoredTheme() {
+// The appearance preference is LIGHT, DARK or SYSTEM (the codes the server stores per user). The browser copy under
+// THEME_STORAGE_KEY ('light' | 'dark' | 'system') is only a cache so the first paint is right; the signed-in user's saved
+// preference (from their profile) is the source of truth and replaces the cache as soon as it loads.
+const PREFERENCE_BY_STORED = { light: 'LIGHT', dark: 'DARK', system: 'SYSTEM' };
+
+const systemPrefersDark = () => {
   try {
-    return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+    return Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches);
   } catch {
-    return 'light';
+    return false;
+  }
+};
+
+export function readStoredPreference() {
+  try {
+    return PREFERENCE_BY_STORED[localStorage.getItem(THEME_STORAGE_KEY)] || 'LIGHT';
+  } catch {
+    return 'LIGHT';
   }
 }
 
-function storeTheme(theme) {
+/** The theme ('light' | 'dark') the stored preference gives right now. */
+export function readStoredTheme() {
+  return resolveTheme(readStoredPreference(), systemPrefersDark());
+}
+
+function storePreference(preference) {
   try {
-    localStorage.setItem(THEME_STORAGE_KEY, theme);
+    localStorage.setItem(THEME_STORAGE_KEY, preference.toLowerCase());
   } catch {
     // Storage blocked (private mode): the theme still applies for this visit
   }
@@ -124,43 +144,92 @@ export function applyTheme(theme, animate = false, origin = null) {
   setRootTheme(root, theme);
 }
 
-const ThemeContext = createContext({ theme: 'light', isDark: false, toggleTheme: () => {}, setTheme: () => {} });
+
+const PREFERENCES = ['LIGHT', 'DARK', 'SYSTEM'];
+
+const ThemeContext = createContext({
+  theme: 'light',
+  isDark: false,
+  preference: 'LIGHT',
+  toggleTheme: () => {},
+  setTheme: () => {},
+  setPreference: () => {},
+});
 
 export function ThemeProvider({ children }) {
-  const [theme, setThemeState] = useState(readStoredTheme);
+  const [preference, setPreferenceState] = useState(readStoredPreference);
+  const [systemDark, setSystemDark] = useState(systemPrefersDark);
+  const theme = resolveTheme(preference, systemDark);
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
 
+  // System: follow the operating system's light/dark setting while it changes
+  useEffect(() => {
+    const query = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!query) return undefined;
+    const onChange = (event) => setSystemDark(event.matches);
+    query.addEventListener?.('change', onChange);
+    return () => query.removeEventListener?.('change', onChange);
+  }, []);
+
   // Keep other open tabs in step
   useEffect(() => {
     const onStorage = (event) => {
-      if (event.key === THEME_STORAGE_KEY) setThemeState(readStoredTheme());
+      if (event.key === THEME_STORAGE_KEY) setPreferenceState(readStoredPreference());
     };
     window.addEventListener('storage', onStorage);
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  // The most recently requested theme, so rapid repeated toggles always flip from the latest choice
-  const latestTheme = useRef(theme);
-  latestTheme.current = theme;
+  // The most recently requested preference, so rapid repeated changes always start from the latest choice
+  const latestPreference = useRef(preference);
+  latestPreference.current = preference;
 
-  /** origin (optional): viewport point the circular reveal grows from, e.g. the centre of the clicked toggle */
-  const setTheme = useCallback((next, origin = null) => {
-    const value = next === 'dark' ? 'dark' : 'light';
-    latestTheme.current = value;
-    storeTheme(value);
-    applyTheme(value, true, origin);
-    setThemeState(value);
+  // The signed-in user's saved preference is the source of truth: when their profile loads (or changes) it replaces whatever the
+  // browser remembered, so each user sees their own appearance. It only reacts to the saved value changing, never to local
+  // changes, so a change that is still being saved is not undone.
+  const { profile } = useCurrentUserProfile();
+  const savedPreference = profile?.preferences?.themePreference;
+  useEffect(() => {
+    if (PREFERENCES.includes(savedPreference) && savedPreference !== latestPreference.current) {
+      latestPreference.current = savedPreference;
+      storePreference(savedPreference);
+      setPreferenceState(savedPreference);
+    }
+  }, [savedPreference]);
+
+  /**
+   * Applies and remembers an appearance preference (LIGHT, DARK or SYSTEM) immediately.
+   * origin (optional): viewport point the circular reveal grows from, e.g. the centre of the clicked control.
+   * persist (default true): also save it to the user's account. The Settings page passes false because it saves with its own
+   * saving / success / error states. Nothing is sent before the user's profile has loaded, so unrelated settings are never overwritten.
+   */
+  const setPreference = useCallback((next, origin = null, { persist = true } = {}) => {
+    const value = PREFERENCES.includes(next) ? next : 'LIGHT';
+    latestPreference.current = value;
+    storePreference(value);
+    applyTheme(resolveTheme(value, systemPrefersDark()), true, origin);
+    setPreferenceState(value);
+    if (persist && preferencesLoaded()) savePreferences({ themePreference: value }).catch(() => {});
   }, []);
 
+  /** Light or dark, chosen explicitly (used by the header toggle). */
+  const setTheme = useCallback((next, origin = null) => setPreference(next === 'dark' ? 'DARK' : 'LIGHT', origin), [setPreference]);
+
   const toggleTheme = useCallback(
-    (origin = null) => setTheme(latestTheme.current === 'dark' ? 'light' : 'dark', origin),
-    [setTheme]
+    (origin = null) => {
+      const current = resolveTheme(latestPreference.current, systemPrefersDark());
+      setPreference(current === 'dark' ? 'LIGHT' : 'DARK', origin);
+    },
+    [setPreference]
   );
 
-  const value = useMemo(() => ({ theme, isDark: theme === 'dark', toggleTheme, setTheme }), [theme, toggleTheme, setTheme]);
+  const value = useMemo(
+    () => ({ theme, isDark: theme === 'dark', preference, toggleTheme, setTheme, setPreference }),
+    [theme, preference, toggleTheme, setTheme, setPreference]
+  );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

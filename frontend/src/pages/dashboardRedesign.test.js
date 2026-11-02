@@ -91,9 +91,9 @@ describe('workload display helpers', () => {
     assert.deepEqual(sortByLoad(null), []);
   });
 
-  it('shows load as a rounded share of the 360-minute threshold, and the date like the reference', () => {
+  it('shows load as a rounded share of the 360-minute threshold, and the date in the chosen date format', () => {
     assert.deepEqual([loadPercent(0), loadPercent(180), loadPercent(270), loadPercent(999)], [0, 50, 75, 100]);
-    assert.equal(formatDashboardDate(new Date(2026, 8, 29)), 'Tue, 29 Sep 2026');
+    assert.equal(formatDashboardDate(new Date(2026, 8, 29)), 'Tue, 29/09/2026');
   });
 
   it('greets by time of day', () => {
@@ -444,7 +444,7 @@ describe('dashboard page', () => {
   const page = read('pages', 'Dashboard.jsx');
 
   it('greets the authenticated user and loads per-person workload for Admin and Manager only', () => {
-    assert.ok(page.includes('describeUser(getUsername(), userRole)') && page.includes('Welcome back, {welcomeName}!') && page.includes('formatDashboardDate(new Date())'));
+    assert.ok(page.includes('preferredName(profile, describeUser(getUsername(), userRole).displayName)') && page.includes('Welcome back, {welcomeName}!') && page.includes('formatDashboardDate(new Date())'));
     assert.ok(page.includes("getUserRole() !== 'STAFF' ? [loadStaffWorkload(), loadRecommendations(), loadTasks()] : []"));
     assert.ok(page.includes('staffWorkload={isStaff ? undefined : staffWorkload}'));
   });

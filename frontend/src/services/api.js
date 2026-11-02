@@ -233,6 +233,28 @@ export const getProfile = () => {
 };
 
 /**
+ * Change the signed-in user's own display name. Only the name is sent: the server decides whose profile it is from the token.
+ * Resolves with the updated profile.
+ */
+export const updateDisplayName = (displayName) => {
+  return apiFetch('/api/profile/display-name', {
+    method: 'PUT',
+    body: JSON.stringify({ displayName }),
+  });
+};
+
+/**
+ * Save the signed-in user's own preferences: { themePreference, dateFormat, timeFormat }. The server decides whose they are from
+ * the token. Resolves with the updated profile.
+ */
+export const updatePreferences = (preferences) => {
+  return apiFetch('/api/profile/preferences', {
+    method: 'PUT',
+    body: JSON.stringify(preferences),
+  });
+};
+
+/**
  * Upload a new profile picture for the signed-in user (multipart field "file"). The server keeps the current picture
  * until the new one is stored and saved. Resolves with the updated profile.
  */

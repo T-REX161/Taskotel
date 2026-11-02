@@ -135,9 +135,10 @@ describe('theme wiring', () => {
   it('the theme is saved and applied before the first paint with the same key', () => {
     const context = read('src', 'theme', 'ThemeContext.jsx');
     assert.ok(context.includes("export const THEME_STORAGE_KEY = 'taskotel-theme';"));
-    assert.ok(context.includes('localStorage.setItem(THEME_STORAGE_KEY, theme)'));
+    assert.ok(context.includes('localStorage.setItem(THEME_STORAGE_KEY, preference.toLowerCase())'), 'the browser keeps light | dark | system as a first-paint cache');
     const html = read('index.html');
-    const script = html.indexOf("localStorage.getItem('taskotel-theme') === 'dark'");
+    const script = html.indexOf("localStorage.getItem('taskotel-theme')");
+    assert.ok(html.includes("remembered === 'dark'") && html.includes("remembered === 'system'") && html.includes('(prefers-color-scheme: dark)'), 'System follows the OS before the first paint');
     assert.ok(script > 0 && script < html.indexOf('<link href="https://fonts.googleapis.com'), 'Inline script runs before styles load');
   });
 
@@ -170,7 +171,7 @@ describe('theme wiring', () => {
     assert.ok(context.includes('Math.hypot(Math.max(origin.x, window.innerWidth - origin.x), Math.max(origin.y, window.innerHeight - origin.y))'), 'Radius reaches the farthest corner');
     assert.ok(context.includes("pseudoElement: '::view-transition-new(root)'") && context.includes('`circle(0px at ${x}px ${y}px)`'), 'The new theme is revealed, the old stays underneath (crisp fallback)');
     assert.ok(context.includes('transition.ready'), 'The circle starts once the old and new snapshots exist');
-    assert.ok(context.includes("latestTheme.current === 'dark' ? 'light' : 'dark'"), 'Rapid clicks always flip from the latest choice');
+    assert.ok(context.includes("resolveTheme(latestPreference.current, systemPrefersDark())") && context.includes("current === 'dark' ? 'LIGHT' : 'DARK'"), 'Rapid clicks always flip from the latest choice');
     const css = read('src', 'index.css');
     assert.ok(css.includes('--theme-reveal-duration: 900ms;') && css.includes('--theme-reveal-easing: cubic-bezier(0.4, 0, 0.2, 1);'), 'Relaxed, gentle curve');
     // Soft edge: a feathered radial mask whose radius is a registered (animatable) length, ending beyond the corner

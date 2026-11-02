@@ -46,10 +46,10 @@ describe('assignmentUtils', () => {
       assert.strictEqual(result, 'Today, 8:30 AM');
     });
 
-    it('formats past date into "MMM D, YYYY, h:mm AM/PM"', () => {
+    it('formats past date into "DD/MM/YYYY, h:mm AM/PM" (default formats)', () => {
       const pastDate = new Date('2026-10-10T14:45:00');
       const result = formatAssignedAt(pastDate, refDate);
-      assert.strictEqual(result, 'Oct 10, 2026, 2:45 PM');
+      assert.strictEqual(result, '10/10/2026, 2:45 PM');
     });
 
     it('preserves already formatted strings like "Today, 08:30 AM"', () => {
@@ -66,8 +66,8 @@ describe('assignmentUtils', () => {
   describe('splitAssignedAt', () => {
     it('splits a past date into date line and time line without reformatting', () => {
       const formatted = formatAssignedAt(new Date('2026-10-16T14:29:00'), refDate);
-      assert.strictEqual(formatted, 'Oct 16, 2026, 2:29 PM');
-      assert.deepStrictEqual(splitAssignedAt(formatted), { date: 'Oct 16, 2026', time: '2:29 PM' });
+      assert.strictEqual(formatted, '16/10/2026, 2:29 PM');
+      assert.deepStrictEqual(splitAssignedAt(formatted), { date: '16/10/2026', time: '2:29 PM' });
     });
 
     it('splits same-day values into "Today" and the time', () => {
@@ -81,7 +81,7 @@ describe('assignmentUtils', () => {
       const formatted = formatAssignedAt(new Date('2026-01-05T00:05:00'), refDate);
       const { date, time } = splitAssignedAt(formatted);
       assert.strictEqual(`${date}, ${time}`, formatted);
-      assert.deepStrictEqual([date, time], ['Jan 5, 2026', '12:05 AM']);
+      assert.deepStrictEqual([date, time], ['05/01/2026', '12:05 AM']);
     });
 
     it('returns "-" and unparseable text whole on a single line', () => {

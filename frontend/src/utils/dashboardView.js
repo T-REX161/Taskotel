@@ -1,4 +1,6 @@
 // Pure helpers for the dashboard. Everything is derived from what the backend returned; nothing is invented.
+import { formatDate as formatDateValue } from './dateTimeFormat.js';
+import { getPreferences } from './preferences.js';
 
 /** The task statuses the summary reports, in display order. Staff do not receive a cancelled count. */
 export const TASK_STATUSES = [
@@ -96,8 +98,7 @@ export const loadPercent = (minutes) => Math.round(durationPercent(minutes));
 
 /** "Mon, 29 Sep 2026" */
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-export const formatDashboardDate = (date) => `${WEEKDAYS[date.getDay()]}, ${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`;
+export const formatDashboardDate = (date) => `${WEEKDAYS[date.getDay()]}, ${formatDateValue(date, getPreferences().dateFormat)}`;
 
 /** People on HIGH or AT_RISK workload, the most loaded first. */
 export const overloadedStaff = (list) => sortByLoad(list).filter((row) => row.workloadStatus === 'HIGH' || row.workloadStatus === 'AT_RISK');

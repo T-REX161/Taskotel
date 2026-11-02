@@ -3,6 +3,8 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { clearAuth } from '../../services/api';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import useCurrentUserProfile from '../../hooks/useCurrentUserProfile';
+import { normalizePreferences } from '../../utils/preferences';
 
 export default function AppShell({ children, activeNav, onNavChange }) {
   const navigate = useNavigate();
@@ -39,6 +41,13 @@ export default function AppShell({ children, activeNav, onNavChange }) {
   };
 
   const currentNav = getActiveNavFromPath(location.pathname);
+
+  // Dates and times are written by plain functions that read the user's chosen formats when a page renders. The page content is
+  // therefore remounted once when the formats change (or when the saved ones arrive after a refresh), so every date and time on
+  // screen follows the new choice. The Settings page itself is left alone, so its saving/success message survives its own change.
+  const { profile } = useCurrentUserProfile();
+  const { dateFormat, timeFormat } = normalizePreferences(profile?.preferences);
+  const contentKey = currentNav === 'Settings' ? 'settings' : `${dateFormat}|${timeFormat}`;
 
   const navPathMap = {
     dashboard: '/dashboard',
@@ -92,7 +101,7 @@ export default function AppShell({ children, activeNav, onNavChange }) {
 
         {/* Main Content Area */}
         <main ref={mainRef} data-page={currentNav} className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto bg-surface-page">
-          <div className="max-w-[1440px] mx-auto w-full">
+          <div key={contentKey} className="max-w-[1440px] mx-auto w-full">
             {children || <Outlet />}
           </div>
         </main>

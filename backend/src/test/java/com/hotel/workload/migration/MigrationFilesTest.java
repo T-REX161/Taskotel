@@ -60,11 +60,14 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V8 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V11 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
-            names = files.map(p -> p.getFileName().toString()).sorted().toList();
+            // In version order (a plain string sort would put V10 before V2)
+            names = files.map(p -> p.getFileName().toString())
+                    .sorted(java.util.Comparator.comparingInt(n -> Integer.parseInt(n.substring(1, n.indexOf("__")))))
+                    .toList();
         }
         assertEquals(List.of(
                 "V1__initial_schema.sql",
@@ -74,7 +77,10 @@ public class MigrationFilesTest {
                 "V5__support_assignments.sql",
                 "V6__support_manual_end_reason.sql",
                 "V7__support_archive.sql",
-                "V8__user_profile_image.sql"), names);
+                "V8__user_profile_image.sql",
+                "V9__user_display_name.sql",
+                "V10__user_account_activity.sql",
+                "V11__user_preferences.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -82,7 +88,46 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8), versions, "Versions must be 1 to 8 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), versions, "Versions must be 1 to 11 with no gaps or duplicates");
+    }
+
+    @Test
+    @DisplayName("V11 only adds three nullable columns to users: no data is backfilled, no constraint or other table is touched")
+    public void testV11OnlyAddsThreeNullableColumns() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V11__user_preferences.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|CASCADE|RENAME|DROP|NOT\\s+NULL|DEFAULT|CONSTRAINT|INDEX)\\b").matcher(code).find(),
+                "V11 must not change data, constraints or indexes, and the new columns must be nullable with no default");
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS theme_preference VARCHAR(10);"));
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format VARCHAR(10);"));
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS time_format VARCHAR(10);"));
+        assertEquals(3, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+    }
+
+    @Test
+    @DisplayName("V10 only adds two nullable timestamp columns to users: no data is backfilled, no constraint or other table is touched")
+    public void testV10OnlyAddsTwoNullableColumns() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V10__user_account_activity.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|CASCADE|RENAME|DROP|NOT\\s+NULL|DEFAULT|CONSTRAINT|INDEX)\\b").matcher(code).find(),
+                "V10 must not change data, constraints or indexes, and the new columns must be nullable with no default");
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;"));
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP;"));
+        assertEquals(2, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+    }
+
+    @Test
+    @DisplayName("V9 only adds one nullable display_name column to users: no data, constraint or other table is touched")
+    public void testV9OnlyAddsOneNullableColumn() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V9__user_display_name.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|CASCADE|RENAME|DROP|NOT\\s+NULL|DEFAULT|CONSTRAINT|INDEX)\\b").matcher(code).find(),
+                "V9 must not change data, constraints or indexes, and the new column must be nullable with no default");
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(50);"));
+        assertEquals(1, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
     }
 
     @Test

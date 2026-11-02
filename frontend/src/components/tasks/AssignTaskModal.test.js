@@ -262,7 +262,7 @@ describe('AssignTaskModal component and task details rendering', () => {
       assert.strictEqual(formatPriority(realTaskDto.priority), 'High');
       assert.strictEqual(formatDepartment(realTaskDto.department), 'Housekeeping');
       assert.strictEqual(formatDuration(realTaskDto.estimatedDuration), '45 min');
-      assert.strictEqual(formatDate(realTaskDto.dueDate), 'Oct 18, 2026');
+      assert.strictEqual(formatDate(realTaskDto.dueDate), '18/10/2026');
       assert.strictEqual(formatTime(realTaskDto.deadlineTime), '2:30 PM');
 
       assert.strictEqual(realStaffDto.name, 'Maria Santos');

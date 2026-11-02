@@ -26,7 +26,7 @@ function safeMessage(message) {
  * @param {Object} params
  * @param {boolean} [params.ok=false] - response.ok
  * @param {number} [params.status=0] - response.status
- * @param {Object|null} [params.data=null] - parsed JSON body of a successful response, or of a 429 response
+ * @param {Object|null} [params.data=null] - parsed JSON body of a successful, 429 or 5xx response
  * @param {boolean} [params.networkError=false] - the request itself failed
  * @returns {{kind: 'success'|'verification'|'invalid'|'rateLimited'|'server'|'network', message: string}}
  */
@@ -39,5 +39,8 @@ export function getLoginOutcome({ ok = false, status = 0, data = null, networkEr
   }
   if (status === 429) return { kind: 'rateLimited', message: safeMessage(data?.message) || LOGIN_MESSAGES.rateLimited };
   if (status === 401) return { kind: 'invalid', message: LOGIN_MESSAGES.invalid };
+  // The server's own fixed message for a failure it understands (e.g. the verification email could not be sent: {success:false, message}).
+  // Only that exact shape is shown; any other server error keeps the generic text.
+  if (status >= 500 && data?.success === false && safeMessage(data.message)) return { kind: 'server', message: safeMessage(data.message) };
   return { kind: 'server', message: LOGIN_MESSAGES.server };
 }

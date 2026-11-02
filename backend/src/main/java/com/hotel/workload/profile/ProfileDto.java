@@ -1,4 +1,17 @@
 package com.hotel.workload.profile;
 
-/** The signed-in user's own profile. {@code profileImageUrl} is null when there is no picture (the default avatar is shown). */
-public record ProfileDto(String username, String role, String fullName, String profileImageUrl) {}
+import java.time.LocalDateTime;
+
+/**
+ * The signed-in user's own profile. {@code displayName} is the name the user chose (or the default derived from the username);
+ * {@code fullName} is the staff record name used elsewhere. {@code profileImageUrl} is null when there is no picture.
+ * {@code active} is whether the account is enabled; {@code emailVerified} is whether the account's email address has been verified
+ * (a stored account fact, not whether anyone is signed in right now).
+ * {@code createdAt}, {@code lastLoginAt} and {@code passwordChangedAt} are the server's own timestamps for this account; the last two
+ * are null when not recorded (never guessed). {@code preferences} are this user's own appearance, date and time format choices
+ * (defaults filled in). No hashes, codes or tokens are ever part of this response.
+ */
+public record ProfileDto(String username, String role, String fullName, String profileImageUrl, String displayName,
+                         boolean active, boolean emailVerified,
+                         LocalDateTime createdAt, LocalDateTime lastLoginAt, LocalDateTime passwordChangedAt,
+                         UserPreferences.Values preferences) {}

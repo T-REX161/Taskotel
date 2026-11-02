@@ -1,4 +1,6 @@
 import React from 'react';
+import { formatDate } from '../../utils/dateTimeFormat';
+import { getPreferences } from '../../utils/preferences';
 import { StaffIcon, AssignmentsIcon } from '../icons/Icons';
 
 /**
@@ -35,7 +37,7 @@ export default function AssignmentsOverview({ data, isStaff }) {
                   </div>
                   <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-blue-50 text-blue-700">
                     {assignment.assignedAt
-                      ? new Date(assignment.assignedAt).toLocaleDateString()
+                      ? formatDate(new Date(assignment.assignedAt), getPreferences().dateFormat)
                       : 'Assigned'}
                   </span>
                 </div>

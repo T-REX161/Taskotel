@@ -17,9 +17,10 @@ export function describeUser(username, role) {
 
 export default function Header({ onMenuClick, onProfileClick, onLogoClick }) {
   const { isDark, toggleTheme } = useTheme();
-  const { displayName, initials, roleLabel } = describeUser(getUsername(), getUserRole());
-  // Loaded once per sign-in and shared with the profile page, so a new picture shows here straight away
+  const { displayName: defaultName, initials, roleLabel } = describeUser(getUsername(), getUserRole());
+  // Loaded once per sign-in and shared with the profile page, so a new picture or display name shows here straight away
   const { profile } = useCurrentUserProfile();
+  const displayName = profile?.displayName || defaultName;
 
   return (
     <header className="h-16 px-4 sm:px-6 lg:px-8 border-b border-gray-200 bg-surface-chrome flex items-center justify-between gap-4 sticky top-0 z-30 shrink-0">

@@ -1,4 +1,6 @@
 import React from 'react';
+import AccountActivityCard from '../components/account/AccountActivityCard';
+import PersonalPreferencesCard from '../components/settings/PersonalPreferencesCard';
 
 export default function SettingsPage() {
   return (
@@ -8,6 +10,8 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">System Settings</h1>
         <p className="text-gray-500 mt-1">Configure hotel operations, task auto-balancing rules, and notification preferences.</p>
       </div>
+
+      <PersonalPreferencesCard />
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 space-y-6">
         <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3">Workload Balancing Rules</h2>
@@ -38,6 +42,8 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <AccountActivityCard />
     </div>
   );
 }
