@@ -244,6 +244,36 @@ export const updateDisplayName = (displayName) => {
 };
 
 /**
+ * Change the signed-in user's own password: { currentPassword, newPassword, confirmPassword }. No user is named: the server uses the
+ * token. Resolves with a confirmation message only when the password was really changed; nothing is stored in the browser.
+ */
+export const changePassword = (request) => {
+  return apiFetch('/api/profile/password', {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  });
+};
+
+/**
+ * The signed-in user's own notification preferences: { preferences: [{ category, email, locked }] }, one entry per
+ * category, defaults filled in. The server decides whose they are from the token.
+ */
+export const getNotificationPreferences = () => {
+  return apiFetch('/api/notification-preferences');
+};
+
+/**
+ * Save changes to the signed-in user's notification preferences: { preferences: [{ category, email }] } (the categories to
+ * change, each with both switches). Resolves with the complete current set, like getNotificationPreferences.
+ */
+export const updateNotificationPreferences = (request) => {
+  return apiFetch('/api/notification-preferences', {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  });
+};
+
+/**
  * Save the signed-in user's own preferences: { themePreference, dateFormat, timeFormat }. The server decides whose they are from
  * the token. Resolves with the updated profile.
  */
@@ -324,6 +354,14 @@ export const deactivateStaff = (id) => {
     method: 'PATCH',
   });
 };
+
+/**
+ * Account-level actions (Admin only), by user id. They work whether or not the account has a staff record; for an account that has
+ * one the server applies the staff rules too. The server decides who is calling from the token.
+ */
+export const deactivateUser = (id) => apiFetch(`/api/users/${id}/deactivate`, { method: 'PATCH' });
+export const activateUser = (id) => apiFetch(`/api/users/${id}/activate`, { method: 'PATCH' });
+export const removeUser = (id) => apiFetch(`/api/users/${id}`, { method: 'DELETE' });
 
 /**
  * Activate a staff member.

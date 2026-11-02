@@ -104,11 +104,23 @@ describe('row actions', () => {
     assert.strictEqual(map.size, 2);
   });
 
-  it('an account without a staff record offers no actions, and says why', () => {
-    const result = getUserActions(users[1], { staff: null, currentUsername: 'someone', isAdmin: true });
-    assert.deepStrictEqual(result.actions, []);
-    assert.match(result.note, /no staff record/);
-    assert.match(getUserActions(users[1], { staff: null, currentUsername: 'ADMIN', isAdmin: true }).note, /your account/);
+  it('an account without a staff record can still be managed: no view/edit, but activate, deactivate and remove, with a note about details', () => {
+    const noStaff = { id: 'u9', username: 'carlos', role: 'STAFF', active: true };
+    const active = getUserActions(noStaff, { staff: null, currentUsername: 'admin', isAdmin: true });
+    assert.deepStrictEqual(active.actions, ['deactivate']);
+    assert.match(active.note, /no staff record/);
+    const inactive = getUserActions({ ...noStaff, active: false }, { staff: null, currentUsername: 'admin', isAdmin: true });
+    assert.deepStrictEqual(inactive.actions, ['activate', 'remove']);
+    assert.deepStrictEqual(getUserActions({ ...noStaff, active: false }, { staff: null, currentUsername: 'admin', isAdmin: false }).actions, ['activate'], 'remove stays admin only');
+    for (const role of ['ADMIN', 'MANAGER', 'STAFF']) {
+      assert.deepStrictEqual(getUserActions({ ...noStaff, role }, { staff: null, currentUsername: 'admin', isAdmin: true }).actions, ['deactivate'], role);
+    }
+  });
+
+  it('your own account without a staff record offers nothing destructive, and says so', () => {
+    const own = getUserActions({ id: 'u1', username: 'admin', active: true }, { staff: null, currentUsername: 'ADMIN', isAdmin: true });
+    assert.deepStrictEqual(own.actions, []);
+    assert.match(own.note, /your account/);
   });
 
   it('an active account: view, edit and deactivate (deactivation is confirmed in a dialog)', () => {

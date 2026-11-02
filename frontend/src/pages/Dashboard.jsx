@@ -4,10 +4,11 @@ import { getDashboardSummary, getUserRole, getUsername, getWorkload, getWorkload
 import { describeUser } from '../components/layout/Header';
 import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
 import { preferredName } from '../utils/displayName';
-import { buildInsights, formatDashboardDate } from '../utils/dashboardView';
+import { buildInsights } from '../utils/dashboardView';
 import { keepIfSame, singleFlight, startPolling } from '../utils/polling';
 import { normalizeRecommendations } from '../utils/supportRecommendations';
 import OperationsInsights from '../components/dashboard/OperationsInsights';
+import LiveClock from '../components/dashboard/LiveClock';
 import SummaryCards from '../components/dashboard/SummaryCards';
 import WorkloadOverview from '../components/dashboard/WorkloadOverview';
 import TaskStatusSummary from '../components/dashboard/TaskStatusSummary';
@@ -180,7 +181,7 @@ export default function Dashboard() {
           <h1 className="text-2xl sm:text-[1.75rem] font-bold tracking-tight text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-0.5">Welcome back, {welcomeName}!</p>
         </div>
-        <p className="text-sm font-medium text-gray-700 sm:pt-1.5">{formatDashboardDate(new Date())}</p>
+        <LiveClock />
       </div>
 
       {/* KPI cards */}

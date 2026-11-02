@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V11 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V12 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -80,7 +80,8 @@ public class MigrationFilesTest {
                 "V8__user_profile_image.sql",
                 "V9__user_display_name.sql",
                 "V10__user_account_activity.sql",
-                "V11__user_preferences.sql"), names);
+                "V11__user_preferences.sql",
+                "V12__notification_preferences.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -88,7 +89,22 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11), versions, "Versions must be 1 to 11 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12), versions, "Versions must be 1 to 12 with no gaps or duplicates");
+    }
+
+    @Test
+    @DisplayName("V12 only creates the notification_preferences table: no existing table, row or column is changed")
+    public void testV12OnlyCreatesOneTable() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V12__notification_preferences.sql")));
+        // The one allowed use of DELETE is the foreign key's ON DELETE CASCADE (a user's preference rows go with the user)
+        String code = withoutStringLiterals(executable).replace("ON DELETE CASCADE", "");
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|ALTER|RENAME|DROP)\\b").matcher(code).find(),
+                "V12 must not change or remove anything that exists");
+        assertEquals(1, Pattern.compile("(?i)CREATE TABLE").matcher(executable).results().count());
+        assertTrue(executable.contains("CREATE TABLE notification_preferences ("));
+        assertTrue(executable.contains("REFERENCES users (id) ON DELETE CASCADE"), "rows go with their user, never the other way round");
+        assertTrue(executable.contains("CONSTRAINT uk_notification_preferences_user_category UNIQUE (user_id, category)"));
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
     }
 
     @Test

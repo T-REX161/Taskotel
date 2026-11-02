@@ -83,7 +83,7 @@ describe('data and actions', () => {
     assert.ok(/case 'deactivate':[\s\S]*?setDeactivating\(\{ staff, user \}\);/.test(page), 'Deactivate opens the confirmation dialog');
     assert.ok(/case 'remove':[\s\S]*?setRemoving\(\{ staff, user \}\);/.test(page), 'Remove opens the confirmation dialog');
     assert.ok(page.includes('<DeactivateStaffModal') && page.includes('<RemoveStaffModal'));
-    assert.ok(page.includes('await deactivateStaff(deactivating.staff.id);') && page.includes('await removeStaff(removing.staff.id);'));
+    assert.ok(page.includes('deactivateStaff(deactivating.staff.id)') && page.includes('removeStaff(removing.staff.id)'), 'accounts with a staff record still use the staff endpoints');
   });
 
   it('never deactivates or removes your own account, and removal stays admin-only', () => {
@@ -126,5 +126,27 @@ describe('Users pagination', () => {
     assert.ok(footer.includes("'bg-emerald-600 border-emerald-600 text-white shadow-sm'") && footer.includes("aria-current={current ? 'page' : undefined}"));
     assert.ok(footer.includes('<nav className="flex flex-wrap items-center gap-1"'), 'Wraps instead of overflowing on small screens');
     assert.ok(footer.includes('aria-hidden="true">…</span>') && footer.includes('getPageNumbers(pagination.totalPages, pagination.page)'));
+  });
+});
+
+describe('accounts without a staff record (source wiring)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { fileURLToPath } = await import('node:url');
+  const { dirname, join } = await import('node:path');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const page = readFileSync(join(here, 'UsersPage.jsx'), 'utf8');
+  const api = readFileSync(join(here, '..', 'services', 'api.js'), 'utf8');
+
+  it('activate, deactivate and remove fall back to the by-user-id API when there is no staff record, and the staff API is still used when there is', () => {
+    assert.ok(page.includes('staff ? activateStaff(staff.id) : activateUser(user.id)'));
+    assert.ok(page.includes('deactivating.staff ? deactivateStaff(deactivating.staff.id) : deactivateUser(deactivating.user.id)'));
+    assert.ok(page.includes('removing.staff ? removeStaff(removing.staff.id) : removeUser(removing.user.id)'));
+    assert.ok(page.includes("if (!staff && !['activate', 'deactivate', 'remove'].includes(action)) return;"), 'view and edit still need a staff record');
+  });
+
+  it('the by-user-id calls use the admin-only user endpoints', () => {
+    assert.ok(api.includes("`/api/users/${id}/deactivate`, { method: 'PATCH' }"));
+    assert.ok(api.includes("`/api/users/${id}/activate`, { method: 'PATCH' }"));
+    assert.ok(api.includes("`/api/users/${id}`, { method: 'DELETE' }"));
   });
 });

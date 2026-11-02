@@ -3,8 +3,8 @@
  * Plain JavaScript (no JSX) so it can be unit tested directly.
  *
  * Every user account in Taskotel is either linked to a staff record (staff.userId) or is a stand-alone account
- * such as the seeded administrator. Accounts are changed only through the existing staff endpoints, so a row can
- * offer actions only when its account has a staff record.
+ * such as the seeded administrator. Accounts with a staff record are managed through it (the staff endpoints); accounts
+ * without one are managed directly by user id (activate, deactivate, remove). Viewing and editing details need a staff record.
  */
 import { formatDate } from '../tasks/taskFormatters.js';
 import { isActive } from '../staff/staffFormatters.js';
@@ -129,22 +129,18 @@ export function indexStaffByUserId(staffList) {
  */
 export function getUserActions(user, { staff = null, currentUsername = '', isAdmin = false } = {}) {
   const own = isCurrentUser(user, currentUsername);
-  if (!staff) {
-    return {
-      actions: [],
-      note: own
-        ? 'This is your account. It has no staff record, so it cannot be changed from this page.'
-        : 'This account has no staff record, so it cannot be changed from this page.',
-    };
-  }
-  const active = isActive(user?.active) && isActive(staff.active);
-  const actions = ['view', 'edit'];
+  // A missing staff record only limits what is shown (details and editing live on the staff record); it never blocks account actions
+  const hasStaff = Boolean(staff);
+  const active = hasStaff ? isActive(user?.active) && isActive(staff.active) : isActive(user?.active);
+  const actions = hasStaff ? ['view', 'edit'] : [];
   if (active) {
     if (!own) actions.push('deactivate');
   } else {
     actions.push('activate');
     if (isAdmin && !own) actions.push('remove');
   }
-  const note = own ? 'This is your account, so it cannot be deactivated or removed here.' : null;
+  let note = null;
+  if (own) note = 'This is your account, so it cannot be deactivated or removed here.';
+  else if (!hasStaff) note = 'This account has no staff record, so its details cannot be viewed or edited here.';
   return { actions, note };
 }

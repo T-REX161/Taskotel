@@ -444,7 +444,7 @@ describe('dashboard page', () => {
   const page = read('pages', 'Dashboard.jsx');
 
   it('greets the authenticated user and loads per-person workload for Admin and Manager only', () => {
-    assert.ok(page.includes('preferredName(profile, describeUser(getUsername(), userRole).displayName)') && page.includes('Welcome back, {welcomeName}!') && page.includes('formatDashboardDate(new Date())'));
+    assert.ok(page.includes('preferredName(profile, describeUser(getUsername(), userRole).displayName)') && page.includes('Welcome back, {welcomeName}!') && page.includes('<LiveClock />'));
     assert.ok(page.includes("getUserRole() !== 'STAFF' ? [loadStaffWorkload(), loadRecommendations(), loadTasks()] : []"));
     assert.ok(page.includes('staffWorkload={isStaff ? undefined : staffWorkload}'));
   });

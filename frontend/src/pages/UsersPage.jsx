@@ -10,6 +10,9 @@ import {
   activateStaff,
   deactivateStaff,
   removeStaff,
+  activateUser,
+  deactivateUser,
+  removeUser,
 } from '../services/api';
 import UsersTable from '../components/users/UsersTable';
 import TablePagination from '../components/common/TablePagination';
@@ -59,6 +62,9 @@ function FilterSelect({ label, value, onChange, options }) {
     </div>
   );
 }
+
+// The confirmation dialogs only need a name to show; an account without a staff record has none, so use the account's own
+const nameOnly = (user) => ({ fullName: user?.fullName || user?.username });
 
 const isRedirect = (err) => Boolean(err?.message && err.message.includes('Redirecting to login'));
 
@@ -184,8 +190,10 @@ export default function UsersPage() {
     setStatusFilter('');
   };
 
+  // Accounts with a staff record are managed through it (same dialogs and rules as the Staff page); accounts without one are
+  // managed directly by user id. Either way the server enforces the rules.
   const handleAction = async (action, user, staff) => {
-    if (!staff) return;
+    if (!staff && !['activate', 'deactivate', 'remove'].includes(action)) return; // view and edit need a staff record
     const own = isCurrentUser(user, currentUsername);
     setActionError('');
     switch (action) {
@@ -207,7 +215,7 @@ export default function UsersPage() {
         break;
       case 'activate':
         try {
-          await activateStaff(staff.id);
+          await (staff ? activateStaff(staff.id) : activateUser(user.id));
           await fetchUsers(false);
           notify(`User "${user.username}" activated.`);
         } catch (err) {
@@ -241,7 +249,7 @@ export default function UsersPage() {
     setIsDeactivating(true);
     setDeactivateError('');
     try {
-      await deactivateStaff(deactivating.staff.id);
+      await (deactivating.staff ? deactivateStaff(deactivating.staff.id) : deactivateUser(deactivating.user.id));
       const { username } = deactivating.user;
       setDeactivating(null);
       await fetchUsers(false);
@@ -262,7 +270,7 @@ export default function UsersPage() {
     setIsRemoving(true);
     setRemoveError('');
     try {
-      await removeStaff(removing.staff.id);
+      await (removing.staff ? removeStaff(removing.staff.id) : removeUser(removing.user.id));
       const { username } = removing.user;
       setRemoving(null);
       await fetchUsers(false);
@@ -454,7 +462,7 @@ export default function UsersPage() {
 
       <DeactivateStaffModal
         isOpen={Boolean(deactivating)}
-        staff={deactivating?.staff || null}
+        staff={deactivating ? deactivating.staff || nameOnly(deactivating.user) : null}
         onClose={() => {
           if (isDeactivating) return;
           setDeactivating(null);
@@ -467,7 +475,7 @@ export default function UsersPage() {
 
       <RemoveStaffModal
         isOpen={Boolean(removing)}
-        staff={removing?.staff || null}
+        staff={removing ? removing.staff || nameOnly(removing.user) : null}
         onClose={() => {
           if (isRemoving) return;
           setRemoving(null);

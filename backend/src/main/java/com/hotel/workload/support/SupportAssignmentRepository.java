@@ -26,6 +26,9 @@ public interface SupportAssignmentRepository extends JpaRepository<SupportAssign
 
     boolean existsByTaskId(UUID taskId);
 
+    /** True when this account approved any support record (history that deleting the account would orphan). */
+    boolean existsByApprovedByUserId(UUID userId);
+
     /** The task of this support record, without loading (and caching) the record itself. */
     @Query("SELECT s.taskId FROM SupportAssignment s WHERE s.id = :id")
     Optional<UUID> findTaskIdById(@Param("id") UUID id);

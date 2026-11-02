@@ -31,6 +31,23 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     int updateLastLogin(@org.springframework.data.repository.query.Param("id") UUID id,
                         @org.springframework.data.repository.query.Param("at") java.time.LocalDateTime at);
 
+    long countByRoleAndActiveTrue(Role role);
+
+    /** Changes only the active flag of one account (no staff record needed). */
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query("update User u set u.active = :active where u.id = :id")
+    int updateActive(@org.springframework.data.repository.query.Param("id") UUID id,
+                     @org.springframework.data.repository.query.Param("active") boolean active);
+
+    /** Stores a new password hash and when it changed. Touches only those two columns, so nothing else on the row can be overwritten. */
+    @org.springframework.transaction.annotation.Transactional
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+    @org.springframework.data.jpa.repository.Query("update User u set u.password = :hash, u.passwordChangedAt = :at where u.id = :id")
+    int updatePassword(@org.springframework.data.repository.query.Param("id") UUID id,
+                       @org.springframework.data.repository.query.Param("hash") String hash,
+                       @org.springframework.data.repository.query.Param("at") java.time.LocalDateTime at);
+
     /** Changes only the display name column, so a concurrent picture or password change on the same row is never overwritten. */
     @org.springframework.transaction.annotation.Transactional
     @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
