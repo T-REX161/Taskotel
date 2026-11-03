@@ -128,7 +128,7 @@ describe('profile page: display name', () => {
     const submit = page.slice(page.indexOf('const handleNameSubmit'), page.indexOf('const handlePictureDone'));
     assert.ok(submit.indexOf('if (savingName) return;') < submit.indexOf('validateDisplayName(nameDraft)'));
     assert.ok(submit.indexOf('validateDisplayName(nameDraft)') < submit.indexOf('await updateDisplayName'));
-    assert.ok(submit.includes('setCurrentProfile(updated)') && submit.includes('setNameSaved(true)') && submit.includes('finally'));
+    assert.ok(submit.includes('setCurrentProfile(updated)') && submit.includes('nameNotice.show(DISPLAY_NAME_MESSAGES.saved)') && submit.includes('finally'));
     assert.ok(page.includes('disabled={savingName}') && page.includes('Saving…') && page.includes('role="alert"'));
     assert.ok(page.includes('maxLength={DISPLAY_NAME_MAX}') && page.includes('DISPLAY_NAME_MESSAGES.saved'));
   });

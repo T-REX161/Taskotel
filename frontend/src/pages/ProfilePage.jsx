@@ -4,10 +4,11 @@ import { getUsername, getUserRole, updateDisplayName } from '../services/api';
 import { DISPLAY_NAME_MAX, DISPLAY_NAME_MESSAGES, shownName, validateDisplayName } from '../utils/displayName';
 import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
 import useTransientNotice from '../hooks/useTransientNotice';
-import { setCurrentProfile } from '../utils/currentUserProfile';
+import { loadCurrentProfile, setCurrentProfile } from '../utils/currentUserProfile';
 import UserAvatar from '../components/common/UserAvatar';
 import EmailChangeDialog from '../components/profile/EmailChangeDialog';
 import PhoneChangeDialog from '../components/profile/PhoneChangeDialog';
+import ChangePasswordDialog from '../components/profile/ChangePasswordDialog';
 import { PHONE_MESSAGES } from '../utils/phoneNumber';
 import { EMAIL_CHANGE_MESSAGES } from '../utils/emailChange';
 import { describeActivity } from '../utils/accountActivity';
@@ -31,6 +32,12 @@ function Icon({ className = 'w-5 h-5', children }) {
   );
 }
 
+const KeyIcon = (props) => (
+  <Icon {...props}>
+    <circle cx="7.5" cy="15.5" r="4.5" />
+    <path d="M10.7 12.3L21 2M16 7l3 3" />
+  </Icon>
+);
 const CameraIcon = (props) => (
   <Icon {...props}>
     <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
@@ -124,11 +131,12 @@ export default function ProfilePage() {
   const savedImageUrl = profile?.profileImageUrl || null;
 
   const [editorOpen, setEditorOpen] = useState(false);
-  const { notice: pictureMessage, show: showPictureNotice, clear: clearPictureNotice } = useTransientNotice(); // dismisses itself
+  const { notice: noticeMessage, show: showNotice, clear: clearNotice } = useTransientNotice(); // a success message that dismisses itself
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [emailChanged, setEmailChanged] = useState(false);
+  const emailNotice = useTransientNotice(); // each success message below dismisses itself after 3 seconds; errors never use these timers
   const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
-  const [phoneChanged, setPhoneChanged] = useState(false);
+  const phoneNotice = useTransientNotice();
 
   // Display name editing: `editingName` shows the input, `savingName` blocks a second submit while the request runs
   const displayName = shownName(profile, username);
@@ -136,7 +144,7 @@ export default function ProfilePage() {
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState('');
-  const [nameSaved, setNameSaved] = useState(false);
+  const nameNotice = useTransientNotice();
   const nameInputRef = useRef(null);
 
   useEffect(() => {
@@ -146,7 +154,7 @@ export default function ProfilePage() {
   const startEditingName = () => {
     setNameDraft(displayName);
     setNameError('');
-    setNameSaved(false);
+    nameNotice.clear();
     setEditingName(true);
   };
 
@@ -170,7 +178,7 @@ export default function ProfilePage() {
       const updated = await updateDisplayName(nameDraft.trim());
       setCurrentProfile(updated); // the banner and the top navigation read the shared profile, so both change at once
       setEditingName(false);
-      setNameSaved(true);
+      nameNotice.show(DISPLAY_NAME_MESSAGES.saved);
     } catch (error) {
       setNameError(error?.status === 400 && error.message ? error.message : DISPLAY_NAME_MESSAGES.saveFailed);
     } finally {
@@ -180,7 +188,7 @@ export default function ProfilePage() {
 
   const handlePictureDone = (updated, message) => {
     setCurrentProfile(updated); // the header avatar and the top navigation read the shared profile, so both change at once
-    showPictureNotice(message); // restarts the timer if an earlier notice is still showing
+    showNotice(message); // restarts the timer if an earlier notice is still showing
     setEditorOpen(false);
   };
 
@@ -188,6 +196,12 @@ export default function ProfilePage() {
   const created = describeActivity(profile, 'createdAt', 'Unavailable');
   const lastLogin = describeActivity(profile, 'lastLoginAt');
   const passwordChanged = describeActivity(profile, 'passwordChangedAt');
+
+  const handlePasswordChanged = (message) => {
+    setPasswordDialogOpen(false);
+    showNotice(message);
+    loadCurrentProfile({ force: true }); // the server has just recorded a new Last Password Change time; fetch it so it shows at once
+  };
 
   const status = accountStatus(profile);
   const verification = emailVerification(profile);
@@ -221,7 +235,7 @@ export default function ProfilePage() {
           <div className="relative w-20 h-20 sm:w-28 sm:h-28 shrink-0 mx-auto md:mx-0">
             <button
               type="button"
-              onClick={() => { clearPictureNotice(); setEditorOpen(true); }}
+              onClick={() => { clearNotice(); setEditorOpen(true); }}
               title="Edit profile picture"
               aria-label="Edit profile picture"
               className="group relative block w-full h-full rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
@@ -266,22 +280,33 @@ export default function ProfilePage() {
 
           {/* Right: Account Activity (read-only) */}
           <div role="group" aria-labelledby="account-activity-title" className="min-w-0 lg:w-[22rem] lg:shrink-0">
-            <h3 id="account-activity-title" className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3 text-center md:text-left">Account Activity</h3>
-            <dl className="space-y-3">
+            {/* Heading on the left, the Change Password action on the same line at the far right; they wrap apart on very narrow screens */}
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 mb-3">
+              <h3 id="account-activity-title" className="text-xs leading-4 font-semibold uppercase tracking-wide text-gray-500">Account Activity</h3>
+              <button
+                type="button"
+                onClick={() => { clearNotice(); setPasswordDialogOpen(true); }}
+                className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs leading-4 font-medium text-emerald-700 hover:text-emerald-800 hover:underline underline-offset-2 cursor-pointer rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 transition-colors"
+              >
+                <KeyIcon className="w-3.5 h-3.5" />
+                Change Password
+              </button>
+            </div>
+            <dl className="space-y-[7px]">
               {[['Account Created', created], ['Last Login', lastLogin], ['Last Password Change', passwordChanged]].map(([label, activity]) => (
                 <div key={label} className="flex items-baseline justify-between gap-4">
                   <dt className="text-xs text-gray-500 shrink-0">{label}</dt>
-                  <dd className={`text-sm font-medium text-right min-w-0 ${activity.known ? 'text-gray-900' : 'text-gray-500'}`}>{activity.text}</dd>
+                  <dd className={`text-[13px] leading-5 font-medium text-right min-w-0 ${activity.known ? 'text-gray-700' : 'text-gray-500'}`}>{activity.text}</dd>
                 </div>
               ))}
             </dl>
           </div>
         </div>
 
-        {pictureMessage && (
+        {noticeMessage && (
           <div className="px-5 sm:px-6 pb-5 -mt-1">
             <p role="status" aria-live="polite" className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-              {pictureMessage}
+              {noticeMessage}
             </p>
           </div>
         )}
@@ -359,9 +384,9 @@ export default function ProfilePage() {
               ) : (
                 <>
                   <span id="display-name" className="block truncate text-sm font-semibold text-gray-900" title={displayName}>{displayName}</span>
-                  {nameSaved && (
+                  {nameNotice.notice && (
                     <p role="status" aria-live="polite" className="mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                      {DISPLAY_NAME_MESSAGES.saved}
+                      {nameNotice.notice}
                     </p>
                   )}
                 </>
@@ -379,7 +404,7 @@ export default function ProfilePage() {
             <FieldRow label="Email Address" action={(
               <button
                 type="button"
-                onClick={() => { setEmailChanged(false); setEmailDialogOpen(true); }}
+                onClick={() => { emailNotice.clear(); setEmailDialogOpen(true); }}
                 disabled={!email}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed"
               >
@@ -394,16 +419,16 @@ export default function ProfilePage() {
                 <span className="sr-only">Email verification:</span>
                 <StatusBadge state={verification.state} label={verification.label} offTone="warning" />
               </div>
-              {emailChanged && (
+              {emailNotice.notice && (
                 <p role="status" aria-live="polite" className="mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                  {EMAIL_CHANGE_MESSAGES.changed}
+                  {emailNotice.notice}
                 </p>
               )}
             </FieldRow>
             <FieldRow label="Phone Number" action={(
               <button
                 type="button"
-                onClick={() => { setPhoneChanged(false); setPhoneDialogOpen(true); }}
+                onClick={() => { phoneNotice.clear(); setPhoneDialogOpen(true); }}
                 disabled={!profile}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed"
               >
@@ -414,9 +439,9 @@ export default function ProfilePage() {
               {phone
                 ? <span className="block truncate text-sm font-semibold text-gray-900" title={phone}>{phone}</span>
                 : <span className="text-sm text-gray-500">{profile ? 'Not added' : 'Loading…'}</span>}
-              {phoneChanged && (
+              {phoneNotice.notice && (
                 <p role="status" aria-live="polite" className="mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                  {PHONE_MESSAGES.changed}
+                  {phoneNotice.notice}
                 </p>
               )}
             </FieldRow>
@@ -430,7 +455,7 @@ export default function ProfilePage() {
         onClose={() => setEmailDialogOpen(false)}
         onChanged={(updated) => {
           setCurrentProfile(updated); // the page (and anything else reading the shared profile) shows the new address and status at once
-          setEmailChanged(true);
+          emailNotice.show(EMAIL_CHANGE_MESSAGES.changed);
           setEmailDialogOpen(false);
         }}
       />
@@ -441,9 +466,15 @@ export default function ProfilePage() {
         onClose={() => setPhoneDialogOpen(false)}
         onChanged={(updated) => {
           setCurrentProfile(updated); // the page shows the saved number at once
-          setPhoneChanged(true);
+          phoneNotice.show(PHONE_MESSAGES.changed);
           setPhoneDialogOpen(false);
         }}
+      />
+
+      <ChangePasswordDialog
+        isOpen={passwordDialogOpen}
+        onClose={() => setPasswordDialogOpen(false)}
+        onChanged={handlePasswordChanged}
       />
 
       <ProfilePictureEditor

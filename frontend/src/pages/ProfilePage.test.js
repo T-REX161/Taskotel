@@ -33,8 +33,8 @@ describe('profile page: the avatar opens the picture editor', () => {
 
   it("shares the server's updated profile when the editor is done, so the header and navbar change at once", () => {
     const done = page.slice(page.indexOf('const handlePictureDone'), page.indexOf('const status = accountStatus'));
-    assert.ok(done.includes('setCurrentProfile(updated)') && done.includes('showPictureNotice(message)') && done.includes('setEditorOpen(false)'));
-    assert.ok(page.includes('role="status"') && page.includes('{pictureMessage}'));
+    assert.ok(done.includes('setCurrentProfile(updated)') && done.includes('showNotice(message)') && done.includes('setEditorOpen(false)'));
+    assert.ok(page.includes('role="status"') && page.includes('{noticeMessage}'));
   });
 
   it('keeps the existing profile details and branding', () => {

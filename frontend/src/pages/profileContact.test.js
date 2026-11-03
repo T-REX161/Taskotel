@@ -88,15 +88,15 @@ describe('profile page: Contact Information', () => {
   it('the email dialog is wired to the shared profile: the new address and verification status show at once, with a success message', () => {
     assert.ok(page.includes('<EmailChangeDialog') && page.includes('currentEmail={email}'));
     const wiring = page.slice(page.indexOf('<EmailChangeDialog'));
-    assert.ok(wiring.includes('setCurrentProfile(updated)') && wiring.includes('setEmailChanged(true)') && wiring.includes('setEmailDialogOpen(false)'));
-    assert.ok(contact.includes('EMAIL_CHANGE_MESSAGES.changed') && contact.includes('role="status"'));
+    assert.ok(wiring.includes('setCurrentProfile(updated)') && wiring.includes('emailNotice.show(EMAIL_CHANGE_MESSAGES.changed)') && wiring.includes('setEmailDialogOpen(false)'));
+    assert.ok(contact.includes('{emailNotice.notice}') && contact.includes('role="status"'));
   });
 
   it('the phone dialog is wired to the shared profile, shows a success message, and never calls the number verified', () => {
     assert.ok(page.includes('<PhoneChangeDialog') && page.includes('currentPhone={phone}'));
     const wiring = page.slice(page.indexOf('<PhoneChangeDialog'));
-    assert.ok(wiring.includes('setCurrentProfile(updated)') && wiring.includes('setPhoneChanged(true)') && wiring.includes('setPhoneDialogOpen(false)'));
-    assert.ok(contact.includes('PHONE_MESSAGES.changed') && contact.includes('role="status"'));
+    assert.ok(wiring.includes('setCurrentProfile(updated)') && wiring.includes('phoneNotice.show(PHONE_MESSAGES.changed)') && wiring.includes('setPhoneDialogOpen(false)'));
+    assert.ok(contact.includes('{phoneNotice.notice}') && contact.includes('role="status"'));
     assert.ok(!contact.includes('<input') && !contact.includes('<form'), 'the form lives in the dialog');
     for (const forbidden of ['sendOtp', 'sms', 'phoneVerified', 'verifyPhone']) assert.ok(!page.toLowerCase().includes(forbidden.toLowerCase()), forbidden);
   });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 /** How long a success notice stays on screen. */
-export const NOTICE_DURATION_MS = 3500;
+export const NOTICE_DURATION_MS = 3000;
 
 /**
  * A message that dismisses itself.

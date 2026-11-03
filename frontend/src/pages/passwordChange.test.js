@@ -119,37 +119,59 @@ describe('submitting', () => {
   });
 });
 
-describe('Settings page: Security Settings card', () => {
-  const card = read('..', 'components', 'settings', 'SecuritySettingsCard.jsx');
+describe('Profile page: Change Password dialog (replaces the Settings Security card)', () => {
+  const card = read('..', 'components', 'profile', 'ChangePasswordDialog.jsx');
   const settings = read('SettingsPage.jsx');
+  const profile = read('ProfilePage.jsx');
 
-  it('has the specified title and description and the three password fields with show/hide controls', () => {
-    assert.ok(card.includes('>Security Settings</h2>'));
-    assert.ok(card.includes('Manage your password and protect your Taskotel account.'));
+  it('has the three password fields with show/hide controls, the requirements checklist, and Change Password and Cancel buttons', () => {
+    assert.ok(card.includes('>Change Password</h3>'));
     for (const label of ['Current Password', 'New Password', 'Confirm New Password']) assert.ok(card.includes(`label="${label}"`), label);
     assert.equal((card.match(/<PasswordField\b/g) || []).length, 3);
-    assert.ok(card.includes("'Hide ${label.toLowerCase()}'") || card.includes('`Hide ${label.toLowerCase()}`'));
-    assert.ok(card.includes('type={shown ? \'text\' : \'password\'}'));
+    assert.ok(card.includes('`Hide ${label.toLowerCase()}`') && card.includes("type={shown ? 'text' : 'password'}"));
     assert.ok(card.includes('autoComplete="current-password"') && card.includes('autoComplete="new-password"'));
-    assert.ok(card.includes('<PasswordRequirements rules={rules} />'), 'clear requirement messages (the shared checklist)');
-    assert.ok(card.includes("'Change Password'"));
+    assert.ok(card.includes('<PasswordRequirements rules={rules} />'), 'the shared requirements checklist');
+    assert.ok(card.includes("'Change Password'") && card.includes('>\n            Cancel\n'));
+    assert.ok(card.includes('role="dialog"') && card.includes('aria-modal="true"'));
   });
 
-  it('is placed on Settings between Notification Preferences and Workload Balancing Rules, which are unchanged', () => {
-    const order = ['<PersonalPreferencesCard />', '<NotificationPreferencesCard />', '<SecuritySettingsCard />', 'Workload Balancing Rules'].map((s) => settings.indexOf(s));
-    assert.ok(order.every((p) => p > 0));
-    assert.deepEqual([...order].sort((a, b) => a - b), order);
-    for (const kept of ['Auto-Balancing Trigger', 'Max Task Capacity Alert', 'Cross-Department Assistance']) assert.ok(settings.includes(kept), kept);
+  it('is opened from a green Change Password action under the Account Activity entries', () => {
+    const header = profile.slice(profile.indexOf('aria-label="Profile summary"'), profile.indexOf('title="Personal Information"'));
+    const headingRow = header.slice(header.indexOf('id="account-activity-title"') - 80, header.indexOf('<dl'));
+    assert.ok(headingRow.includes('justify-between') && headingRow.indexOf('Account Activity</h3>') < headingRow.indexOf('Change Password'), 'on the heading line, at the far right');
+    assert.ok(headingRow.includes('flex-wrap') && headingRow.includes('whitespace-nowrap'), 'wraps instead of overlapping on narrow screens');
+    assert.ok(header.includes('mb-3') && header.includes('space-y-[7px]'), 'comfortable spacing under the heading and between rows');
+    assert.ok(header.includes('setPasswordDialogOpen(true)') && header.includes('<KeyIcon') && header.includes('text-emerald-700') && header.includes('hover:text-emerald-800'));
+    assert.ok(profile.includes('<ChangePasswordDialog') && profile.includes('onChanged={handlePasswordChanged}'));
   });
 
-  it('shows a loading state, prevents duplicate submits, and reports success only after the server confirmed', () => {
+  it('after a successful change closes the dialog, shows the success message and refreshes the Last Password Change time', () => {
+    const handler = profile.slice(profile.indexOf('const handlePasswordChanged'), profile.indexOf('const status = accountStatus'));
+    assert.ok(handler.includes('setPasswordDialogOpen(false)') && handler.includes('showNotice(message)') && handler.includes('loadCurrentProfile({ force: true })'));
+  });
+
+  it('reuses the shared validation, rules and request, with no second implementation', () => {
+    assert.ok(card.includes("from '../../utils/passwordChange'") && card.includes('submitPasswordChange(values)') && card.includes('evaluatePasswordRules'));
+    assert.ok(!card.includes('changePassword(') && !card.includes('/api/profile/password'));
+    assert.ok(!settings.includes('SecuritySettingsCard') && !settings.includes('Security Settings') && !settings.includes('Change Password'));
+    assert.ok(!fs.existsSync(path.join(here, '..', 'components', 'settings', 'SecuritySettingsCard.jsx')));
+    for (const kept of ['<PersonalPreferencesCard />', '<NotificationPreferencesCard />', 'Workload Balancing Rules', 'Auto-Balancing Trigger', 'Max Task Capacity Alert', 'Cross-Department Assistance']) {
+      assert.ok(settings.includes(kept), kept);
+    }
+  });
+
+  it('shows a loading state, prevents duplicate submits, and closes only after the server confirmed', () => {
     assert.ok(card.includes('if (sending.current) return;'));
     assert.ok(card.includes('disabled={saving}') && card.includes('Changing password…') && card.includes('aria-busy={saving}'));
-    const submit = card.slice(card.indexOf('const submit = async'), card.indexOf('return (', card.indexOf('const submit = async')));
-    assert.ok(submit.indexOf("phase: 'saved'") > submit.indexOf('await submitPasswordChange('), 'success only after the server agreed');
-    assert.ok(submit.includes("setValues({ currentPassword: '', newPassword: '', confirmPassword: '' })"), 'fields cleared after success');
-    assert.ok(submit.includes("phase: 'error'") && submit.includes('passwordErrorMessage(error)'));
-    for (const text of ['role="status"', 'role="alert"', 'sending.current = false']) assert.ok(card.includes(text), text);
+    const submit = card.slice(card.indexOf('const submit = async'), card.indexOf('const dismiss'));
+    assert.ok(submit.indexOf('onChanged(PASSWORD_MESSAGES.saved)') > submit.indexOf('await submitPasswordChange('), 'success only after the server agreed');
+    assert.ok(submit.includes("phase: 'error'") && submit.includes('passwordErrorMessage(error)') && card.includes('role="alert"'));
+    assert.ok(card.includes('if (!sending.current) onClose();') && card.includes("event.key === 'Escape' && !sending.current"), 'cannot be dismissed while a change is being sent');
+  });
+
+  it('clears every password field whenever the dialog closes or opens', () => {
+    const effect = card.slice(card.indexOf('useEffect(() => {'), card.indexOf('useEffect(() => {', card.indexOf('useEffect(() => {') + 10));
+    assert.ok(effect.includes('setValues(EMPTY)') && effect.includes('[isOpen]'));
   });
 
   it('keeps passwords out of browser storage, URLs and logs, and does not call the network itself', () => {
@@ -159,8 +181,7 @@ describe('Settings page: Security Settings card', () => {
   });
 
   it('uses the shared theme classes and the green accent, and stacks on small screens', () => {
-    assert.ok(card.includes('bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden'));
-    assert.ok(card.includes('bg-emerald-600') && card.includes('lg:grid-cols-2'));
+    assert.ok(card.includes('bg-emerald-600') && card.includes('md:grid-cols-2') && card.includes('max-h-[90vh]'));
     assert.ok(!/dark:/.test(card));
   });
 });

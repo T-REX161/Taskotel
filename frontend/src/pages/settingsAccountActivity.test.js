@@ -33,10 +33,10 @@ describe('profile page: one unified header with Account Activity on the right', 
   });
 
   it('shows the dates as plain label and value rows, not input-style boxes', () => {
-    const activity = header.slice(header.indexOf('id="account-activity-title"'), header.indexOf('</dl>'));
+    const activity = header.slice(header.indexOf('<dl'), header.indexOf('</dl>'));
     assert.ok(activity.includes('<dl') && activity.includes('<dt') && activity.includes('<dd'));
     assert.ok(!/\bborder\b|rounded|bg-gray-50|<input/.test(activity), 'no bordered or filled containers around the dates');
-    assert.ok(activity.includes('text-xs text-gray-500') && activity.includes('text-sm font-medium'));
+    assert.ok(activity.includes('text-xs text-gray-500') && activity.includes('text-[13px] leading-5 font-medium') && activity.includes('text-gray-700') && !activity.slice(activity.indexOf('<dl')).includes('font-semibold') && !activity.slice(activity.indexOf('<dl')).includes('font-bold'));
   });
 
   it('is no longer a separate card, and is gone from the Settings page', () => {

@@ -1,7 +1,6 @@
 import React from 'react';
 import PersonalPreferencesCard from '../components/settings/PersonalPreferencesCard';
 import NotificationPreferencesCard from '../components/settings/NotificationPreferencesCard';
-import SecuritySettingsCard from '../components/settings/SecuritySettingsCard';
 
 export default function SettingsPage() {
   return (
@@ -15,8 +14,6 @@ export default function SettingsPage() {
       <PersonalPreferencesCard />
 
       <NotificationPreferencesCard />
-
-      <SecuritySettingsCard />
 
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 space-y-6">
         <h2 className="text-base font-bold text-gray-900 border-b border-gray-100 pb-3">Workload Balancing Rules</h2>

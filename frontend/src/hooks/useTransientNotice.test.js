@@ -23,7 +23,7 @@ describe('self-dismissing profile picture notice', () => {
   });
 
   it('is used by the profile page: shown on success, cleared when the editor opens, never reloading the page', () => {
-    assert.ok(page.includes('useTransientNotice()') && page.includes('showPictureNotice(message)') && page.includes('clearPictureNotice(); setEditorOpen(true)'));
+    assert.ok(page.includes('useTransientNotice()') && page.includes('showNotice(message)') && page.includes('clearNotice(); setEditorOpen(true)'));
     assert.ok(!page.includes('location.reload') && !page.includes('window.location'));
     assert.ok(!page.includes('setPictureMessage'));
   });
@@ -32,5 +32,23 @@ describe('self-dismissing profile picture notice', () => {
     const save = editor.slice(editor.indexOf('const handleSave'), editor.indexOf('const handleRemove'));
     assert.ok(save.indexOf('uploadProfilePicture(file)') < save.indexOf('onDone(updated'));
     assert.ok(save.includes('catch (err)') && !/catch \(err\)[^}]*onDone/.test(save));
+  });
+});
+
+describe('every profile success message dismisses itself after 3 seconds', () => {
+  it('uses the same self-dismissing mechanism for display name, email, phone, picture and password', () => {
+    assert.equal(NOTICE_DURATION_MS, 3000);
+    for (const wiring of ['nameNotice.show(DISPLAY_NAME_MESSAGES.saved)', 'emailNotice.show(EMAIL_CHANGE_MESSAGES.changed)', 'phoneNotice.show(PHONE_MESSAGES.changed)', 'showNotice(message)']) {
+      assert.ok(page.includes(wiring), wiring);
+    }
+    for (const stale of ['setNameSaved', 'setEmailChanged', 'setPhoneChanged', 'useState(false);\n  const [phoneDialogOpen']) {
+      assert.ok(!page.includes(stale), stale + ' (the old flags that never cleared) must be gone');
+    }
+    assert.equal((page.match(/useTransientNotice\(\)/g) || []).length, 4, 'one notice per message area, each with its own timer');
+  });
+
+  it('only success messages use the timers; errors keep their own state and stay until handled', () => {
+    assert.ok(page.includes('setNameError(') && page.includes("role=\"alert\""));
+    assert.ok(!/nameNotice\.show\([^)]*[Ee]rror/.test(page) && !/(emailNotice|phoneNotice|showNotice)\.show\([^)]*[Ee]rror/.test(page));
   });
 });
