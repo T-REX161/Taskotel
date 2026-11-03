@@ -162,6 +162,36 @@ public class ProfilePictureControllerTest {
     }
 
     @Test
+    @DisplayName("Damaged, truncated and renamed files get a clear 4xx and never reach Cloudinary; a real picture still goes through")
+    void corruptedAndRenamedFilesNeverReachCloudinary() throws Exception {
+        User me = account("corrupt", Role.STAFF, true);
+
+        MvcResult truncated = upload(me, TestImages.file("me.png", "image/png", TestImages.truncated(TestImages.png(200, 200))));
+        assertEquals(400, truncated.getResponse().getStatus());
+        assertTrue(body(truncated).contains(ProfileImageValidator.CORRUPT_MESSAGE), body(truncated));
+
+        byte[] jpegHead = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F', 0x00};
+        MvcResult garbage = upload(me, TestImages.file("me.jpg", "image/jpeg", TestImages.signatureWithGarbage(jpegHead)));
+        assertEquals(400, garbage.getResponse().getStatus());
+
+        MvcResult svg = upload(me, TestImages.file("me.svg", "image/svg+xml", "<svg xmlns='http://www.w3.org/2000/svg'/>".getBytes()));
+        assertEquals(415, svg.getResponse().getStatus());
+
+        MvcResult renamedSvg = upload(me, TestImages.file("me.png", "image/png", "<svg xmlns='http://www.w3.org/2000/svg'/>".getBytes()));
+        assertEquals(415, renamedSvg.getResponse().getStatus());
+        assertTrue(body(renamedSvg).contains(ProfileImageValidator.NOT_AN_IMAGE_MESSAGE), body(renamedSvg));
+
+        MvcResult renamedGif = upload(me, TestImages.file("me.jpg", "image/jpeg", "GIF89a\u0001\u0000\u0001\u0000".getBytes(java.nio.charset.StandardCharsets.ISO_8859_1)));
+        assertEquals(415, renamedGif.getResponse().getStatus());
+
+        MvcResult tooBig = upload(me, TestImages.file("big.png", "image/png", Arrays.copyOf(TestImages.png(), (int) ProfileImageValidator.MAX_BYTES + 1)));
+        assertEquals(413, tooBig.getResponse().getStatus());
+        assertTrue(body(tooBig).contains(ProfileImageValidator.TOO_LARGE_MESSAGE), body(tooBig));
+
+        verify(storage, never()).upload(any(), anyString());
+    }
+
+    @Test
     @DisplayName("Without a sign-in every profile endpoint is a 401 and Cloudinary is never called")
     void unauthenticated() throws Exception {
         assertEquals(401, mockMvc.perform(get("/api/profile")).andReturn().getResponse().getStatus());

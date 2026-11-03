@@ -74,6 +74,21 @@ public class ProfilePictureService {
         return toDto(userRepository.findById(user.getId()).orElse(user));
     }
 
+    /**
+     * Saves the signed-in user's own phone number (the account comes from the token). It is kept on the account, so Admins and Managers
+     * without a staff record have one too, and copied to the linked staff record when there is one. The number is not verified.
+     */
+    public ProfileDto updatePhone(String username, String requested) {
+        String phone = PhoneNumbers.validate(requested);
+        User user = currentUser(username);
+        transactions.executeWithoutResult(status -> {
+            User locked = lockLatest(user.getId());
+            locked.setPhone(phone);
+            staffRepository.findByUserUsername(locked.getUsername()).ifPresent(staff -> staff.setPhone(phone));
+        });
+        return toDto(userRepository.findById(user.getId()).orElse(user));
+    }
+
     /** Saves the signed-in user's own appearance, date format and time format (the account comes from the token). */
     public ProfileDto updatePreferences(String username, UserPreferences.Values requested) {
         UserPreferences.Values values = UserPreferences.validate(requested);
@@ -173,13 +188,18 @@ public class ProfilePictureService {
     }
 
     private ProfileDto toDto(User user) {
-        String fullName = staffRepository.findByUserUsername(user.getUsername())
+        java.util.Optional<Staff> staffRecord = staffRepository.findByUserUsername(user.getUsername());
+        String fullName = staffRecord
                 .map(Staff::getName)
                 .filter(name -> !name.isBlank())
                 .orElseGet(() -> UserDto.deriveFallbackName(user));
+        // The staff record's number (which administrators also edit), else the one saved on the account; never invented
+        String phone = staffRecord.map(Staff::getPhone).map(String::trim).filter(number -> !number.isEmpty())
+                .or(() -> java.util.Optional.ofNullable(user.getPhone()).map(String::trim).filter(number -> !number.isEmpty()))
+                .orElse(null);
         return new ProfileDto(user.getUsername(), user.getRole() == null ? null : user.getRole().name(), fullName, user.getProfileImageUrl(),
                 DisplayNames.effective(user), user.isActive(), user.isEmailVerified(),
-                user.getCreatedAt(), user.getLastLoginAt(), user.getPasswordChangedAt(), UserPreferences.of(user));
+                user.getCreatedAt(), user.getLastLoginAt(), user.getPasswordChangedAt(), UserPreferences.of(user), user.getEmail(), phone);
     }
 
     /** A new name for every upload, so a replacement never overwrites the picture that is still in use. */

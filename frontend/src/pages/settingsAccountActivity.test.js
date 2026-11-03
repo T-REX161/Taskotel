@@ -10,73 +10,61 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const read = (...parts) => fs.readFileSync(path.join(here, ...parts), 'utf8');
 const profilePage = read('ProfilePage.jsx');
 const settingsPage = read('SettingsPage.jsx');
-const card = read('..', 'components', 'account', 'AccountActivityCard.jsx');
 
-describe('profile page: Account Activity is gone, the rest is untouched', () => {
-  it('no longer has the Account Activity card, its fields, icons or formatter', () => {
-    for (const gone of ['Account Activity', 'account-activity-title', 'Account Created', 'Last Login', 'Last Password Change',
-      'describeActivity', 'accountActivity', 'CalendarIcon', 'ClockIcon', 'KeyIcon', 'ActivityIcon']) {
-      assert.ok(!profilePage.includes(gone), `ProfilePage must not contain ${gone}`);
-    }
+const header = profilePage.slice(profilePage.indexOf('aria-label="Profile summary"'), profilePage.indexOf('title="Personal Information"'));
+
+describe('profile page: one unified header with Account Activity on the right', () => {
+  it('shows Account Created, Last Login and Last Password Change, in that order, in the header', () => {
+    const labels = ["'Account Created'", "'Last Login'", "'Last Password Change'"];
+    const positions = labels.map((label) => header.indexOf(label));
+    assert.ok(positions.every((p) => p > 0), 'all three present');
+    assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'order');
+    assert.ok(header.includes('>Account Activity</h3>'));
   });
 
-  it('keeps Personal Information with its six fields in the same order', () => {
-    const labels = ['>Display Name</label>', 'label="Username"', 'label="Status"', 'label="Email Verified"', 'label="System Role"', 'label="Access Scope"'];
-    const positions = labels.map((label) => profilePage.indexOf(label));
-    assert.ok(positions.every((p) => p > 0));
-    assert.deepEqual([...positions].sort((a, b) => a - b), positions);
-    assert.equal((profilePage.match(/<section\b/g) || []).length, 2, 'the profile banner and Personal Information only');
+  it('has profile information on the left, a divider, and the activity on the right', () => {
+    const order = ['<UserAvatar', '{displayName}</h2>', '{accessScope}', 'Divider', 'id="account-activity-title"', '<dl'].map((t) => header.indexOf(t));
+    assert.ok(order.every((p) => p > 0), order.join(','));
+    assert.deepEqual([...order].sort((a, b) => a - b), order);
+    assert.ok(header.includes('hidden lg:block self-stretch w-px bg-gray-200'), 'vertical divider on desktop');
+    assert.ok(header.includes('lg:hidden h-px bg-gray-200'), 'horizontal divider when stacked');
+    assert.ok(header.includes('flex flex-col lg:flex-row lg:items-center'), 'two columns from lg, stacked below, vertically centred');
+    assert.ok(header.includes('lg:w-[22rem]'), 'enough width for the timestamps');
   });
 
-  it('keeps display name editing, picture upload and the single shared profile read', () => {
-    assert.ok(profilePage.includes('updateDisplayName(nameDraft.trim())') && profilePage.includes('uploadProfilePicture(picture.file)'));
-    assert.ok(profilePage.includes('removeProfilePicture()') && profilePage.includes('Change Profile Picture'));
-    assert.equal((profilePage.match(/useCurrentUserProfile\(\)/g) || []).length, 1);
+  it('shows the dates as plain label and value rows, not input-style boxes', () => {
+    const activity = header.slice(header.indexOf('id="account-activity-title"'), header.indexOf('</dl>'));
+    assert.ok(activity.includes('<dl') && activity.includes('<dt') && activity.includes('<dd'));
+    assert.ok(!/\bborder\b|rounded|bg-gray-50|<input/.test(activity), 'no bordered or filled containers around the dates');
+    assert.ok(activity.includes('text-xs text-gray-500') && activity.includes('text-sm font-medium'));
   });
-});
 
-describe('settings page: Account Activity', () => {
-  it('shows the card below the existing settings, which are all kept', () => {
-    assert.ok(settingsPage.includes("import AccountActivityCard from '../components/account/AccountActivityCard'"));
-    assert.ok(settingsPage.includes('<AccountActivityCard />'));
-    assert.ok(settingsPage.indexOf('<AccountActivityCard />') > settingsPage.indexOf('Workload Balancing Rules'));
+  it('is no longer a separate card, and is gone from the Settings page', () => {
+    assert.ok(!fs.existsSync(path.join(here, '..', 'components', 'account', 'AccountActivityCard.jsx')));
+    assert.ok(!settingsPage.includes('AccountActivityCard') && !settingsPage.includes('Account Activity'));
+    assert.equal((profilePage.match(/<section\b/g) || []).length, 2, 'the header and the shared card component only');
     for (const kept of ['System Settings', 'Auto-Balancing Trigger', 'Max Task Capacity Alert', 'Cross-Department Assistance']) {
       assert.ok(settingsPage.includes(kept), kept);
     }
   });
 
-  it('displays Account Created, Last Login and Last Password Change, in that order', () => {
-    const labels = ['label="Account Created"', 'label="Last Login"', 'label="Last Password Change"'];
-    const positions = labels.map((label) => card.indexOf(label));
-    assert.ok(positions.every((p) => p > 0), 'all three present');
-    assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'order');
-    assert.equal((card.match(/<ActivityField /g) || []).length, 3, 'exactly three fields');
-    assert.ok(card.includes('CalendarIcon') && card.includes('ClockIcon') && card.includes('KeyIcon'));
-    assert.ok(card.includes('Account Activity</h2>'));
+  it('reads the single shared profile and the shared formatter: no request, no hardcoded or constructed dates', () => {
+    assert.ok(profilePage.includes("import { describeActivity } from '../utils/accountActivity'"));
+    assert.ok(profilePage.includes("describeActivity(profile, 'createdAt', 'Unavailable')"));
+    assert.ok(profilePage.includes("describeActivity(profile, 'lastLoginAt')") && profilePage.includes("describeActivity(profile, 'passwordChangedAt')"));
+    assert.equal((profilePage.match(/useCurrentUserProfile\(\)/g) || []).length, 1, 'one shared read');
+    assert.ok(!profilePage.includes('new Date(') && !settingsPage.includes('useCurrentUserProfile'));
   });
 
-  it('keeps the card styling: same card, and one column on mobile, two on desktop', () => {
-    assert.ok(card.includes('bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden'));
-    assert.ok(card.includes('grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-7 px-6 sm:px-8 py-7'));
-    assert.ok(!/dark:|#[0-9a-fA-F]{3,6}/.test(card), 'colours come from the shared theme classes (light and dark)');
-  });
-
-  it('takes its data from the shared profile hook and formatter, with no request or state of its own', () => {
-    assert.ok(card.includes("import useCurrentUserProfile from '../../hooks/useCurrentUserProfile'"));
-    assert.equal((card.match(/useCurrentUserProfile\(\)/g) || []).length, 1);
-    assert.ok(card.includes("import { describeActivity } from '../../utils/accountActivity'"));
-    assert.ok(card.includes("describeActivity(profile, 'createdAt', 'Unavailable')"));
-    assert.ok(card.includes("describeActivity(profile, 'lastLoginAt')") && card.includes("describeActivity(profile, 'passwordChangedAt')"));
-    for (const source of [card, settingsPage]) {
-      for (const forbidden of ['getProfile', 'loadCurrentProfile', 'apiFetch', 'fetch(', 'useState', 'useEffect', 'new Date(']) {
-        assert.ok(!source.includes(forbidden), `must not contain ${forbidden}`);
-      }
-    }
-    assert.ok(!settingsPage.includes('useCurrentUserProfile'), 'the page itself adds no second read');
+  it('keeps the rest of the page: picture editing, display name editing, and the two information cards in order', () => {
+    assert.ok(profilePage.includes('<ProfilePictureEditor') && profilePage.includes('updateDisplayName(nameDraft.trim())'));
+    const order = ['aria-label="Profile summary"', 'title="Personal Information"', 'title="Contact Information"'].map((t) => profilePage.indexOf(t));
+    assert.ok(order.every((p) => p > 0) && [...order].sort((x, y) => x - y).join() === order.join());
+    assert.equal((profilePage.match(/<ProfileCard\b/g) || []).length, 2);
   });
 });
 
-describe('settings page: states from the shared profile', () => {
+describe('account activity: states from the shared profile', () => {
   const view = (username) => profileFor(getCurrentProfileSnapshot(), username);
   const fields = (username) => ['createdAt', 'lastLoginAt', 'passwordChangedAt'].map((field, i) =>
     describeActivity(view(username), field, i === 0 ? 'Unavailable' : undefined));

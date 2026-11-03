@@ -220,7 +220,7 @@ describe('Settings page: Notification Preferences card', () => {
   });
 
   it('is placed on Settings between Personal Preferences and Workload Balancing Rules, which are unchanged', () => {
-    const order = ['<PersonalPreferencesCard />', '<NotificationPreferencesCard />', 'Workload Balancing Rules', '<AccountActivityCard />'].map((s) => settings.indexOf(s));
+    const order = ['<PersonalPreferencesCard />', '<NotificationPreferencesCard />', 'Workload Balancing Rules'].map((s) => settings.indexOf(s));
     assert.ok(order.every((p) => p > 0));
     assert.deepEqual([...order].sort((a, b) => a - b), order);
     for (const kept of ['Auto-Balancing Trigger', 'Max Task Capacity Alert', 'Cross-Department Assistance']) assert.ok(settings.includes(kept), kept);

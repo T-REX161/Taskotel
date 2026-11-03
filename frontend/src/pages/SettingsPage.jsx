@@ -1,5 +1,4 @@
 import React from 'react';
-import AccountActivityCard from '../components/account/AccountActivityCard';
 import PersonalPreferencesCard from '../components/settings/PersonalPreferencesCard';
 import NotificationPreferencesCard from '../components/settings/NotificationPreferencesCard';
 import SecuritySettingsCard from '../components/settings/SecuritySettingsCard';
@@ -48,8 +47,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-
-      <AccountActivityCard />
     </div>
   );
 }

@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V12 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V13 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -81,7 +81,9 @@ public class MigrationFilesTest {
                 "V9__user_display_name.sql",
                 "V10__user_account_activity.sql",
                 "V11__user_preferences.sql",
-                "V12__notification_preferences.sql"), names);
+                "V12__notification_preferences.sql",
+                "V13__user_email_change.sql",
+                "V14__user_phone.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -89,7 +91,35 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12), versions, "Versions must be 1 to 12 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14), versions, "Versions must be 1 to 14 with no gaps or duplicates");
+    }
+
+    @Test
+    @DisplayName("V14 only adds one nullable phone column to users: no data is backfilled, no constraint, index or other table is touched")
+    public void testV14OnlyAddsOneNullableColumn() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V14__user_phone.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|CASCADE|RENAME|DROP|NOT\\s+NULL|DEFAULT|CONSTRAINT|INDEX|UNIQUE)\\b").matcher(code).find(),
+                "V14 must not change data, constraints or indexes, and the new column must be nullable with no default");
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);"));
+        assertEquals(1, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+    }
+
+    @Test
+    @DisplayName("V13 only adds five nullable columns to users: no data is backfilled, no constraint, index or other table is touched")
+    public void testV13OnlyAddsFiveNullableColumns() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V13__user_email_change.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\b(DELETE|UPDATE|INSERT|TRUNCATE|CASCADE|RENAME|DROP|NOT\s+NULL|DEFAULT|CONSTRAINT|INDEX|UNIQUE)\b").matcher(code).find(),
+                "V13 must not change data, constraints or indexes, and the new columns must be nullable with no default");
+        for (String column : new String[] {"pending_email VARCHAR(255)", "pending_email_code_hash VARCHAR(255)", "pending_email_expires_at TIMESTAMP",
+                "pending_email_attempt_count INTEGER", "pending_email_last_sent_at TIMESTAMP"}) {
+            assertTrue(executable.contains("ALTER TABLE users ADD COLUMN IF NOT EXISTS " + column + ";"), column);
+        }
+        assertEquals(5, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
+        assertFalse(executable.toLowerCase().contains("email ") && executable.contains("ALTER COLUMN"), "the real email column is never altered");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
     }
 
     @Test

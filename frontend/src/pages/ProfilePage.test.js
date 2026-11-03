@@ -15,45 +15,31 @@ const usersTable = read('..', 'components', 'users', 'UsersTable.jsx');
 const staffDetails = read('..', 'components', 'staff', 'StaffDetailsModal.jsx');
 const hook = read('..', 'hooks', 'useCurrentUserProfile.js');
 
-describe('profile page: change profile picture', () => {
-  it('offers a Change Profile Picture action with a hidden picker limited to JPG, PNG and WebP', () => {
-    assert.ok(page.includes('Change Profile Picture'));
-    assert.ok(page.includes('type="file"') && page.includes('accept={PROFILE_IMAGE_ACCEPT}') && page.includes('className="hidden"'));
-    assert.ok(page.includes('fileInputRef.current?.click()'));
+describe('profile page: the avatar opens the picture editor', () => {
+  it('has no upload section in the header any more', () => {
+    for (const gone of ['Change Profile Picture', 'More picture actions', 'Remove picture', 'Save picture', 'type="file"', 'uploadProfilePicture', 'removeProfilePicture', 'PROFILE_IMAGE_ACCEPT']) {
+      assert.ok(!page.includes(gone), gone + ' should not be on the page');
+    }
+    assert.ok(!page.includes('JPG, PNG or WebP, up to 5 MB'), 'no format instructions in the header');
   });
 
-  it('validates the chosen file before previewing it, and previews it locally', () => {
-    const change = page.slice(page.indexOf('const handleFileChange'), page.indexOf('const handleSave'));
-    assert.ok(change.indexOf('validateProfileImageFile(file)') < change.indexOf('URL.createObjectURL(file)'), 'validation before preview');
-    assert.ok(change.includes("dispatch({ type: 'invalid', error: problem })"));
-    assert.ok(page.includes('src={picture.previewUrl}') && page.includes("onError={() => dispatch({ type: 'previewFailed' })}"));
+  it('makes the avatar itself the button that opens the editor, with a tooltip and a camera indicator on hover', () => {
+    const head = page.slice(page.indexOf('aria-label="Profile summary"'), page.indexOf('title="Personal Information"'));
+    assert.ok(head.includes('title="Edit profile picture"') && head.includes('aria-label="Edit profile picture"'));
+    assert.ok(head.includes('setEditorOpen(true)') && head.includes('<CameraIcon') && head.includes('group-hover:'));
+    assert.ok(head.includes('rounded-full') && head.includes('<UserAvatar'));
+    assert.ok(page.includes('<ProfilePictureEditor') && page.includes('savedImageUrl={savedImageUrl}'));
   });
 
-  it('releases every preview URL', () => {
-    assert.ok(page.includes('URL.revokeObjectURL(url)') && page.includes('[picture.previewUrl]'));
-  });
-
-  it('shows Save and Cancel while previewing, with a loading state during upload', () => {
-    assert.ok(page.includes('Save picture') && page.includes("dispatch({ type: 'cancel' })") && page.includes('Uploading…'));
-    assert.ok(page.includes('disabled={busy}'));
-  });
-
-  it('uploads only on Save, then shares the new profile so the header updates without another request', () => {
-    const save = page.slice(page.indexOf('const handleSave'), page.indexOf('const handleRemove'));
-    assert.ok(save.includes('await uploadProfilePicture(picture.file)') && save.includes('setCurrentProfile(updated)'));
-    assert.ok(save.includes("dispatch({ type: 'uploadFailure', error: profilePictureErrorMessage(error, PROFILE_PICTURE_MESSAGES.uploadFailed) })"));
-    assert.ok(!page.slice(page.indexOf('const handleFileChange'), page.indexOf('const handleSave')).includes('uploadProfilePicture'), 'choosing never uploads');
-  });
-
-  it('shows success and failure feedback, and a remove action only when a picture exists', () => {
-    assert.ok(page.includes('role="alert"') && page.includes('{picture.error}'));
-    assert.ok(page.includes('role="status"') && page.includes('{picture.success}'));
-    assert.ok(page.includes('{savedImageUrl && (') && page.includes('Remove picture') && page.includes('await removeProfilePicture()'));
+  it("shares the server's updated profile when the editor is done, so the header and navbar change at once", () => {
+    const done = page.slice(page.indexOf('const handlePictureDone'), page.indexOf('const status = accountStatus'));
+    assert.ok(done.includes('setCurrentProfile(updated)') && done.includes('showPictureNotice(message)') && done.includes('setEditorOpen(false)'));
+    assert.ok(page.includes('role="status"') && page.includes('{pictureMessage}'));
   });
 
   it('keeps the existing profile details and branding', () => {
     assert.ok(page.includes('Taskotel — Hotel Operations, Simplified'));
-    assert.ok(page.includes('Full Administrator Access') && page.includes('Email Verified'));
+    assert.ok(page.includes('accessScopeFor(role)') && page.includes('Email verification:'));
   });
 });
 

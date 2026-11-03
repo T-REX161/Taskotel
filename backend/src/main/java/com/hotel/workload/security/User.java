@@ -98,6 +98,27 @@ public class User {
     @Column(name = "time_format", length = 10)
     private String timeFormat;
 
+    // A change of email address in progress (Profile > Contact Information). The real email stays untouched until the code sent to the
+    // new address is verified. Only a hash of the code is stored. All null when nothing is pending.
+    @Column(name = "pending_email")
+    private String pendingEmail;
+
+    @Column(name = "pending_email_code_hash")
+    private String pendingEmailCodeHash;
+
+    @Column(name = "pending_email_expires_at")
+    private LocalDateTime pendingEmailExpiresAt;
+
+    @Column(name = "pending_email_attempt_count")
+    private Integer pendingEmailAttemptCount;
+
+    @Column(name = "pending_email_last_sent_at")
+    private LocalDateTime pendingEmailLastSentAt;
+
+    // The number the user typed in Profile > Contact Information (not verified). Null when none was added.
+    @Column(name = "phone", length = 50)
+    private String phone;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -174,4 +195,27 @@ public class User {
     public void setTimeFormat(String timeFormat) { this.timeFormat = timeFormat; }
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
+
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+
+    public String getPendingEmail() { return pendingEmail; }
+    public void setPendingEmail(String pendingEmail) { this.pendingEmail = pendingEmail; }
+    public String getPendingEmailCodeHash() { return pendingEmailCodeHash; }
+    public void setPendingEmailCodeHash(String pendingEmailCodeHash) { this.pendingEmailCodeHash = pendingEmailCodeHash; }
+    public LocalDateTime getPendingEmailExpiresAt() { return pendingEmailExpiresAt; }
+    public void setPendingEmailExpiresAt(LocalDateTime pendingEmailExpiresAt) { this.pendingEmailExpiresAt = pendingEmailExpiresAt; }
+    public int getPendingEmailAttemptCount() { return pendingEmailAttemptCount != null ? pendingEmailAttemptCount : 0; }
+    public void setPendingEmailAttemptCount(Integer pendingEmailAttemptCount) { this.pendingEmailAttemptCount = pendingEmailAttemptCount; }
+    public LocalDateTime getPendingEmailLastSentAt() { return pendingEmailLastSentAt; }
+    public void setPendingEmailLastSentAt(LocalDateTime pendingEmailLastSentAt) { this.pendingEmailLastSentAt = pendingEmailLastSentAt; }
+
+    /** Forgets a change in progress. The account's real email is not touched. */
+    public void clearPendingEmail() {
+        pendingEmail = null;
+        pendingEmailCodeHash = null;
+        pendingEmailExpiresAt = null;
+        pendingEmailAttemptCount = null;
+        pendingEmailLastSentAt = null;
+    }
 }

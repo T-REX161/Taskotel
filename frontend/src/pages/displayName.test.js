@@ -90,30 +90,42 @@ describe('profile page: display name', () => {
     assert.ok(page.includes('{displayName}</h2>') && page.includes('{role}') && page.includes('@{username}'));
   });
 
-  it('has exactly three rows of two fields: Display Name | Username, Status | Email Verified, System Role | Access Scope', () => {
-    const labels = ['>Display Name</label>', 'label="Username"', 'label="Status"', 'label="Email Verified"', 'label="System Role"', 'label="Access Scope"'];
-    const positions = labels.map((label) => page.indexOf(label));
-    assert.ok(positions.every((p) => p > 0), 'all six fields present');
-    assert.deepEqual([...positions].sort((a, b) => a - b), positions, 'field order');
-    const grid = page.slice(page.indexOf('grid grid-cols-1 md:grid-cols-2 gap-x-8'), page.indexOf('</section>', page.indexOf('grid grid-cols-1 md:grid-cols-2 gap-x-8')));
-    assert.equal((grid.match(/<DetailField /g) || []).length + (grid.match(/<label htmlFor="display-name"/g) || []).length, 6, 'six fields, none extra');
-    assert.ok(grid.startsWith('grid grid-cols-1 md:grid-cols-2'), 'one column on mobile, two on desktop');
+  it('Personal Information has Display Name (editable) then Username (read-only)', () => {
+    const personal = page.slice(page.indexOf('title="Personal Information"'), page.indexOf('title="Contact Information"'));
+    assert.ok(personal.indexOf('label="Display Name"') > 0 && personal.indexOf('label="Display Name"') < personal.indexOf('label="Username"'));
+    assert.equal((personal.match(/<FieldRow /g) || []).length, 2, 'two fields, none extra');
   });
 
-  it('reads Status and Email Verified from the backend profile, never hardcoded', () => {
-    assert.ok(page.includes('profile?.active') && page.includes('profile?.emailVerified'));
-    assert.ok(!page.includes('Active & Authenticated'), 'no constant "Active & Authenticated"');
-    assert.ok(page.includes("flagText(profile?.active, 'Active', 'Inactive')") && page.includes("flagText(profile?.emailVerified, 'Yes', 'No')"));
-    assert.ok(page.includes('not whether this browser is signed in'), 'labelled as email verification, not a login session');
+  it('the header shows Account Status, System Role and Access Scope under the username, in that order, from the backend profile and the existing role logic; the Account Information card is gone', () => {
+    assert.ok(!page.includes('Account Information') && !page.includes('label="Account Status"'));
+    const header = page.slice(page.indexOf('aria-label="Profile summary"'), page.indexOf('title="Personal Information"'));
+    const order = ['@{username}', '<StatusBadge state={status.state} label={status.label} />', '{role}', '{accessScope}'].map((l) => header.indexOf(l));
+    assert.ok(order.every((x) => x > 0) && [...order].sort((x, y) => x - y).join() === order.join(), 'order');
+    assert.ok(!header.includes('<input') || header.includes('type="file"'));
+    assert.ok(page.includes('accountStatus(profile)') && page.includes('accessScopeFor(role)') && page.includes('getUserRole()'));
+    assert.ok(!page.includes('Active & Authenticated'), 'no constant status text');
+  });
+
+  it('the header badges wrap on small screens and the access scope is a subtle neutral badge', () => {
+    const header = page.slice(page.indexOf('aria-label="Profile summary"'), page.indexOf('title="Personal Information"'));
+    assert.ok(header.includes('flex flex-wrap items-center justify-center md:justify-start gap-2'));
+    assert.ok(header.includes('${BADGE_BASE} ${SCOPE_BADGE_TONE}'), 'scope badge uses the shared shape with the neutral tone');
+    assert.ok(page.includes("SCOPE_BADGE_TONE = 'bg-gray-100 text-gray-600 border-gray-200'"), 'neutral scope colours');
+  });
+
+  it('reads status and email verification from the backend profile, never hardcoded', () => {
+    assert.ok(page.includes('emailVerification(profile)') && page.includes('accountStatus(profile)'));
+    const view = read('..', 'utils', 'profileView.js');
+    assert.ok(view.includes('profile?.active') && view.includes('profile?.emailVerified'));
   });
 
   it('keeps the username read-only: only the display name has an input and a save', () => {
-    assert.equal((page.match(/<input\b/g) || []).length, 2, 'the file picker and the display name input only');
+    assert.equal((page.match(/<input\b/g) || []).length, 1, 'the display name input only (the picture file picker lives in the editor)');
     assert.ok(page.includes('updateDisplayName(nameDraft.trim())') && !page.includes('updateUsername'));
   });
 
   it('validates before saving, blocks duplicate submits, and shows errors and success', () => {
-    const submit = page.slice(page.indexOf('const handleNameSubmit'), page.indexOf('const chooseFile'));
+    const submit = page.slice(page.indexOf('const handleNameSubmit'), page.indexOf('const handlePictureDone'));
     assert.ok(submit.indexOf('if (savingName) return;') < submit.indexOf('validateDisplayName(nameDraft)'));
     assert.ok(submit.indexOf('validateDisplayName(nameDraft)') < submit.indexOf('await updateDisplayName'));
     assert.ok(submit.includes('setCurrentProfile(updated)') && submit.includes('setNameSaved(true)') && submit.includes('finally'));

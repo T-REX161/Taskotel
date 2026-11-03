@@ -233,9 +233,38 @@ export const getProfile = () => {
 };
 
 /**
+ * Email change, step 1: send a six-digit code to the NEW address (and again to resend). Only the new address is sent: the server decides
+ * whose account it is from the token. Resolves with { pendingEmailMasked, expiresInSeconds, resendAvailableInSeconds }; nothing about the
+ * account changes yet.
+ */
+export const requestEmailChange = (newEmail) => {
+  return apiFetch('/api/profile/email-change/request', {
+    method: 'POST',
+    body: JSON.stringify({ newEmail }),
+  });
+};
+
+/**
+ * Email change, step 2: verify the code. Resolves with the updated profile (new email, verified) only if the server switched the address.
+ */
+export const confirmEmailChange = (code) => {
+  return apiFetch('/api/profile/email-change/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+};
+
+/**
  * Change the signed-in user's own display name. Only the name is sent: the server decides whose profile it is from the token.
  * Resolves with the updated profile.
  */
+export const updatePhone = (phone) => {
+  return apiFetch('/api/profile/phone', {
+    method: 'PUT',
+    body: JSON.stringify({ phone }),
+  });
+};
+
 export const updateDisplayName = (displayName) => {
   return apiFetch('/api/profile/display-name', {
     method: 'PUT',

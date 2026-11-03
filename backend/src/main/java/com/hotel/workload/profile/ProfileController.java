@@ -37,6 +37,14 @@ public class ProfileController {
         return profilePictureService.updateDisplayName(nameOf(authentication), request.displayName());
     }
 
+    public record UpdatePhoneRequest(String phone) {}
+
+    /** Changes the signed-in user's own phone number (not verified; no SMS). Only that number: nothing else on the account changes. */
+    @PutMapping("/phone")
+    public ProfileDto updatePhone(Authentication authentication, @RequestBody UpdatePhoneRequest request) {
+        return profilePictureService.updatePhone(nameOf(authentication), request == null ? null : request.phone());
+    }
+
     /** Saves the signed-in user's own appearance, date format and time format. Nothing else on the account changes. */
     @PutMapping("/preferences")
     public ProfileDto updatePreferences(Authentication authentication, @RequestBody UserPreferences.Values request) {

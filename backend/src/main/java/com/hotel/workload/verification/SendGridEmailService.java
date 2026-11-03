@@ -215,6 +215,77 @@ public class SendGridEmailService implements EmailService {
         return email.substring(0, 2) + "***" + email.substring(atIndex);
     }
 
+    public static final String EMAIL_CHANGE_SUBJECT = "Taskotel - Confirm Your New Email Address";
+    public static final String EMAIL_CHANGE_REQUESTED_SUBJECT = "Taskotel - Email Address Change Requested";
+    public static final String EMAIL_CHANGE_COMPLETED_SUBJECT = "Taskotel - Your Email Address Was Changed";
+
+    @Override
+    public void sendEmailChangeVerificationEmail(String toNewEmail, String code) {
+        String text = "Hello,\n\n"
+                + "Use the following 6-digit code to confirm this as the new email address for your Taskotel account:\n\n"
+                + "Verification Code: " + code + "\n\n"
+                + "Expiration: 10 minutes\n\n"
+                + "For your security, do not share this code with anyone. If you did not ask to change your email address, ignore this message: nothing will change.\n\n"
+                + "Regards,\n"
+                + "Taskotel Team";
+        String html = "<p>Hello,</p>"
+                + "<p>Use the following 6-digit code to confirm this as the new email address for your Taskotel account:</p>"
+                + "<p>Verification Code: " + styledCode(code) + "</p>"
+                + "<p>Expiration: 10 minutes</p>"
+                + "<p>For your security, do not share this code with anyone. If you did not ask to change your email address, ignore this message: nothing will change.</p>"
+                + "<p>Regards,<br>Taskotel Team</p>";
+        dispatch(toNewEmail, EMAIL_CHANGE_SUBJECT, text, html, "email change verification");
+    }
+
+    @Override
+    public void sendEmailChangeNotice(String toOldEmail, String maskedNewEmail, boolean completed) {
+        String what = completed
+                ? "The email address on your Taskotel account was changed to " + maskedNewEmail + "."
+                : "A request was made to change the email address on your Taskotel account to " + maskedNewEmail + ". Nothing has changed yet.";
+        String advice = "If this was not you, change your password right away and contact your administrator.";
+        String text = "Hello,\n\n" + what + "\n\n" + advice + "\n\nRegards,\nTaskotel Team";
+        String html = "<p>Hello,</p><p>" + escape(what) + "</p><p>" + advice + "</p><p>Regards,<br>Taskotel Team</p>";
+        dispatch(toOldEmail, completed ? EMAIL_CHANGE_COMPLETED_SUBJECT : EMAIL_CHANGE_REQUESTED_SUBJECT, text, html, "email change notice");
+    }
+
+    private static String escape(String value) {
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    /** Sends one message (plain text and HTML). Same checks and failure behaviour as the verification and reset emails; nothing sensitive is logged. */
+    private void dispatch(String toEmail, String subject, String text, String html, String kind) {
+        if (sendGridClient == null) {
+            log.error("SendGrid API key is not configured or missing. Cannot dispatch {} email to recipient: {}", kind, maskEmail(toEmail));
+            throw new EmailSendingException("SendGrid is not configured. Failed to dispatch " + kind + " email.");
+        }
+        if (properties == null || properties.getFromEmail() == null || properties.getFromEmail().isBlank()) {
+            log.error("SendGrid sender email (from-email) is not configured. Cannot dispatch {} email to recipient: {}", kind, maskEmail(toEmail));
+            throw new EmailSendingException("SendGrid sender email is not configured.");
+        }
+        if (toEmail == null || toEmail.isBlank()) {
+            log.error("Recipient email is missing or empty.");
+            throw new EmailSendingException("Recipient email is required.");
+        }
+        Mail mail = new Mail(new Email(properties.getFromEmail(), properties.getFromName()), subject, new Email(toEmail), new Content("text/plain", text));
+        mail.addContent(new Content("text/html", html));
+        try {
+            Request request = new Request();
+            request.setMethod(Method.POST);
+            request.setEndpoint("mail/send");
+            request.setBody(mail.build());
+            Response response = sendGridClient.api(request);
+            if (response.getStatusCode() >= 200 && response.getStatusCode() < 300) {
+                log.info("{} email successfully dispatched to recipient: {}", kind, maskEmail(toEmail));
+            } else {
+                log.error("Failed to send {} email via SendGrid. HTTP Status: {}; SendGrid said: {}", kind, response.getStatusCode(), describeFailure(response));
+                throw new EmailSendingException("Failed to send " + kind + " email via SendGrid, status code: " + response.getStatusCode());
+            }
+        } catch (IOException e) {
+            log.error("IOException occurred while dispatching {} email via SendGrid: {}", kind, e.getMessage());
+            throw new EmailSendingException("Failed to dispatch " + kind + " email", e);
+        }
+    }
+
     @Override
     public boolean isConfigured() {
         return sendGridClient != null;

@@ -257,9 +257,8 @@ describe('Settings page: Personal Preferences card', () => {
   });
 
   it('appears on the Settings page without touching Workload Balancing Rules or Account Activity', () => {
-    assert.ok(settings.includes('<PersonalPreferencesCard />') && settings.includes('<AccountActivityCard />'));
+    assert.ok(settings.includes('<PersonalPreferencesCard />') && !settings.includes('AccountActivityCard'));
     for (const kept of ['Workload Balancing Rules', 'Auto-Balancing Trigger', 'Max Task Capacity Alert', 'Cross-Department Assistance']) assert.ok(settings.includes(kept), kept);
-    assert.ok(read('..', 'components', 'account', 'AccountActivityCard.jsx').includes('Account Activity</h2>'));
   });
 
   it('shows loading, saving, success and error states, and locks the controls while loading or saving', () => {
