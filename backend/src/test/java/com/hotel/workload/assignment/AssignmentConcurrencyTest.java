@@ -51,9 +51,62 @@ public class AssignmentConcurrencyTest {
     private static final String TAG = "asgnrace_";
     private static final List<TaskStatus> ACTIVE = List.of(TaskStatus.PENDING, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS);
 
-    @Autowired private AssignmentService assignments;
+    @Autowired private AssignmentService assignmentService;
+
+    /**
+     * The assignment service now decides by the caller's scope, so a direct call needs a signed-in user. These tests exercise locking and
+     * concurrency, not authorization: every call signs in as an administrator for that one call, on whichever thread it runs on
+     * (executor threads have no security context of their own), and clears it again.
+     */
+    private final AssignmentService assignments = new AssignmentService() {
+        @Override public AssignmentDto createAssignment(CreateAssignmentRequest request) { return asAdminCall(() -> assignmentService.createAssignment(request)); }
+        @Override public java.util.List<AssignmentDto> getAllAssignments() { return asAdminCall(() -> assignmentService.getAllAssignments()); }
+        @Override public AssignmentDto reassignTask(UUID id, UpdateAssignmentRequest request) { return asAdminCall(() -> assignmentService.reassignTask(id, request)); }
+    };
+
+    private static <T> T asAdminCall(Callable<T> call) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("concurrency_admin", null,
+                        java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+        try {
+            return call.call();
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
     @Autowired private StaffService staffService;
     @Autowired private TaskService taskService;
+
+    /**
+     * The task service now decides who may change a task, so a direct call needs a signed-in user. These tests exercise locking and
+     * concurrency, not authorization: every call below signs in as an administrator for that one call, on whichever thread it runs on
+     * (executor threads have no security context of their own), and clears it again.
+     */
+    private final TaskService asAdminTasks = new TaskService() {
+        private <T> T asAdmin(java.util.concurrent.Callable<T> call) {
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                    new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("concurrency_admin", null,
+                            java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+            try {
+                return call.call();
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            } finally {
+                org.springframework.security.core.context.SecurityContextHolder.clearContext();
+            }
+        }
+
+        @Override public java.util.List<com.hotel.workload.task.TaskDto> getAllTasks() { return asAdmin(() -> taskService.getAllTasks()); }
+        @Override public com.hotel.workload.task.TaskDto createTask(com.hotel.workload.task.CreateTaskRequest request) { return asAdmin(() -> taskService.createTask(request)); }
+        @Override public com.hotel.workload.task.TaskDto updateTask(java.util.UUID id, UpdateTaskRequest request) { return asAdmin(() -> taskService.updateTask(id, request)); }
+        @Override public void deleteTask(java.util.UUID id) { asAdmin(() -> { taskService.deleteTask(id); return null; }); }
+    };
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private AssignmentRepository assignmentRepository;
     @Autowired private StaffRepository staffRepository;
@@ -259,7 +312,17 @@ public class AssignmentConcurrencyTest {
             Task task = task();
             List<String> outcomes = race(List.of(
                     () -> { assign(task, member); return null; },
-                    () -> staffService.deactivateStaff(member.getId())));
+                    () -> {
+                        // A pool thread has no security context of its own: sign in as an administrator for this call only
+                        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("race_admin", null,
+                                        java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+                        try {
+                            return staffService.deactivateStaff(member.getId());
+                        } finally {
+                            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+                        }
+                    }));
 
             Staff stored = staffRepository.findById(member.getId()).orElseThrow();
             assertFalse(!stored.isActive() && activeAssignmentsOf(member) > 0, "inactive person with an active task: " + outcomes);
@@ -321,7 +384,7 @@ public class AssignmentConcurrencyTest {
             Task task = task();
             List<String> outcomes = race(List.of(
                     () -> { assign(task, member); return null; },
-                    () -> taskService.updateTask(task.getId(), statusUpdate(task, TaskStatus.CANCELLED))));
+                    () -> asAdminTasks.updateTask(task.getId(), statusUpdate(task, TaskStatus.CANCELLED))));
 
             Task stored = taskRepository.findById(task.getId()).orElseThrow();
             boolean cancelled = outcomes.get(1).equals("OK");
@@ -342,7 +405,7 @@ public class AssignmentConcurrencyTest {
             UUID assignmentId = assignmentRepository.findAllByTaskId(task.getId()).get(0).getId();
 
             List<String> outcomes = race(List.of(
-                    () -> taskService.updateTask(task.getId(), statusUpdate(task, TaskStatus.COMPLETED)),
+                    () -> asAdminTasks.updateTask(task.getId(), statusUpdate(task, TaskStatus.COMPLETED)),
                     () -> assignments.reassignTask(assignmentId, new UpdateAssignmentRequest(target.getId()))));
 
             assertEquals("OK", outcomes.get(0), outcomes.toString());
@@ -363,7 +426,7 @@ public class AssignmentConcurrencyTest {
     @DisplayName("Completing a task that is being assigned at that moment waits and then succeeds (it is not refused on the old 'no assignee' state)")
     void completionSeesAnAssignmentThatIsBeingCommitted() throws Exception {
         Task task = task();
-        runWhileAssignmentIsInFlight(task, staff(), () -> taskService.updateTask(task.getId(), statusUpdate(task, TaskStatus.COMPLETED)));
+        runWhileAssignmentIsInFlight(task, staff(), () -> asAdminTasks.updateTask(task.getId(), statusUpdate(task, TaskStatus.COMPLETED)));
         assertEquals(TaskStatus.COMPLETED, taskRepository.findById(task.getId()).orElseThrow().getStatus());
         assertEquals(1, assignmentRepository.findAllByTaskId(task.getId()).size());
     }
@@ -372,7 +435,7 @@ public class AssignmentConcurrencyTest {
     @DisplayName("Deleting a task that is being assigned at that moment waits, then removes the task together with its new assignment")
     void deletionSeesAnAssignmentThatIsBeingCommitted() throws Exception {
         Task task = task();
-        runWhileAssignmentIsInFlight(task, staff(), () -> { taskService.deleteTask(task.getId()); return null; });
+        runWhileAssignmentIsInFlight(task, staff(), () -> { asAdminTasks.deleteTask(task.getId()); return null; });
         assertTrue(taskRepository.findById(task.getId()).isEmpty());
         assertEquals(0, assignmentRepository.findAllByTaskId(task.getId()).size());
     }
@@ -384,18 +447,18 @@ public class AssignmentConcurrencyTest {
         Staff member = staff();
         Task task = task();
         assign(task, member);
-        taskService.updateTask(task.getId(), statusUpdate(task, TaskStatus.IN_PROGRESS));
+        asAdminTasks.updateTask(task.getId(), statusUpdate(task, TaskStatus.IN_PROGRESS));
         assertEquals(TaskStatus.IN_PROGRESS, taskRepository.findById(task.getId()).orElseThrow().getStatus());
-        taskService.updateTask(task.getId(), statusUpdate(task, TaskStatus.COMPLETED));
+        asAdminTasks.updateTask(task.getId(), statusUpdate(task, TaskStatus.COMPLETED));
         assertEquals(TaskStatus.COMPLETED, taskRepository.findById(task.getId()).orElseThrow().getStatus());
         try {
-            taskService.updateTask(task.getId(), statusUpdate(task, TaskStatus.PENDING));
+            asAdminTasks.updateTask(task.getId(), statusUpdate(task, TaskStatus.PENDING));
             throw new AssertionError("a completed task cannot be reopened");
         } catch (ResponseStatusException e) {
             assertEquals(409, e.getStatusCode().value());
         }
         Task other = task();
-        taskService.updateTask(other.getId(), statusUpdate(other, TaskStatus.CANCELLED));
+        asAdminTasks.updateTask(other.getId(), statusUpdate(other, TaskStatus.CANCELLED));
         try {
             assign(other, member);
             throw new AssertionError("a cancelled task cannot be assigned");
@@ -429,5 +492,118 @@ public class AssignmentConcurrencyTest {
         assign(t3, first);
         assertEquals(1, activeAssignmentsOf(first));
         assertEquals(1, activeAssignmentsOf(second));
+    }
+
+    // ── a department-scoped Manager (Step 2D) ────────────────────────────────────────────────────────────────
+
+    /** A valid Manager of the test department: active account, active Staff record in it. Removed by cleanUp (user name starts with TAG). */
+    private String manager() {
+        String username = TAG + "m" + (counter++);
+        User user = new User();
+        user.setUsername(username);
+        user.setEmail(username + "@hotel.test");
+        user.setPassword("not-used");
+        user.setRole(Role.MANAGER);
+        user.setActive(true);
+        user = userRepository.saveAndFlush(user);
+        Staff staff = new Staff();
+        staff.setUser(user);
+        staff.setName("Race " + username);
+        staff.setEmail(user.getEmail());
+        staff.setDepartment(department);
+        staff.setAvailability(Availability.AVAILABLE);
+        staff.setActive(true);
+        staffRepository.saveAndFlush(staff);
+        return username;
+    }
+
+    private <T> T asManagerCall(String username, Callable<T> call) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(username, null,
+                        java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_MANAGER"))));
+        try {
+            return call.call();
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    @DisplayName("Manager path: six tasks assigned to the same staff member at once: exactly one succeeds, the rest get a clean 409")
+    void managerPathKeepsTheOneActiveTaskRule() throws Exception {
+        String manager = manager();
+        Staff busy = staff();
+        List<Callable<Object>> calls = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            Task task = task();
+            calls.add(() -> asManagerCall(manager, () -> assignmentService.createAssignment(new CreateAssignmentRequest(task.getId(), busy.getId()))));
+        }
+
+        List<String> outcomes = race(calls);
+
+        assertEquals(1, count(outcomes, "OK"), outcomes.toString());
+        assertEquals(5, count(outcomes, "409"), outcomes.toString());
+        assertEquals(1, activeAssignmentsOf(busy));
+    }
+
+    @Test
+    @DisplayName("A Manager assigning a task while an Admin moves it to another department: never both. Either the assignment wins and the move is refused, or the move wins and the Manager gets 404")
+    void managerAssignmentRacesWithTheTaskLeavingTheDepartment() throws Exception {
+        String manager = manager();
+        for (int round = 0; round < 6; round++) {
+            Task task = task();
+            Staff member = staff();
+            UpdateTaskRequest move = statusUpdate(task, TaskStatus.PENDING);
+            move.setDepartment("HOUSEKEEPING");
+
+            List<String> outcomes = race(List.of(
+                    () -> asManagerCall(manager, () -> assignmentService.createAssignment(new CreateAssignmentRequest(task.getId(), member.getId()))),
+                    () -> asAdminTasks.updateTask(task.getId(), move)));
+
+            boolean assigned = assignmentRepository.existsByTaskId(task.getId());
+            Task stored = taskRepository.findById(task.getId()).orElseThrow();
+            if (assigned) {
+                assertEquals("OK", outcomes.get(0), outcomes.toString());
+                assertEquals(department.getCode(), stored.getDepartment().getCode(),
+                        "an assigned task never ends in a different department from its assignee: " + outcomes);
+            } else {
+                assertEquals("404", outcomes.get(0), "a Manager who lost the race sees the task as gone: " + outcomes);
+                assertEquals("OK", outcomes.get(1), outcomes.toString());
+                assertEquals("HOUSEKEEPING", stored.getDepartment().getCode());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("A Manager reassigning while an Admin moves the task to another department: the move or the reassignment, never an inconsistent mix")
+    void managerReassignmentRacesWithTheTaskLeavingTheDepartment() throws Exception {
+        String manager = manager();
+        for (int round = 0; round < 6; round++) {
+            Task task = task();
+            Staff first = staff();
+            Staff second = staff();
+            assign(task, first);
+            UUID assignmentId = assignmentRepository.findAllByTaskId(task.getId()).get(0).getId();
+            UpdateTaskRequest move = statusUpdate(task, TaskStatus.ASSIGNED);
+            move.setDepartment("HOUSEKEEPING");
+
+            List<String> outcomes = race(List.of(
+                    () -> asManagerCall(manager, () -> assignmentService.reassignTask(assignmentId, new UpdateAssignmentRequest(second.getId()))),
+                    () -> asAdminTasks.updateTask(task.getId(), move)));
+
+            Task stored = taskRepository.findById(task.getId()).orElseThrow();
+            Staff holder = assignmentRepository.findAllByTaskId(task.getId()).get(0).getStaff();
+            if ("OK".equals(outcomes.get(0))) {
+                assertEquals(second.getId(), holder.getId(), outcomes.toString());
+                assertEquals(department.getCode(), stored.getDepartment().getCode(), "the move must have been refused: " + outcomes);
+            } else {
+                assertEquals("404", outcomes.get(0), outcomes.toString());
+                assertEquals(first.getId(), holder.getId(), "a refused reassignment changes nothing: " + outcomes);
+            }
+        }
     }
 }

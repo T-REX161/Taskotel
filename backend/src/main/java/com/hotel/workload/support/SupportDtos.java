@@ -30,16 +30,17 @@ public final class SupportDtos {
     public record WaitingTask(UUID id, String title, String category, Priority priority, Integer estimatedDuration,
                               LocalDate dueDate, LocalTime deadlineTime) {}
 
-    public record DonorStaff(UUID staffId, String name, Availability availability, int activeTaskCount,
-                             int totalEstimatedDuration, WorkloadStatus workloadStatus) {}
+    /** The workload figures are null in a Manager's response (they are the donor department's data). */
+    public record DonorStaff(UUID staffId, String name, Availability availability, Integer activeTaskCount,
+                             Integer totalEstimatedDuration, WorkloadStatus workloadStatus) {}
 
     /**
      * A department that has staff who could help, and how many it may lend while keeping its reserve. {@code overrideLendable}
      * is how many it could lend if a manager acknowledges the staffing risk: its own waiting work stays covered, but the
      * one free person it normally keeps in reserve may go (never fewer than {@code maxLendable}).
      */
-    public record DonorDepartment(String code, String name, int freeStaff, int availableStaff, int waitingTasks,
-                                  int maxLendable, int overrideLendable, boolean canLend, String note, List<DonorStaff> staff) {}
+    public record DonorDepartment(String code, String name, Integer freeStaff, Integer availableStaff, Integer waitingTasks,
+                                  Integer maxLendable, Integer overrideLendable, Boolean canLend, String note, List<DonorStaff> staff) {}
 
     public record Options(DepartmentSummary receiving, List<WaitingTask> tasks, int maxHelpers,
                           List<DonorDepartment> donors, List<String> limitations) {}
@@ -70,6 +71,25 @@ public final class SupportDtos {
                                        Boolean reserveOverride, LocalDateTime archivedAt) {
         public static SupportAssignmentDto from(SupportAssignment s) {
             return from(s, null);
+        }
+
+        /**
+         * A Manager's view of a record where their department RECEIVED the support: the details needed to understand it, but never the approver
+         * (`approvedBy`) or the one-time confirmation flag.
+         */
+        public static SupportAssignmentDto forReceivingManager(SupportAssignment s, TaskStatus taskStatus) {
+            return new SupportAssignmentDto(s.getId(), s.getPlanId(), s.getStaffId(), s.getStaffName(), s.getHomeDepartmentCode(),
+                    s.getReceivingDepartmentCode(), s.getTaskId(), s.getTaskTitle(), s.getAssignmentId(),
+                    null, s.getStatus(), s.getEndReason(), s.getCreatedAt(), s.getCompletedAt(), taskStatus, null, s.getArchivedAt());
+        }
+
+        /**
+         * A Manager's view of a record where their department only LENT the person: the person's name and the fact that they are on a temporary
+         * loan (status and dates). No receiving department, no task, no plan, no approver and no end reason.
+         */
+        public static SupportAssignmentDto forDonorManager(SupportAssignment s) {
+            return new SupportAssignmentDto(s.getId(), null, s.getStaffId(), s.getStaffName(), s.getHomeDepartmentCode(),
+                    null, null, null, null, null, s.getStatus(), null, s.getCreatedAt(), s.getCompletedAt(), null, null, s.getArchivedAt());
         }
 
         /** {@code taskStatus} is the supported task's current status (null when unknown or the task is gone). */

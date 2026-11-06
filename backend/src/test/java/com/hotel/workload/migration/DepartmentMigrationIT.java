@@ -46,7 +46,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class DepartmentMigrationIT {
 
-    private static final Path FINGERPRINT_SQL = Path.of("db-tools/fingerprint.sql");
+    private static final Path FINGERPRINT_SQL = Path.of("db-tools/fingerprint-original-tables.sql");
     private static final Path ROLLBACK_EXISTING = Path.of("db-tools/rollback/V4_existing.sql");
     private static final Path ROLLBACK_FRESH = Path.of("db-tools/rollback/V4_fresh.sql");
     private static final String V4_MARKER = "Created by Flyway V4: departments table (replaces the department enum)";

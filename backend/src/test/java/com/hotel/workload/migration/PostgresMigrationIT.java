@@ -58,7 +58,7 @@ public class PostgresMigrationIT {
     private static final String V3_MARKER = "Created by Flyway V3: one assignment row per task";
     /** These tests prove V3 on its own; V4 (departments) is proved by DepartmentMigrationIT, so Flyway stops at 3 here. */
     private static final String V3_TARGET = "3";
-    private static final Path FINGERPRINT_SQL = Path.of("db-tools/fingerprint.sql");
+    private static final Path FINGERPRINT_SQL = Path.of("db-tools/fingerprint-original-tables.sql");
     private static final Path ROLLBACK_EXISTING = Path.of("db-tools/rollback/V3_existing.sql");
     private static final Path ROLLBACK_FRESH = Path.of("db-tools/rollback/V3_fresh.sql");
 

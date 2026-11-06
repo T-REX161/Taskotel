@@ -45,6 +45,7 @@ public class StaffRoleProtectionTest {
     private Staff adminStaff;
     private Staff managerStaff;
     private Staff ordinaryStaff;
+    private Staff callerManager;
 
     @BeforeEach
     public void setup() {
@@ -53,6 +54,8 @@ public class StaffRoleProtectionTest {
         adminStaff = create(Role.ADMIN, "admin");
         managerStaff = create(Role.MANAGER, "manager");
         ordinaryStaff = create(Role.STAFF, "staff");
+        // The Manager who makes the requests: a valid Manager of the same (Front Desk) department, separate from the manager account being protected
+        callerManager = create(Role.MANAGER, "caller");
     }
 
     @AfterEach
@@ -92,8 +95,13 @@ public class StaffRoleProtectionTest {
     }
 
     private int send(String role, MockHttpServletRequestBuilder request) throws Exception {
-        return mockMvc.perform(request.with(user("caller").roles(role)).contentType(MediaType.APPLICATION_JSON))
+        return mockMvc.perform(request.with(user(caller(role)).roles(role)).contentType(MediaType.APPLICATION_JSON))
                 .andReturn().getResponse().getStatus();
+    }
+
+    /** A Manager request comes from the fixture Manager; other roles keep a plain user name. */
+    private String caller(String role) {
+        return "MANAGER".equals(role) ? callerManager.getUser().getUsername() : "caller";
     }
 
     private MockHttpServletRequestBuilder update(Staff staff, String email, boolean active) {
@@ -153,7 +161,7 @@ public class StaffRoleProtectionTest {
     }
 
     private String read(String role, String url) throws Exception {
-        var result = mockMvc.perform(get(url).with(user("caller").roles(role))).andReturn().getResponse();
+        var result = mockMvc.perform(get(url).with(user(caller(role)).roles(role))).andReturn().getResponse();
         return result.getStatus() + "|" + result.getContentAsString();
     }
 
@@ -187,7 +195,7 @@ public class StaffRoleProtectionTest {
         assertFalse(single.startsWith("200|"), "no single-record read exists: " + single.substring(0, 3));
         assertFalse(single.contains(PREFIX + "admin"));
         // a rejected write must not echo the protected record either
-        var rejected = mockMvc.perform(update(adminStaff, "x@hotel.test", true).with(user("caller").roles("MANAGER")).contentType(MediaType.APPLICATION_JSON))
+        var rejected = mockMvc.perform(update(adminStaff, "x@hotel.test", true).with(user(caller("MANAGER")).roles("MANAGER")).contentType(MediaType.APPLICATION_JSON))
                 .andReturn().getResponse();
         assertEquals(403, rejected.getStatus());
         assertFalse(rejected.getContentAsString().contains(PREFIX + "admin"));

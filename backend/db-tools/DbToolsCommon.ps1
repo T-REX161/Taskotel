@@ -15,8 +15,8 @@ Set-StrictMode -Version Latest
 
 $script:PgBin           = 'C:\Program Files\PostgreSQL\18\bin'
 $script:LiveDb          = 'workload_balancer'
-$script:AppTables       = @('assignments', 'staff', 'tasks', 'users')
-$script:KnownTables     = @('assignments', 'flyway_schema_history', 'staff', 'tasks', 'users')
+$script:AppTables       = @('assignments', 'departments', 'notification_preferences', 'staff', 'support_assignments', 'tasks', 'users')
+$script:KnownTables     = @('assignments', 'departments', 'flyway_schema_history', 'notification_preferences', 'staff', 'support_assignments', 'tasks', 'users')
 $script:ReadOnlyOptions = '-c default_transaction_read_only=on'
 $script:DbHost          = if ($env:DB_HOST) { $env:DB_HOST } else { 'localhost' }
 $script:DbPort          = if ($env:DB_PORT) { $env:DB_PORT } else { '5432' }
@@ -131,6 +131,10 @@ function Invoke-PgRestoreLogged {
 
 function Get-QueryResult {
     param([string]$Database, [string]$Sql, [string]$File)
+    # Windows PowerShell 5.1 drops double quotes from arguments it passes to psql.exe, which silently changes the
+    # query (an identifier like "C" becomes C). Inline SQL must therefore use single quotes only; anything that needs
+    # a double quote belongs in a .sql file passed with -File.
+    if ($Sql -and $Sql.Contains('"')) { throw 'Inline SQL passed to psql must not contain double quotes (PowerShell would strip them); use a .sql file.' }
     $source = if ($File) { @('-f', $File) } else { @('-c', $Sql) }
     $out = & (Join-Path $script:PgBin 'psql.exe') @script:Conn -d $Database -X -At -v ON_ERROR_STOP=1 @source
     if ($LASTEXITCODE -ne 0) { throw "psql failed on database $Database." }
@@ -198,19 +202,73 @@ function Show-SchemaDifference {
         Format-Table -AutoSize | Out-String | Write-Host
 }
 
-# Throws unless the text is exactly: 4 application-table lines (count + MD5), the table list, and
-# the Flyway history line. Empty or malformed output can therefore never compare as "equal".
+# Throws unless the text is exactly nine lines: the seven application-table lines (count + MD5) in the
+# fixed order of $script:AppTables, the table list, and the Flyway history line. The table list must
+# contain every application table once and nothing outside $script:KnownTables. Empty, incomplete or
+# malformed output can therefore never compare as "equal".
 function Assert-FingerprintFormat {
     param([string]$Fingerprint, [string]$Source)
+    $expectedLines = $script:AppTables.Count + 2
     $lines = @($Fingerprint -split "`n")
-    if ($lines.Count -ne 6) { throw "Fingerprint from $Source has $($lines.Count) lines instead of 6; refusing to compare." }
-    for ($i = 0; $i -lt 4; $i++) {
+    if ($lines.Count -ne $expectedLines) { throw "Fingerprint from $Source has $($lines.Count) lines instead of $expectedLines; refusing to compare." }
+    for ($i = 0; $i -lt $script:AppTables.Count; $i++) {
         if ($lines[$i] -cnotmatch ('^' + $script:AppTables[$i] + ' \d+ [0-9a-f]{32}$')) {
             throw "Fingerprint line $($i + 1) from $Source is malformed; refusing to compare."
         }
     }
-    if ($lines[4] -cnotmatch '^tables [a-z_,]+$') { throw "Table list from $Source is malformed; refusing to compare." }
-    if ($lines[5] -cnotmatch '^flyway_schema_history (absent|[0-9a-f]{32})$') { throw "Flyway history line from $Source is malformed; refusing to compare." }
+    $tableLine = $lines[$script:AppTables.Count]
+    if ($tableLine -cnotmatch '^tables [a-z_]+(,[a-z_]+)*$') { throw "Table list from $Source is malformed; refusing to compare." }
+    $listed = @($tableLine.Substring('tables '.Length) -split ',')
+    if (@($listed | Select-Object -Unique).Count -ne $listed.Count) { throw "Table list from $Source repeats a table; refusing to compare." }
+    foreach ($table in $script:AppTables) {
+        if ($listed -cnotcontains $table) { throw "Table list from $Source is missing public.$table; refusing to compare." }
+    }
+    foreach ($table in $listed) {
+        if ($script:KnownTables -cnotcontains $table) { throw "Table list from $Source contains public.$table, which the fingerprint does not cover; refusing to compare." }
+    }
+    if ($lines[$script:AppTables.Count + 1] -cnotmatch '^flyway_schema_history (absent|[0-9a-f]{32})$') { throw "Flyway history line from $Source is malformed; refusing to compare." }
+}
+
+# -- SHA-256 sidecar for a dump file ---------------------------------------------------------
+# The sidecar wb_<stamp>.dump.sha256 holds one line, "<64 hex chars>  <dump file name>" (the format
+# sha256sum uses), written when the dump is made and checked again before the dump is trusted.
+
+function Get-DumpSha256 {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Dump file not found: $Path" }
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Format-Sha256Sidecar {
+    param([string]$Hash, [string]$DumpFileName)
+    if ($Hash -cnotmatch '^[0-9a-f]{64}$') { throw 'Refusing to record a malformed SHA-256 value.' }
+    if ($DumpFileName -cnotmatch '^wb_\d{8}_\d{6}\.dump$') { throw "Refusing to record a checksum for unexpected file name '$DumpFileName'." }
+    return "$Hash  $DumpFileName"
+}
+
+# Returns the recorded hash after checking that the sidecar is exactly one well-formed line naming this dump.
+function Read-Sha256Sidecar {
+    param([string]$SidecarPath, [string]$DumpFileName)
+    if (-not (Test-Path -LiteralPath $SidecarPath -PathType Leaf)) { throw "Checksum file $SidecarPath is missing." }
+    $text = ((Get-Content -LiteralPath $SidecarPath -Raw) -replace "`r`n", "`n").Trim()
+    if (-not $text) { throw "Checksum file $SidecarPath is empty." }
+    $match = [regex]::Match($text, '^(?<hash>[0-9a-f]{64})  (?<name>wb_\d{8}_\d{6}\.dump)$')
+    if (-not $match.Success) { throw "Checksum file $SidecarPath is malformed (expected one line: <sha256>  <dump file name>)." }
+    if (-not [string]::Equals($match.Groups['name'].Value, $DumpFileName, [System.StringComparison]::Ordinal)) {
+        throw "Checksum file $SidecarPath names $($match.Groups['name'].Value), not $DumpFileName."
+    }
+    return $match.Groups['hash'].Value
+}
+
+# Throws unless the dump's actual SHA-256 equals the recorded one.
+function Assert-DumpMatchesSidecar {
+    param([string]$DumpPath, [string]$SidecarPath)
+    $recorded = Read-Sha256Sidecar -SidecarPath $SidecarPath -DumpFileName (Split-Path $DumpPath -Leaf)
+    $actual = Get-DumpSha256 $DumpPath
+    if (-not [string]::Equals($recorded, $actual, [System.StringComparison]::Ordinal)) {
+        throw "SHA-256 of $DumpPath ($actual) does not match the recorded $recorded. The dump has changed since it was verified."
+    }
+    return $actual
 }
 
 # Application-data fingerprint (fingerprint.sql) plus: the list of tables in public, which must
@@ -218,8 +276,8 @@ function Assert-FingerprintFormat {
 # Flyway history rows when that table exists. Prints counts, table names and hashes only.
 function Get-VerificationFingerprint {
     param([string]$Database)
-    $appData = Get-QueryResult -Database $Database -File $script:FingerprintFile
-    $tables  = Get-QueryResult -Database $Database -Sql "SELECT coalesce(string_agg(relname::text, ',' ORDER BY relname), '') FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')"
+    # The table list is checked first, so a missing or unexpected table is reported by name instead of as a failed query
+    $tables  = Get-QueryResult -Database $Database -Sql "SELECT coalesce(string_agg(relname::text, ',' ORDER BY convert_to(relname::text, 'UTF8')), '') FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')"
     $tableList = @($tables -split ',' | Where-Object { $_ })
     foreach ($table in $script:AppTables) {
         if ($tableList -cnotcontains $table) { throw "Table public.$table is missing in $Database." }
@@ -229,6 +287,7 @@ function Get-VerificationFingerprint {
             throw "Table public.$table in $Database is not covered by the fingerprint. Review before relying on this copy."
         }
     }
+    $appData = Get-QueryResult -Database $Database -File $script:FingerprintFile
     $history = Get-QueryResult -Database $Database -Sql "SELECT CASE WHEN to_regclass('public.flyway_schema_history') IS NULL THEN 'flyway_schema_history absent' ELSE 'flyway_schema_history ' || md5(query_to_xml('SELECT * FROM public.flyway_schema_history ORDER BY installed_rank', true, false, '')::text) END"
     $fingerprint = (@($appData, "tables $tables", $history) -join "`n").Trim()
     Assert-FingerprintFormat -Fingerprint $fingerprint -Source $Database

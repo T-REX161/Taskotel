@@ -8,10 +8,7 @@ import {
   calculateProjectedWorkload,
   calculateWorkloadSummary,
   calculateDepartmentWorkloads,
-  SUPPORTED_DEPARTMENTS,
-  compareWorkloadByName,
-  sortWorkloadAlphabetically,
-} from './workloadUtils.js';
+  sortWorkloadAlphabetically } from './workloadUtils.js';
 
 describe('workloadUtils', () => {
   describe('deriveWorkloadStatus', () => {

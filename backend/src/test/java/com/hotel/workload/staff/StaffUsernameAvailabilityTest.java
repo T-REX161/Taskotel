@@ -45,13 +45,22 @@ public class StaffUsernameAvailabilityTest {
     private StaffRepository staffRepository;
     @Autowired
     private UserRepository userRepository;
+    @Autowired
+    private DepartmentRepository departmentRepository;
+    @Autowired
+    private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     private MockMvc mockMvc;
+    private String managerName;
 
     @BeforeEach
     public void setup() {
         mockMvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         cleanup();
+        // A valid Manager: active account, active Staff record, in the Front Desk department the requests below use
+        com.hotel.workload.security.ScopeFixtures fixtures = new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder);
+        managerName = PREFIX + "mgr";
+        fixtures.manager(managerName, fixtures.department("FRONT_DESK"));
     }
 
     @AfterEach
@@ -74,7 +83,7 @@ public class StaffUsernameAvailabilityTest {
     }
 
     private int create(String role, String username, String email) throws Exception {
-        return mockMvc.perform(post("/api/staff").with(user("tester").roles(role))
+        return mockMvc.perform(post("/api/staff").with(user("MANAGER".equals(role) ? managerName : "tester").roles(role))
                         .contentType(MediaType.APPLICATION_JSON).content(body(username, email)))
                 .andReturn().getResponse().getStatus();
     }
@@ -86,7 +95,7 @@ public class StaffUsernameAvailabilityTest {
 
         assertEquals(201, create("ADMIN", PREFIX + "taken", PREFIX + "taken@hotel.com"));
 
-        mockMvc.perform(get("/api/staff/username-availability").param("username", PREFIX + "taken").with(user("a").roles("MANAGER")))
+        mockMvc.perform(get("/api/staff/username-availability").param("username", PREFIX + "taken").with(user(managerName).roles("MANAGER")))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.available").value(false));
     }
 

@@ -4,14 +4,10 @@ import {
   formatDepartment,
   isAvailable,
   isActive,
-  getAvailabilityColor,
-  getStatusColor,
   formatDeactivateConfirmationMessage,
   formatRemoveConfirmationMessage,
   getStaffDisplayName,
-  compareStaffByName,
-  sortStaffAlphabetically,
-} from './staffFormatters.js';
+  sortStaffAlphabetically } from './staffFormatters.js';
 
 describe('staffFormatters', () => {
   describe('formatRemoveConfirmationMessage', () => {

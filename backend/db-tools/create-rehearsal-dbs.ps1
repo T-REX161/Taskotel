@@ -13,7 +13,10 @@
     only if every database was created and checked.
 
     Safety:
-    - Only the verified backup is accepted (SHA-256 37a58cb4...6089 and complete, clean side files).
+    - Only a verified backup is accepted: the dump's SHA-256 must equal the value recorded in its
+      wb_<stamp>.dump.sha256 sidecar, and all verification side files must be present and clean (identical
+      live and restored schema, valid seven-table fingerprint, empty restore log, no Flyway history).
+      There is no built-in default dump and no checksum constant to override.
     - Every name must match ^wb_rehearsal_\d{8}_\d{6}_(fresh|copy|dupe|collide)$, and workload_balancer,
       both existing restore-check databases, any wb_restore_check_* / wb_restored_* database and the
       PostgreSQL system databases are refused. Names are checked again right before each createdb.
@@ -25,14 +28,15 @@
     - PGPASSWORD and PGOPTIONS are restored on success and on failure.
 
 .PARAMETER Dump
-    The verified backup. Defaults to $HOME\db-backups\wb_20261020_142245.dump.
+    Path to the wb_<yyyyMMdd_HHmmss>.dump file made by backup-and-verify.ps1 (required; BACKUP VERIFIED must
+    have been printed for it).
 
 .NOTES
     Requires DB_PASSWORD in the current session. Uses DB_HOST, DB_PORT, DB_USER if set.
 #>
 [CmdletBinding()]
 param(
-    [string]$Dump = (Join-Path $HOME 'db-backups\wb_20261020_142245.dump')
+    [Parameter(Mandatory = $true)][string]$Dump
 )
 
 $ErrorActionPreference = 'Stop'

@@ -51,7 +51,7 @@ public class SupportEndServiceTest {
     @BeforeEach
     void setUp() {
         fx = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository);
-        SupportTestFixture.signInAs("manager_test", "MANAGER");
+        SupportTestFixture.signInAs("manager_test", "ADMIN"); // the global view: these tests are about support behaviour, a Manager's scope is in SupportReadDepartmentIsolationTest
         s = fx.overloaded(2, 3);
         helper = s.donors.get(0);
         task = s.tasks.get(0);
@@ -66,7 +66,13 @@ public class SupportEndServiceTest {
     }
 
     private WorkloadDto workloadOf(Staff person) {
-        return workloadService.calculateWorkload("manager_test", true).stream().filter(w -> w.getStaffId().equals(person.getId())).findFirst().orElseThrow();
+        // The global (Administrator) view: these tests are about support behaviour, not about a Manager's scope
+        SupportTestFixture.signInAs("support_admin", "ADMIN");
+        try {
+            return workloadService.calculateWorkload().stream().filter(w -> w.getStaffId().equals(person.getId())).findFirst().orElseThrow();
+        } finally {
+            SupportTestFixture.signInAs("manager_test", "ADMIN"); // the global view: these tests are about support behaviour, a Manager's scope is in SupportReadDepartmentIsolationTest
+        }
     }
 
     private SupportPlanException conflict(UUID id) {

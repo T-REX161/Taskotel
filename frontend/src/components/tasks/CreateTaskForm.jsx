@@ -1,5 +1,4 @@
 import React from 'react';
-import { formatDepartment } from './taskFormatters';
 import DepartmentOptions from '../common/DepartmentOptions';
 
 /**

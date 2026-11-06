@@ -75,9 +75,15 @@ public final class WorkloadRecommendationEngine {
         /** The free staff who may be suggested to another department (a subset of freeStaff). */
         final List<Staff> lendable = new ArrayList<>();
         final List<Task> waiting = new ArrayList<>();
+        /** Only for a donor department in a receiver-scoped run: how many tasks wait there (its task details are never loaded). */
+        Integer waitingCountOverride;
 
         Stats(Department department) {
             this.department = department;
+        }
+
+        int waitingCount() {
+            return waitingCountOverride != null ? waitingCountOverride : waiting.size();
         }
 
         int uncovered() {
@@ -112,6 +118,22 @@ public final class WorkloadRecommendationEngine {
             }
         }
 
+        classifyStaff(byCode, staff, busyStaff);
+
+        int tasksWithoutDepartment = 0;
+        for (Task task : activeTasks) {
+            if (task.getDepartment() == null) {
+                tasksWithoutDepartment++;
+                continue;
+            }
+            Stats stats = byCode.get(task.getDepartment().getCode());
+            if (stats != null && !assignedTasks.contains(task.getId())) stats.waiting.add(task);
+        }
+
+        return finish(all, null, tasksWithoutDepartment, today, now);
+    }
+
+    private static void classifyStaff(Map<String, Stats> byCode, List<Staff> staff, Set<UUID> busyStaff) {
         for (Staff member : staff) {
             Stats stats = member.getDepartment() == null ? null : byCode.get(member.getDepartment().getCode());
             if (stats == null || !member.isActive()) continue;
@@ -124,17 +146,52 @@ public final class WorkloadRecommendationEngine {
                 }
             }
         }
+    }
 
-        int tasksWithoutDepartment = 0;
-        for (Task task : activeTasks) {
-            if (task.getDepartment() == null) {
-                tasksWithoutDepartment++;
-                continue;
+    /**
+     * The recommendation for ONE receiving department (a Manager's own), with nothing about the other departments in the result. The same
+     * rules as {@link #recommend}: severity, reserve, lendability and ranking are unchanged. The inputs are deliberately narrow, so the caller
+     * never loads other departments' tasks: only the receiver's waiting tasks, the NUMBER of tasks waiting in each other department (the reserve
+     * rule needs it), and the ids of staff who hold an active assignment.
+     *
+     * <p>The result is redacted: a suggestion carries only the person's name and home department name (no id or department code), no donor
+     * impact figures, and a neutral reason, so no donor workload, free-staff or task figure can be read from it. The count of tasks without a
+     * department is not reported.
+     */
+    public static WorkloadRecommendationsDto recommendForReceiver(Department receiver,
+                                                                  List<Department> departments,
+                                                                  List<Staff> staff,
+                                                                  List<Task> receiverWaitingTasks,
+                                                                  Map<String, Integer> waitingCountByDepartment,
+                                                                  Set<UUID> busyStaff,
+                                                                  LocalDate today,
+                                                                  LocalDateTime now) {
+        Map<String, Stats> byCode = new HashMap<>();
+        List<Stats> all = new ArrayList<>();
+        for (Department department : departments) {
+            if (department.isActive()) {
+                Stats stats = new Stats(department);
+                byCode.put(department.getCode(), stats);
+                all.add(stats);
             }
-            Stats stats = byCode.get(task.getDepartment().getCode());
-            if (stats != null && !assignedTasks.contains(task.getId())) stats.waiting.add(task);
         }
+        Stats receiving = receiver == null ? null : byCode.get(receiver.getCode());
+        if (receiving == null) {
+            return new WorkloadRecommendationsDto(now, List.of(), List.of(), limitations(0));
+        }
+        classifyStaff(byCode, staff, busyStaff);
+        for (Stats stats : all) {
+            if (stats != receiving) stats.waitingCountOverride = waitingCountByDepartment.getOrDefault(stats.department.getCode(), 0);
+        }
+        for (Task task : receiverWaitingTasks) {
+            if (task.getDepartment() != null && receiving.department.getCode().equals(task.getDepartment().getCode())) receiving.waiting.add(task);
+        }
+        return finish(all, receiving.department.getCode(), 0, today, now);
+    }
 
+    /** Ranks the pressured departments and suggests donors. {@code receiverCode} null = every department (Admin); otherwise only that one, redacted. */
+    private static WorkloadRecommendationsDto finish(List<Stats> all, String receiverCode, int tasksWithoutDepartment, LocalDate today, LocalDateTime now) {
+        boolean redact = receiverCode != null;
         Comparator<Staff> byName = Comparator.comparing((Staff s) -> String.valueOf(s.getName()).toLowerCase()).thenComparing(s -> String.valueOf(s.getId()));
         Comparator<Task> mostImportantFirst = MOST_IMPORTANT_FIRST;
         for (Stats stats : all) {
@@ -145,7 +202,7 @@ public final class WorkloadRecommendationEngine {
 
         List<Stats> pressured = new ArrayList<>();
         for (Stats stats : all) {
-            if (stats.uncovered() > 0) pressured.add(stats);
+            if (stats.uncovered() > 0 && (receiverCode == null || receiverCode.equals(stats.department.getCode()))) pressured.add(stats);
         }
         pressured.sort(Comparator
                 .comparing((Stats s) -> severity(s, today))
@@ -173,12 +230,18 @@ public final class WorkloadRecommendationEngine {
                 int minutesAfter = minutes(uncovered.subList(index + 1, uncovered.size()));
                 int freeBefore = donor.freeStaff.size();
                 int availableBefore = donor.availableStaff.size();
-                DonorImpact donorImpact = new DonorImpact(freeBefore, freeBefore - 1, availableBefore, availableBefore - 1, donor.waiting.size());
+                DonorImpact donorImpact = new DonorImpact(freeBefore, freeBefore - 1, availableBefore, availableBefore - 1, donor.waitingCount());
                 ReceiverImpact receiverImpact = new ReceiverImpact(
                         uncoveredBefore - index, uncoveredBefore - index - 1,
                         minutes(uncovered.subList(index, uncovered.size())), minutesAfter);
-                suggestions.add(new Suggestion(chosen.getId(), chosen.getName(), donor.department.getCode(), donor.department.getName(),
-                        covers.getTitle(), donorImpact, receiverImpact, suggestionReasons(donor, freeBefore, covers)));
+                if (redact) {
+                    // Only the minimum a Manager needs to judge a helper: name and home department name. Nothing about the donor's workload.
+                    suggestions.add(new Suggestion(null, chosen.getName(), null, donor.department.getName(), covers.getTitle(), null, receiverImpact,
+                            List.of("Currently free and available to help.", couldTakeReason(covers))));
+                } else {
+                    suggestions.add(new Suggestion(chosen.getId(), chosen.getName(), donor.department.getCode(), donor.department.getName(),
+                            covers.getTitle(), donorImpact, receiverImpact, suggestionReasons(donor, freeBefore, covers)));
+                }
                 // The chosen person leaves the lending department's lists, so later receivers see what is really left
                 donor.lendable.remove(chosen);
                 donor.freeStaff.remove(chosen);
@@ -213,8 +276,8 @@ public final class WorkloadRecommendationEngine {
             int free = candidate.freeStaff.size();
             int freeAfter = free - 1;
             // Reserve rule: at least one free person must remain, whether or not anything is waiting
-            if (candidate.lendable.isEmpty() || freeAfter < Math.max(1, candidate.waiting.size())) continue;
-            int spare = freeAfter - candidate.waiting.size();
+            if (candidate.lendable.isEmpty() || freeAfter < Math.max(1, candidate.waitingCount())) continue;
+            int spare = freeAfter - candidate.waitingCount();
             if (spare > bestSpare || (spare == bestSpare && best != null
                     && candidate.department.getName().compareToIgnoreCase(best.department.getName()) < 0)) {
                 best = candidate;
@@ -283,13 +346,17 @@ public final class WorkloadRecommendationEngine {
     private static List<String> suggestionReasons(Stats donor, int freeBefore, Task covers) {
         List<String> reasons = new ArrayList<>();
         reasons.add(donor.department.getName() + " has " + freeBefore + " available staff with no active task and "
-                + plural(donor.waiting.size(), "waiting task") + "; lending one leaves " + (freeBefore - 1)
+                + plural(donor.waitingCount(), "waiting task") + "; lending one leaves " + (freeBefore - 1)
                 + " free, so it keeps a free person in reserve and still covers its own waiting work.");
+        reasons.add(couldTakeReason(covers));
+        return reasons;
+    }
+
+    private static String couldTakeReason(Task covers) {
         String detail = (covers.getPriority() == null ? "" : covers.getPriority() + " priority, ")
                 + (covers.getEstimatedDuration() == null ? "no estimated duration" : covers.getEstimatedDuration() + " min")
                 + (covers.getDueDate() == null ? "" : ", due " + covers.getDueDate());
-        reasons.add("Could take \"" + covers.getTitle() + "\" (" + detail + ") if support were arranged.");
-        return reasons;
+        return "Could take \"" + covers.getTitle() + "\" (" + detail + ") if support were arranged.";
     }
 
     private static List<String> limitations(int tasksWithoutDepartment) {

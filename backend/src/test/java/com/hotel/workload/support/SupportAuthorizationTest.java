@@ -44,6 +44,7 @@ public class SupportAuthorizationTest {
     @Autowired private DepartmentRepository departmentRepository;
     @Autowired private SupportAssignmentRepository supportRepository;
     @Autowired private JwtUtil jwt;
+    @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
     private final ObjectMapper json = new ObjectMapper();
     private MockMvc mvc;
     private SupportTestFixture fx;
@@ -62,6 +63,14 @@ public class SupportAuthorizationTest {
         return "Bearer " + jwt.generateToken(user.getUsername(), role);
     }
 
+    /** A valid Manager of the department (active account, active Staff record in it): the read endpoints resolve a Manager's department. */
+    private String managerToken(String name, com.hotel.workload.staff.Department department) {
+        String bearer = token(name, Role.MANAGER, true);
+        new com.hotel.workload.security.ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder)
+                .staffRecord(name + fx.tag.toLowerCase(), Role.MANAGER, department);
+        return bearer;
+    }
+
     private MockHttpServletRequestBuilder req(HttpMethod method, String url, String bearer, Object body) throws Exception {
         MockHttpServletRequestBuilder b = request(method, url);
         if (bearer != null) b.header("Authorization", bearer);
@@ -75,15 +84,20 @@ public class SupportAuthorizationTest {
     }
 
     @Test
-    @DisplayName("Admin and Manager can read options, preview, confirm and read the history; a bad plan is a 409 with the problems")
+    @DisplayName("Admin and Manager can read options, preview and read the history; only the Admin can confirm (a bad plan is a 409 with the problems); a Manager's confirm is 403")
     void adminAndManagerAreAuthorized() throws Exception {
-        for (String bearer : new String[]{token("sup_admin", Role.ADMIN, true), token("sup_mgr", Role.MANAGER, true)}) {
+        String adminBearer = token("sup_admin", Role.ADMIN, true);
+        for (String bearer : new String[]{adminBearer, managerToken("sup_mgr", com.hotel.workload.staff.TestDepartments.HOUSEKEEPING)}) {
             mvc.perform(req(HttpMethod.GET, "/api/support/options?receivingDepartment=HOUSEKEEPING", bearer, null)).andExpect(status().isOk());
             mvc.perform(req(HttpMethod.HEAD, "/api/support/options?receivingDepartment=HOUSEKEEPING", bearer, null)).andExpect(status().isOk());
             mvc.perform(req(HttpMethod.POST, "/api/support/preview", bearer, randomPlan()))
                     .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.problems").isNotEmpty());
-            mvc.perform(req(HttpMethod.POST, "/api/support/assignments", bearer, randomPlan()))
-                    .andExpect(status().isConflict()).andExpect(jsonPath("$.problems").isNotEmpty()).andExpect(jsonPath("$.message").isNotEmpty());
+            if (bearer.equals(adminBearer)) {
+                mvc.perform(req(HttpMethod.POST, "/api/support/assignments", bearer, randomPlan()))
+                        .andExpect(status().isConflict()).andExpect(jsonPath("$.problems").isNotEmpty()).andExpect(jsonPath("$.message").isNotEmpty());
+            } else {
+                mvc.perform(req(HttpMethod.POST, "/api/support/assignments", bearer, randomPlan())).andExpect(status().isForbidden());
+            }
             mvc.perform(req(HttpMethod.GET, "/api/support/assignments", bearer, null)).andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
             mvc.perform(req(HttpMethod.GET, "/api/support/assignments?status=ACTIVE", bearer, null)).andExpect(status().isOk());
         }
@@ -121,7 +135,7 @@ public class SupportAuthorizationTest {
         var s = fx.overloaded(2, 3);
         Object plan = java.util.Map.of("receivingDepartment", s.receiving.getCode(),
                 "items", java.util.List.of(java.util.Map.of("staffId", s.donors.get(0).getId().toString(), "taskId", s.tasks.get(0).getId().toString())));
-        String created = mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_mk", Role.MANAGER, true), plan))
+        String created = mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_mk", Role.ADMIN, true), plan))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         String id = json.readTree(created).get(0).get("id").asText();
         String url = "/api/support/assignments/" + id + "/end";
@@ -131,7 +145,7 @@ public class SupportAuthorizationTest {
         mvc.perform(req(HttpMethod.POST, url, "Bearer " + jwt.generateToken("sup_st" + fx.tag.toLowerCase(), Role.ADMIN), null)).andExpect(status().isForbidden());
         assertEquals(SupportStatus.ACTIVE, supportRepository.findById(UUID.fromString(id)).orElseThrow().getStatus(), "refused calls ended nothing");
 
-        mvc.perform(req(HttpMethod.POST, url, token("sup_mgr_end", Role.MANAGER, true), null))
+        mvc.perform(req(HttpMethod.POST, url, managerToken("sup_mgr_end", s.receiving), null))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"))
                 .andExpect(jsonPath("$.endReason").value("MANUALLY_ENDED"))
@@ -168,18 +182,26 @@ public class SupportAuthorizationTest {
         mvc.perform(req(HttpMethod.POST, "/api/support/assignments", staff, acked)).andExpect(status().isForbidden());
         assertEquals(0, supportRepository.findAll().stream().filter(x -> x.getReceivingDepartmentCode().equals(s.receiving.getCode())).count());
 
-        for (String bearer : new String[]{token("sup_ov_mgr", Role.MANAGER, true), token("sup_ov_adm", Role.ADMIN, true)}) {
-            mvc.perform(req(HttpMethod.POST, "/api/support/preview", bearer, plain))
-                    .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.canOverrideReserve").value(true))
-                    .andExpect(jsonPath("$.problems[0].code").value("DONOR_RESERVE"));
-            mvc.perform(req(HttpMethod.POST, "/api/support/preview", bearer, acked))
-                    .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(true)).andExpect(jsonPath("$.warnings[0].code").value("RESERVE_OVERRIDE"))
-                    .andExpect(jsonPath("$.donors[0].after.freeStaff").value(0));
-        }
+        String overrideAdmin = token("sup_ov_adm", Role.ADMIN, true);
+        mvc.perform(req(HttpMethod.POST, "/api/support/preview", overrideAdmin, plain))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.canOverrideReserve").value(true))
+                .andExpect(jsonPath("$.problems[0].code").value("DONOR_RESERVE"));
+        mvc.perform(req(HttpMethod.POST, "/api/support/preview", overrideAdmin, acked))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(true)).andExpect(jsonPath("$.warnings[0].code").value("RESERVE_OVERRIDE"))
+                .andExpect(jsonPath("$.donors[0].after.freeStaff").value(0));
+        // A Manager of the receiving department gets the same verdicts, but never the donor department's figures (Step 2G-2)
+        String overrideManager = managerToken("sup_ov_mgr", s.receiving);
+        mvc.perform(req(HttpMethod.POST, "/api/support/preview", overrideManager, plain))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.canOverrideReserve").value(false))
+                .andExpect(jsonPath("$.problems[0].code").value("DONOR_RESERVE")).andExpect(jsonPath("$.donors").isEmpty());
+        mvc.perform(req(HttpMethod.POST, "/api/support/preview", overrideManager, acked))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(true)).andExpect(jsonPath("$.warnings[0].code").value("RESERVE_OVERRIDE"))
+                .andExpect(jsonPath("$.donors").isEmpty());
         // the plain confirmation is still refused; the acknowledged one by a Manager is accepted and reports the override
-        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_ov_mgr2", Role.MANAGER, true), plain))
+        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", overrideManager, acked)).andExpect(status().isForbidden());   // a Manager cannot confirm (Step 2G-3)
+        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_ov_adm2", Role.ADMIN, true), plain))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.problems[0].code").value("DONOR_RESERVE"));
-        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_ov_mgr3", Role.MANAGER, true), acked))
+        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_ov_adm3", Role.ADMIN, true), acked))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$[0].reserveOverride").value(true))
                 .andExpect(jsonPath("$[0].homeDepartmentCode").value(s.donor.getCode()));
     }
@@ -190,15 +212,15 @@ public class SupportAuthorizationTest {
         var s = fx.overloaded(2, 3);
         Object plan = java.util.Map.of("receivingDepartment", s.receiving.getCode(),
                 "items", java.util.List.of(java.util.Map.of("staffId", s.donors.get(0).getId().toString(), "taskId", s.tasks.get(0).getId().toString())));
-        String created = mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_ar_mk", Role.MANAGER, true), plan))
+        String created = mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_ar_mk", Role.ADMIN, true), plan))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         String id = json.readTree(created).get(0).get("id").asText();
         String archive = "/api/support/assignments/" + id + "/archive";
 
         // active: even a manager is refused, and nothing changes
-        mvc.perform(req(HttpMethod.POST, archive, token("sup_ar_m1", Role.MANAGER, true), null))
+        mvc.perform(req(HttpMethod.POST, archive, managerToken("sup_ar_m1", s.receiving), null))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.problems[0].code").value("SUPPORT_ACTIVE"));
-        mvc.perform(req(HttpMethod.POST, "/api/support/assignments/" + id + "/end", token("sup_ar_m2", Role.MANAGER, true), null)).andExpect(status().isOk());
+        mvc.perform(req(HttpMethod.POST, "/api/support/assignments/" + id + "/end", managerToken("sup_ar_m2", s.donor), null)).andExpect(status().isOk());
 
         // unauthorized
         mvc.perform(req(HttpMethod.POST, archive, token("sup_ar_st", Role.STAFF, true), null)).andExpect(status().isForbidden());
@@ -207,7 +229,7 @@ public class SupportAuthorizationTest {
         assertEquals(null, supportRepository.findById(UUID.fromString(id)).orElseThrow().getArchivedAt(), "refused calls archived nothing");
 
         // authorized
-        mvc.perform(req(HttpMethod.POST, archive, token("sup_ar_m3", Role.MANAGER, true), null))
+        mvc.perform(req(HttpMethod.POST, archive, managerToken("sup_ar_m3", s.donor), null))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.archivedAt").isNotEmpty()).andExpect(jsonPath("$.status").value("CANCELLED"));
         mvc.perform(req(HttpMethod.POST, archive, token("sup_ar_ad", Role.ADMIN, true), null))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.problems[0].code").value("ALREADY_ARCHIVED"));
@@ -241,7 +263,7 @@ public class SupportAuthorizationTest {
     }
 
     @Test
-    @DisplayName("A Manager can confirm a real plan over HTTP; the same call by Staff creates nothing")
+    @DisplayName("An Admin can confirm a real plan over HTTP; the same call by Staff or a Manager creates nothing")
     void confirmOverHttp() throws Exception {
         var s = fx.overloaded(2, 3);
         Object plan = java.util.Map.of("receivingDepartment", s.receiving.getCode(),
@@ -250,7 +272,10 @@ public class SupportAuthorizationTest {
         mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_staff2", Role.STAFF, true), plan)).andExpect(status().isForbidden());
         assertEquals(0, supportRepository.findAll().stream().filter(x -> x.getReceivingDepartmentCode().equals(s.receiving.getCode())).count());
 
-        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_mgr2", Role.MANAGER, true), plan))
+        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", managerToken("sup_mgr_nc", s.receiving), plan)).andExpect(status().isForbidden());
+        assertEquals(0, supportRepository.findAll().stream().filter(x -> x.getReceivingDepartmentCode().equals(s.receiving.getCode())).count(), "a Manager's confirm created nothing");
+
+        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_mgr2", Role.ADMIN, true), plan))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$[0].status").value("ACTIVE"))
                 .andExpect(jsonPath("$[0].homeDepartmentCode").value(s.donor.getCode()))

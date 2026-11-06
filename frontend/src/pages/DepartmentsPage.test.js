@@ -44,8 +44,9 @@ describe('DepartmentsPage', () => {
     assert.ok(cards.includes('Inactive'), 'Inactive departments are marked');
   });
 
-  it('shows Add Department only to ADMIN and MANAGER, and opens the form modal', () => {
-    assert.ok(pageSource.includes("role === 'ADMIN' || role === 'MANAGER'"), 'Role gate (the server enforces it too)');
+  it('shows Add Department only to ADMIN, and opens the form modal', () => {
+    assert.ok(pageSource.includes("const canManage = role === 'ADMIN';"), 'Role gate: ADMIN only (the server enforces it too)');
+    assert.ok(!pageSource.includes("'MANAGER'") && !pageSource.includes("'STAFF'"), 'MANAGER and STAFF are not part of any management gate');
     assert.ok(/\{canManage && \(\s*<button[^>]*onClick=\{openCreate\}/.test(pageSource), 'The button is behind the role gate and opens the dialog');
     assert.ok(pageSource.includes('<PlusIcon') && pageSource.includes('Add Department'));
     assert.ok(pageSource.includes('bg-emerald-600'), 'Emerald button');
@@ -61,7 +62,8 @@ describe('DepartmentsPage', () => {
   it('the card menu only offers an action that is really implemented (edit)', () => {
     assert.ok(pageSource.includes('aria-haspopup="menu"') && pageSource.includes('Edit department'));
     assert.ok(pageSource.includes('onClick={() => openEdit(dept)}'));
-    assert.ok(/\{canManage && dept\.code && \(/.test(pageSource), 'Menu is only for managers');
+    assert.ok(/\{canManage && dept\.code && \(/.test(pageSource), 'The card menu (edit and remove) is only for ADMIN');
+    assert.ok(!/canManage\s*=\s*[^;]*MANAGER/.test(pageSource), 'No department control is shown to MANAGER');
   });
 });
 

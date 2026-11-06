@@ -6,12 +6,8 @@ import { fileURLToPath } from 'node:url';
 import {
   calculateWorkloadSummary,
   calculateDepartmentWorkloads,
-  calculateWorkloadPercentage,
-  deriveWorkloadStatus,
   SUPPORTED_DEPARTMENTS,
-  sortWorkloadAlphabetically,
-  compareWorkloadByName,
-} from '../utils/workloadUtils.js';
+  sortWorkloadAlphabetically } from '../utils/workloadUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

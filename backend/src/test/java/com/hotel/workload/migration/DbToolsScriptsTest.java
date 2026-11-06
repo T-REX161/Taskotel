@@ -150,7 +150,7 @@ public class DbToolsScriptsTest {
     public void testOutputsAreValidatedBeforeCreation() throws IOException {
         String backup = code(BACKUP);
         int insideCheck = indexOrFail(backup, "Test-IsInsideFolder -Path $outputPath -Folder $projectRoot", "backup");
-        int fileCheck = indexOrFail(backup, "Assert-FilesDoNotExist @($dumpFile, $liveSchemaFile, $liveFingerprint, $checkSchemaFile, $restoreErrorLog)", "backup");
+        int fileCheck = indexOrFail(backup, "Assert-FilesDoNotExist @($dumpFile, $dumpChecksumFile, $liveSchemaFile, $liveFingerprint, $checkSchemaFile, $restoreErrorLog)", "backup");
         int mkdir = indexOrFail(backup, "New-Item -ItemType Directory", "backup");
         int firstConnection = indexOrFail(backup, "Save-PgEnvironment", "backup");
         assertTrue(insideCheck < mkdir && fileCheck < mkdir && mkdir < firstConnection,
@@ -183,7 +183,7 @@ public class DbToolsScriptsTest {
             assertTrue(Pattern.compile("(?m)^\\s*throw\\s*$").matcher(handler).find(), script + ": the failure must be re-thrown, not swallowed");
         }
         String backup = code(BACKUP);
-        for (String file : List.of("$dumpFile", "$liveSchemaFile", "$liveFingerprint", "$restoreErrorLog", "$checkSchemaFile")) {
+        for (String file : List.of("$dumpFile", "$dumpChecksumFile", "$liveSchemaFile", "$liveFingerprint", "$restoreErrorLog", "$checkSchemaFile")) {
             assertTrue(backup.contains("Register-File " + file), "backup must register " + file + " before creating it");
         }
         assertTrue(backup.indexOf("Register-File $dumpFile") < backup.indexOf("'-Fc', '-f', $dumpFile"));
@@ -253,23 +253,140 @@ public class DbToolsScriptsTest {
     }
 
     @Test
-    @DisplayName("fingerprint.sql covers the four application tables with counts and MD5 only; the scripts cover every other table")
+    @DisplayName("fingerprint.sql covers all seven application tables in a fixed order with counts and MD5 only; the scripts cover every other table")
     public void testFingerprintCoversApplicationTablesWithoutRowContents() throws IOException {
         String fingerprint = sql(DB_TOOLS.resolve("fingerprint.sql"));
-        for (String table : List.of("assignments", "staff", "tasks", "users")) {
-            String line = "SELECT '" + table + " ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), ''))";
-            assertTrue(fingerprint.contains(line), "fingerprint.sql must hash " + table + " as count + MD5 only");
+        List<String> tables = List.of("assignments", "departments", "notification_preferences", "staff", "support_assignments", "tasks", "users");
+        int previous = -1;
+        for (String table : tables) {
+            String hashExpression = "'" + table + " ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), ''))";
+            assertTrue(fingerprint.contains(hashExpression), "fingerprint.sql must hash " + table + " as count + MD5 only, in id order");
             assertEquals(1, Pattern.compile("FROM public\\." + table + " t\\b").matcher(fingerprint).results().count());
+            int at = fingerprint.indexOf(hashExpression);
+            assertTrue(at > previous, "Tables must appear in the fixed order " + tables);
+            previous = at;
         }
         assertFalse(fingerprint.contains("SELECT *"));
-        assertEquals(4, Pattern.compile("(?i)\\bFROM public\\.").matcher(fingerprint).results().count(), "Only the four application tables are read");
+        assertEquals(7, Pattern.compile("(?i)\\bFROM public\\.").matcher(fingerprint).results().count(), "Only the seven application tables are read");
+        assertTrue(fingerprint.contains("string_agg(line, E'\\n' ORDER BY ord)"), "Lines are ordered by a fixed ordinal, not by collation-dependent text");
+        assertEquals(7, Pattern.compile("\\bSELECT (\\d+)(?: AS ord)?, '").matcher(fingerprint).results().count(), "Seven ordinal-numbered lines");
 
         String common = code(COMMON);
-        assertAssignment(common, "$script:AppTables", "@('assignments', 'staff', 'tasks', 'users')");
-        assertAssignment(common, "$script:KnownTables", "@('assignments', 'flyway_schema_history', 'staff', 'tasks', 'users')");
+        assertAssignment(common, "$script:AppTables", "@('assignments', 'departments', 'notification_preferences', 'staff', 'support_assignments', 'tasks', 'users')");
+        assertAssignment(common, "$script:KnownTables", "@('assignments', 'departments', 'flyway_schema_history', 'notification_preferences', 'staff', 'support_assignments', 'tasks', 'users')");
         assertTrue(common.contains("is not covered by the fingerprint"), "Any other table in public must stop the verification");
+        assertTrue(common.contains("is missing in $Database"), "A missing application table must stop the verification");
+        assertTrue(common.contains("$script:AppTables.Count + 2"), "The fingerprint is the application tables plus the table list and the Flyway line (nine lines)");
         assertTrue(common.contains("md5(query_to_xml('SELECT * FROM public.flyway_schema_history ORDER BY installed_rank'"),
                 "Flyway history rows must be fingerprinted (MD5 only) when present");
+        int tableCheck = common.indexOf("is missing in $Database");
+        int fingerprintRun = common.indexOf("Get-QueryResult -Database $Database -File $script:FingerprintFile");
+        assertTrue(tableCheck > 0 && tableCheck < fingerprintRun, "The table list is checked before the fingerprint query runs");
+    }
+
+    @Test
+    @DisplayName("fingerprint-original-tables.sql keeps the four-table fingerprint for the opt-in migration tests, which start before V4")
+    public void testOriginalTablesFingerprintIsKeptForMigrationTests() throws IOException {
+        String original = sql(DB_TOOLS.resolve("fingerprint-original-tables.sql"));
+        for (String table : List.of("assignments", "staff", "tasks", "users")) {
+            assertTrue(original.contains("'" + table + " ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), ''))"));
+        }
+        assertEquals(4, Pattern.compile("(?i)\\bFROM public\\.").matcher(original).results().count(), "Only the four original tables");
+        assertFalse(original.contains("SELECT *"));
+        for (String it : List.of("PostgresMigrationIT.java", "DepartmentMigrationIT.java")) {
+            String source = Files.readString(Path.of("src/test/java/com/hotel/workload/migration").resolve(it));
+            assertTrue(source.contains("Path.of(\"db-tools/fingerprint-original-tables.sql\")"), it + " must keep using the four-table fingerprint");
+            assertFalse(source.contains("Path.of(\"db-tools/fingerprint.sql\")"), it + " must not use the seven-table fingerprint (V4's tables do not exist yet on its copies)");
+        }
+    }
+
+    @Test
+    @DisplayName("Backup records the dump's SHA-256 in a sidecar, validates it before writing, and re-checks it before success")
+    public void testBackupRecordsAndChecksDumpChecksum() throws IOException {
+        String backup = code(BACKUP);
+        String common = code(COMMON);
+        assertAssignment(backup, "$dumpChecksumFile", "\"$base.dump.sha256\"");
+        int pathCheck = indexOrFail(backup, "Assert-FilesDoNotExist @($dumpFile, $dumpChecksumFile", "backup");
+        int createFolder = indexOrFail(backup, "New-Item -ItemType Directory", "backup");
+        assertTrue(pathCheck < createFolder, "The checksum file path is validated with the other outputs before anything is created");
+        int dump = indexOrFail(backup, "'-Fc', '-f', $dumpFile", "backup");
+        int register = indexOrFail(backup, "Register-File $dumpChecksumFile", "backup");
+        int write = indexOrFail(backup, "WriteAllText($dumpChecksumFile", "backup");
+        assertTrue(dump < register && register < write, "Register the sidecar, then write it, after the dump exists");
+        assertTrue(backup.contains("Format-Sha256Sidecar -Hash (Get-DumpSha256 $dumpFile)"), "The recorded hash is computed from the dump file");
+        int recheck = indexOrFail(backup, "Assert-DumpMatchesSidecar -DumpPath $dumpFile -SidecarPath $dumpChecksumFile", "backup");
+        int fingerprintCheck = indexOrFail(backup, "The data fingerprint of $checkDb", "backup");
+        int success = indexOrFail(backup, "BACKUP VERIFIED", "backup");
+        assertTrue(fingerprintCheck < recheck && recheck < success, "The checksum is re-checked after the comparisons and before success is printed");
+        assertFalse(backup.contains("-Force"));
+        assertTrue(common.contains("[System.IO.File]::WriteAllText") || backup.contains("[System.IO.File]::WriteAllText"));
+        for (String fn : List.of("function Get-DumpSha256", "function Format-Sha256Sidecar", "function Read-Sha256Sidecar", "function Assert-DumpMatchesSidecar")) {
+            assertTrue(common.contains(fn), "DbToolsCommon.ps1 must define " + fn);
+        }
+        assertTrue(common.contains("-Algorithm SHA256"));
+        assertTrue(common.contains("^(?<hash>[0-9a-f]{64})  (?<name>wb_\\d{8}_\\d{6}\\.dump)$"), "The sidecar must be one strict line: <sha256>  <dump file name>");
+        assertFalse(Pattern.compile("(?im)^.*\\bWrite-(Host|Output|Warning)\\b.*\\$hash\\b.*$").matcher(common).find(), "The helpers print nothing");
+    }
+
+    @Test
+    @DisplayName("Restore checks the dump against its SHA-256 sidecar before connecting to anything")
+    public void testRestoreChecksDumpChecksumFirst() throws IOException {
+        String restore = code(RESTORE);
+        assertAssignment(restore, "$dumpChecksumFile", "\"$base.dump.sha256\"");
+        assertTrue(restore.contains("foreach ($f in @($expectedSchemaFile, $expectedPrintFile, $dumpChecksumFile))"), "The sidecar is a required side file");
+        int check = indexOrFail(restore, "Assert-DumpMatchesSidecar -DumpPath $Dump -SidecarPath $dumpChecksumFile", "restore");
+        assertTrue(check < indexOrFail(restore, "Save-PgEnvironment", "restore"), "The checksum is verified before any connection");
+        assertTrue(check < indexOrFail(restore, "createdb.exe", "restore"));
+    }
+
+    @Test
+    @DisplayName("Inline SQL passed to psql has no double quotes (PowerShell 5.1 strips them), and the table list is ordered by bytes")
+    public void testInlineSqlSurvivesPowerShellArgumentPassing() throws IOException {
+        for (Path script : SCRIPTS) {
+            String body = code(script);
+            Matcher inline = Pattern.compile("-Sql\\s+\"((?:[^\"`]|\"\"|`.)*)\"").matcher(body);
+            while (inline.find()) {
+                String query = inline.group(1);
+                assertFalse(query.contains("\"\"") || query.contains("`\""),
+                        script + ": inline SQL must not contain an escaped double quote (PowerShell drops it before psql sees it): " + query);
+            }
+            assertFalse(Pattern.compile("(?i)\\bCOLLATE\\b").matcher(body).find(), script + ": no COLLATE in inline SQL (a quoted collation name loses its quotes)");
+        }
+        String common = code(COMMON);
+        assertTrue(common.contains("ORDER BY convert_to(relname::text, 'UTF8')"), "The table list is ordered by its UTF-8 bytes");
+        assertTrue(common.contains("if ($Sql -and $Sql.Contains('\"'))") && common.contains("must not contain double quotes"),
+                "Get-QueryResult must refuse inline SQL containing a double quote");
+        int guard = common.indexOf("$Sql.Contains('\"')");
+        int psql = common.indexOf("& (Join-Path $script:PgBin 'psql.exe') @script:Conn");
+        assertTrue(guard > 0 && guard < psql, "The guard runs before psql is started");
+        assertFalse(sql(DB_TOOLS.resolve("fingerprint.sql")).contains("COLLATE"), "fingerprint.sql orders by an ordinal, not by collation");
+    }
+
+    @Test
+    @DisplayName("The fingerprint and checksum PowerShell tests pass (Windows only)")
+    public void testFingerprintAndChecksumPureFunctionTestsPass() throws Exception {
+        Path tests = DB_TOOLS.resolve("tests").resolve("FingerprintAndChecksum.Tests.ps1");
+        assertTrue(Files.exists(tests));
+        for (byte b : Files.readAllBytes(tests)) {
+            assertTrue(b >= 0, "FingerprintAndChecksum.Tests.ps1 must be ASCII only");
+        }
+        String body = code(tests);
+        // It may inspect the text of Get-QueryResult / Get-VerificationFingerprint (Get-Command ...ScriptBlock), but never call them
+        assertFalse(Pattern.compile("(?i)(pg_dump|pg_restore|createdb|dropdb|Invoke-Pg\\b|Invoke-PgRestoreLogged|Assert-PgTools|Start-Process|Get-QueryResult\\s+-|Get-VerificationFingerprint\\s+-|\\bpsql(\\.exe)?\\s+-)").matcher(body).find(),
+                "The pure-function tests must not call database tools or connect to anything");
+        assertTrue(body.contains("(Get-Command Get-QueryResult).ScriptBlock"), "The guard test reads the function text instead of calling it");
+        assertTrue(body.contains("Remove-Item -LiteralPath $tempDir -Recurse -Force"), "It may only remove its own temp folder");
+        boolean windows = System.getProperty("os.name", "").toLowerCase().contains("windows");
+        org.junit.jupiter.api.Assumptions.assumeTrue(windows, "Windows PowerShell is only available on Windows");
+        Process process = new ProcessBuilder("powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                "-File", tests.toAbsolutePath().toString())
+                .redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertTrue(process.waitFor(120, java.util.concurrent.TimeUnit.SECONDS), "PowerShell tests timed out");
+        assertEquals(0, process.exitValue(), "FingerprintAndChecksum.Tests.ps1 failed:\n" + output);
+        assertTrue(output.contains("ALL PASSED"), output);
+        assertFalse(output.contains("FAIL "), output);
     }
 
     // ── Schema normalization of the two equivalent enum CHECK forms (P4a-2 fix) ──
@@ -384,16 +501,63 @@ public class DbToolsScriptsTest {
     public void testPreflightPrintsNoRowContents() throws IOException {
         String preflight = sql(DB_TOOLS.resolve("preflight.sql"));
         assertFalse(preflight.contains("SELECT *"));
-        Matcher reads = Pattern.compile("(?im)^.*\\bFROM\\s+public\\.(users|staff|tasks|assignments)\\b.*$").matcher(preflight);
+        Matcher reads = Pattern.compile("(?im)^.*\\bFROM\\s+public\\.(users|staff|tasks|assignments|departments|support_assignments|notification_preferences)\\b.*$").matcher(preflight);
         int count = 0;
         while (reads.find()) {
             count++;
             String line = reads.group();
-            assertTrue(line.contains("count(") || line.contains("SELECT 1 FROM public."),
+            assertTrue(line.contains("count(") || line.contains("SELECT 1 FROM public.") || line.contains("max(installed_rank)"),
                     "preflight.sql may only count rows in application tables: " + line.trim());
         }
         assertTrue(count > 0);
         assertTrue(read(DB_TOOLS.resolve("preflight.sql")).contains("$savedPassword = $env:PGPASSWORD"),
                 "The documented run command must restore previous environment variables");
+    }
+
+    @Test
+    @DisplayName("preflight.sql inspects all seven tables and the V1-V14 state, is strictly read-only, and checks read-only at both ends")
+    public void testPreflightCoversTheCurrentSchemaAndIsReadOnly() throws IOException {
+        String preflight = sql(DB_TOOLS.resolve("preflight.sql"));
+        // Every application table is listed for presence and row count
+        for (String table : List.of("assignments", "departments", "notification_preferences", "staff", "support_assignments", "tasks", "users")) {
+            assertTrue(preflight.contains("('" + table + "')"), "S2 must list " + table);
+            assertTrue(preflight.contains("'" + table + "'"), "preflight.sql must mention " + table);
+        }
+        assertTrue(preflight.contains("'SELECT count(*) AS c FROM public.' || quote_ident(e.name)"), "Row counts for every table come from count(*) only");
+        // Sections for every kind of inspection that was asked for
+        for (String section : List.of("S0. Session", "S2. The seven application tables", "S3. Flyway history", "S4. Columns", "S5. Constraints",
+                "S6. Indexes", "S7. V1 objects", "S8. V3 prerequisites", "S9. V4 state", "S10. V5/V6/V7 state", "S11. Columns added by V7-V11",
+                "S12. V12 state", "S13. Cross-table references", "S14. Read-only proof")) {
+            assertTrue(read(DB_TOOLS.resolve("preflight.sql")).contains(section), "Missing preflight section: " + section);
+        }
+        // Constraint and index detail, including delete behaviour
+        assertTrue(preflight.contains("confdeltype") && preflight.contains("confupdtype") && preflight.contains("convalidated"));
+        assertTrue(preflight.contains("FROM pg_constraint") && preflight.contains("FROM pg_indexes") && preflight.contains("FROM information_schema.columns"));
+        assertTrue(preflight.contains("column_default") && preflight.contains("is_nullable"));
+        // The migration objects it must report on
+        for (String object : List.of("uk_assignments_task_id", "uk_departments_code", "fk_staff_department_code", "fk_tasks_department_code",
+                "idx_staff_department", "idx_tasks_department", "ck_support_assignments_end_reason", "uk_support_assignments_active_staff",
+                "uk_support_assignments_active_task", "uk_notification_preferences_user_category", "ck_notification_preferences_category",
+                "flyway_schema_history", "credentials_setup_required", "MANUALLY_ENDED")) {
+            assertTrue(preflight.contains(object), "preflight.sql must report on " + object);
+        }
+        for (String column : List.of("archived_at", "profile_image_url", "display_name", "last_login_at", "password_changed_at", "theme_preference",
+                "date_format", "time_format", "pending_email", "phone")) {
+            assertTrue(preflight.contains("'" + column + "'"), "S11 must report the column " + column);
+        }
+        // Strictly read-only: no statement that changes anything, and no reading of row contents
+        assertFalse(Pattern.compile("(?im)^\\s*(CREATE|ALTER|DROP|TRUNCATE|INSERT|UPDATE|DELETE|GRANT|REVOKE|COMMENT|VACUUM|REINDEX|SET|RESET|BEGIN|COMMIT|ROLLBACK|COPY|DO|CALL)\\b").matcher(preflight).find(),
+                "preflight.sql must not contain a statement that changes anything");
+        assertFalse(Pattern.compile("(?i)\\b(pg_terminate_backend|pg_cancel_backend|pg_reload_conf|set_config|lo_import|lo_export|nextval|setval)\\b").matcher(preflight).find());
+        assertFalse(preflight.contains("SELECT *"));
+        assertFalse(Pattern.compile("(?i)\\b(password|email|phone|display_name|profile_image_url|setup_token)\\b\\s*(,|FROM)").matcher(preflight).find(),
+                "personal data columns are never selected");
+        // The session proves it is read-only at the start and again at the end
+        String raw = read(DB_TOOLS.resolve("preflight.sql"));
+        assertTrue(raw.contains("current_setting('transaction_read_only') AS transaction_read_only,"), "S0 reports the read-only setting");
+        assertTrue(raw.contains("current_setting('transaction_read_only') AS transaction_read_only_at_end"), "S14 re-checks it");
+        assertTrue(raw.indexOf("S0. Session") < raw.indexOf("S2. The seven") && raw.lastIndexOf("S14. Read-only proof") > raw.indexOf("S13."));
+        assertTrue(raw.contains("default_transaction_read_only=on"), "The documented run command enforces a read-only session");
+        assertTrue(raw.contains("-v ON_ERROR_STOP=1"));
     }
 }

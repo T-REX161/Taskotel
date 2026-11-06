@@ -54,7 +54,16 @@ public class StaffCredentialSetupFlowTest {
         request.setUsername("johnsetup");
         request.setTemporaryPassword("TempPass@123");
 
-        StaffDto staffDto = staffService.createStaff(request);
+        // Creating staff needs a signed-in administrator (or a Manager of the department)
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("setup_flow_admin", null,
+                        java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+        StaffDto staffDto;
+        try {
+            staffDto = staffService.createStaff(request);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
         assertNotNull(staffDto);
         assertEquals("johnsetup", staffDto.getUsername());
 

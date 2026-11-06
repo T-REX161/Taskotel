@@ -177,3 +177,24 @@ html {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: none; }
 }
+
+/* Dashboard clock: subtle digit roll (hours/minutes) and AM/PM fade; no motion when the user prefers reduced motion */
+@keyframes clockRollIn {
+  from { opacity: 0; transform: translateY(45%); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes clockRollOut {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-45%); }
+}
+@keyframes clockFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.clock-roll-in { animation: clockRollIn 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+.clock-roll-out { animation: clockRollOut 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both; pointer-events: none; }
+.clock-fade-in { animation: clockFadeIn 300ms ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .clock-roll-in, .clock-fade-in { animation: none; }
+  .clock-roll-out { display: none; }
+}

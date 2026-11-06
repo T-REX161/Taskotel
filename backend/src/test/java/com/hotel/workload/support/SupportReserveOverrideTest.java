@@ -49,7 +49,7 @@ public class SupportReserveOverrideTest {
     @BeforeEach
     void setUp() {
         fx = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository);
-        SupportTestFixture.signInAs("manager_test", "MANAGER");
+        SupportTestFixture.signInAs("manager_test", "ADMIN"); // the global view: these tests are about support behaviour, a Manager's scope is in SupportReadDepartmentIsolationTest
     }
 
     @AfterEach

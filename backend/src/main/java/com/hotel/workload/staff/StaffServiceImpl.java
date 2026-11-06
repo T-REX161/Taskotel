@@ -2,6 +2,8 @@ package com.hotel.workload.staff;
 
 import com.hotel.workload.assignment.Assignment;
 import com.hotel.workload.assignment.AssignmentRepository;
+import com.hotel.workload.security.CurrentUserScopeResolver;
+import com.hotel.workload.security.DepartmentScope;
 import com.hotel.workload.security.PasswordValidatorService;
 import com.hotel.workload.security.Role;
 import com.hotel.workload.security.User;
@@ -12,8 +14,6 @@ import com.hotel.workload.task.TaskStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +33,9 @@ public class StaffServiceImpl implements StaffService {
             TaskStatus.IN_PROGRESS
     );
 
+    private static final String OWN_DEPARTMENT_ONLY_MESSAGE = "Managers can only manage staff in their own department.";
+    private static final String TRANSFER_ADMIN_ONLY_MESSAGE = "Only administrators can transfer staff between departments.";
+
     private static final String DEACTIVATE_WITH_ACTIVE_ASSIGNMENTS_MESSAGE =
             "Cannot deactivate staff member with active task assignments. Please reassign or complete their active tasks first.";
 
@@ -43,6 +46,7 @@ public class StaffServiceImpl implements StaffService {
     private final AssignmentRepository assignmentRepository;
     private final TaskRepository taskRepository;
     private final DepartmentResolver departmentResolver;
+    private final CurrentUserScopeResolver scopeResolver;
 
     @Autowired
     public StaffServiceImpl(StaffRepository staffRepository,
@@ -51,7 +55,8 @@ public class StaffServiceImpl implements StaffService {
                             PasswordValidatorService passwordValidatorService,
                             AssignmentRepository assignmentRepository,
                             TaskRepository taskRepository,
-                            DepartmentResolver departmentResolver) {
+                            DepartmentResolver departmentResolver,
+                            CurrentUserScopeResolver scopeResolver) {
         this.staffRepository = staffRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
@@ -59,27 +64,32 @@ public class StaffServiceImpl implements StaffService {
         this.assignmentRepository = assignmentRepository;
         this.taskRepository = taskRepository;
         this.departmentResolver = departmentResolver;
+        this.scopeResolver = Objects.requireNonNull(scopeResolver, "scopeResolver");
     }
 
     public StaffServiceImpl(StaffRepository staffRepository,
                             UserRepository userRepository,
                             PasswordEncoder passwordEncoder,
                             PasswordValidatorService passwordValidatorService,
-                            DepartmentResolver departmentResolver) {
-        this(staffRepository, userRepository, passwordEncoder, passwordValidatorService, null, null, departmentResolver);
+                            DepartmentResolver departmentResolver,
+                            CurrentUserScopeResolver scopeResolver) {
+        this(staffRepository, userRepository, passwordEncoder, passwordValidatorService, null, null, departmentResolver, scopeResolver);
     }
 
     public StaffServiceImpl(StaffRepository staffRepository, UserRepository userRepository, PasswordEncoder passwordEncoder,
-                            DepartmentResolver departmentResolver) {
-        this(staffRepository, userRepository, passwordEncoder, new PasswordValidatorService(), null, null, departmentResolver);
+                            DepartmentResolver departmentResolver, CurrentUserScopeResolver scopeResolver) {
+        this(staffRepository, userRepository, passwordEncoder, new PasswordValidatorService(), null, null, departmentResolver, scopeResolver);
     }
 
     @Override
     public List<StaffDto> getAllStaff() {
-        // Managers see ordinary staff only; records linked to manager or admin accounts are for administrators
-        boolean admin = currentUserIsAdmin();
-        return staffRepository.findAll().stream()
-                .filter(staff -> admin || !hasPrivilegedAccount(staff))
+        DepartmentScope scope = requireStaffManagementScope();
+        // An administrator sees every record. A Manager sees ordinary (STAFF-role) staff of their own department only: the department and
+        // the role are part of the database query, so other departments' staff, and manager or admin accounts, are never loaded.
+        List<Staff> visible = scope.isAll()
+                ? staffRepository.findAll()
+                : staffRepository.findByDepartmentAndUserRole(scope.department(), Role.STAFF);
+        return visible.stream()
                 .map(StaffDto::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -87,10 +97,16 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffDto createStaff(CreateStaffRequest request) {
+        DepartmentScope scope = requireStaffManagementScope();
         // Managers may add staff only; manager and admin accounts can be created by an administrator
         Role role = request.getRole() != null ? request.getRole() : Role.STAFF;
-        if (role != Role.STAFF && !currentUserIsAdmin()) {
+        if (role != Role.STAFF && !scope.isAll()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators can create manager or admin accounts");
+        }
+        // A Manager adds staff to their own department only. The department in the request is never trusted: any other value is refused
+        // before anything is looked up or saved (so the refusal says nothing about whether that department exists).
+        if (scope.isDepartment() && !isDepartmentCode(request.getDepartment(), scope.departmentCode())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, OWN_DEPARTMENT_ONLY_MESSAGE);
         }
 
         passwordValidatorService.validate(request.getTemporaryPassword());
@@ -121,7 +137,8 @@ public class StaffServiceImpl implements StaffService {
         staff.setName(request.getFullName());
         staff.setEmail(request.getEmail());
         staff.setPhone(request.getPhone());
-        staff.setDepartment(departmentResolver.requireActive(request.getDepartment()));
+        // For a Manager the department is the one resolved from their own records, never the one from the request
+        staff.setDepartment(scope.isDepartment() ? scope.department() : departmentResolver.requireActive(request.getDepartment()));
         staff.setAvailability(request.getAvailability());
         staff.setActive(true);
         
@@ -137,6 +154,7 @@ public class StaffServiceImpl implements StaffService {
 
     @Override
     public boolean isUsernameAvailable(String username) {
+        requireStaffManagementScope();
         if (username == null || username.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Username is required");
         }
@@ -155,12 +173,18 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffDto updateStaff(java.util.UUID id, UpdateStaffRequest request) {
+        DepartmentScope scope = requireStaffManagementScope();
         // Lock the row first, so a concurrent assignment cannot slip in between the active-assignment check and the save
         staffRepository.lockByIds(java.util.Set.of(id));
         Staff staff = staffRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
 
-        requireMayManage(staff);
+        requireInScope(scope, staff);
+        requireMayManage(scope, staff);
+        // Only an administrator transfers staff between departments; a Manager's request must keep the staff member's own department
+        if (!scope.isAll() && !isDepartmentCode(request.getDepartment(), staff.getDepartment().getCode())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, TRANSFER_ADMIN_ONLY_MESSAGE);
+        }
 
         // Reject before any field changes so a refused deactivation leaves the record untouched
         if (staff.isActive() && !request.isActive() && hasActiveAssignments(staff.getId())) {
@@ -209,11 +233,13 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffDto deactivateStaff(java.util.UUID id) {
+        DepartmentScope scope = requireStaffManagementScope();
         staffRepository.lockByIds(java.util.Set.of(id)); // see updateStaff
         Staff staff = staffRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
 
-        requireMayManage(staff);
+        requireInScope(scope, staff);
+        requireMayManage(scope, staff);
 
         if (!staff.isActive() && (staff.getUser() == null || !staff.getUser().isActive())) {
             return StaffDto.fromEntity(staff);
@@ -239,10 +265,12 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public StaffDto activateStaff(java.util.UUID id) {
+        DepartmentScope scope = requireStaffManagementScope();
         Staff staff = staffRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
 
-        requireMayManage(staff);
+        requireInScope(scope, staff);
+        requireMayManage(scope, staff);
 
         if (staff.isActive() && (staff.getUser() == null || staff.getUser().isActive())) {
             return StaffDto.fromEntity(staff);
@@ -264,7 +292,9 @@ public class StaffServiceImpl implements StaffService {
     @Override
     @Transactional
     public void removeStaff(UUID id) {
-        if (!currentUserIsAdmin()) {
+        // Permanent removal is for administrators alone. It is decided by the same scope resolver as every other staff operation, not by
+        // a separate authority check: a Manager (valid or not) and a Staff caller are refused with 403, and no sign-in is 401.
+        if (!scopeResolver.resolve().isAll()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators are authorized to remove staff members");
         }
 
@@ -333,20 +363,40 @@ public class StaffServiceImpl implements StaffService {
      * changed, deactivated or reactivated by an administrator alone, whichever endpoint is used, so a manager cannot disable or
      * re-email a higher-privileged account.
      */
-    private void requireMayManage(Staff staff) {
-        if (hasPrivilegedAccount(staff) && !currentUserIsAdmin()) {
+    private void requireMayManage(DepartmentScope scope, Staff staff) {
+        if (hasPrivilegedAccount(staff) && !scope.isAll()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators can change manager or admin accounts");
         }
+    }
+
+    /**
+     * The scope for staff management: global for an administrator, one department for a valid Manager. Anyone else (a Staff member) is
+     * refused, and an invalid Manager or a missing sign-in is refused by the resolver itself (403 / 401).
+     */
+    private DepartmentScope requireStaffManagementScope() {
+        DepartmentScope scope = scopeResolver.resolve();
+        if (!scope.isAll() && !scope.isDepartment()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to manage staff.");
+        }
+        return scope;
+    }
+
+    /**
+     * A record outside the caller's scope is reported as not found, exactly as if it did not exist, so ids from another department
+     * cannot be probed. Must run after the row is loaded (and locked), so a concurrent move is seen.
+     */
+    private static void requireInScope(DepartmentScope scope, Staff staff) {
+        if (!scope.includes(staff.getDepartment())) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found");
+        }
+    }
+
+    private static boolean isDepartmentCode(String requested, String actual) {
+        return requested != null && actual != null && requested.trim().equals(actual);
     }
 
     private static boolean hasPrivilegedAccount(Staff staff) {
         User account = staff.getUser();
         return account != null && (account.getRole() == Role.ADMIN || account.getRole() == Role.MANAGER);
-    }
-
-    private boolean currentUserIsAdmin() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        return auth != null && auth.isAuthenticated()
-                && auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ADMIN"));
     }
 }

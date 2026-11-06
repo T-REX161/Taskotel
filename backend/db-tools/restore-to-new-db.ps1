@@ -6,7 +6,8 @@
     Restores wb_<stamp>.dump (made by backup-and-verify.ps1) into a new database named
     wb_restored_<yyyyMMdd_HHmmss>, then compares its schema and verification fingerprint, exactly,
     with the wb_<stamp>.live-schema.sql and wb_<stamp>.live-fingerprint.txt files saved next to the
-    dump. Prints RESTORE VERIFIED only if both match.
+    dump (the seven-table fingerprint). Before restoring, the dump's SHA-256 must equal the one recorded
+    in wb_<stamp>.dump.sha256. Prints RESTORE VERIFIED only if both comparisons match.
 
     Safety:
     - Never connects to workload_balancer, and never drops, renames or overwrites a database.
@@ -48,12 +49,15 @@ Assert-PgTools
 $base               = $Dump.Substring(0, $Dump.Length - '.dump'.Length)
 $expectedSchemaFile = "$base.live-schema.sql"
 $expectedPrintFile  = "$base.live-fingerprint.txt"
+$dumpChecksumFile   = "$base.dump.sha256"
 $restoredSchemaFile = "$base.$restoredDb-schema.sql"
 $restoreErrorLog    = "$base.$restoredDb-restore-errors.log"
-foreach ($f in @($expectedSchemaFile, $expectedPrintFile)) {
+foreach ($f in @($expectedSchemaFile, $expectedPrintFile, $dumpChecksumFile)) {
     if (-not (Test-Path -LiteralPath $f)) { throw "Missing $f (needed to verify the restore). Nothing was changed." }
 }
 Assert-FilesDoNotExist @($restoredSchemaFile, $restoreErrorLog)
+# The dump must still be the file whose SHA-256 was recorded when it was backed up and verified
+$null = Assert-DumpMatchesSidecar -DumpPath $Dump -SidecarPath $dumpChecksumFile
 
 # The recorded values must themselves be complete before they can be compared against
 $expectedSchema = Get-NormalizedSchema $expectedSchemaFile

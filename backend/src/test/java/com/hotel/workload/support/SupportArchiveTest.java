@@ -45,7 +45,7 @@ public class SupportArchiveTest {
     @BeforeEach
     void setUp() {
         fx = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository);
-        SupportTestFixture.signInAs("manager_test", "MANAGER");
+        SupportTestFixture.signInAs("manager_test", "ADMIN"); // the global view: these tests are about support behaviour, a Manager's scope is in SupportReadDepartmentIsolationTest
         s = fx.overloaded(2, 3);
         helper = s.donors.get(0);
         task = s.tasks.get(0);

@@ -1,0 +1,22 @@
+{
+  "name": "database-viewer",
+  "version": "1.0.0",
+  "description": "Prisma Studio for inspecting the Taskotel database (read-only use; Flyway owns the schema).",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "studio": "prisma studio",
+    "db:pull": "prisma db pull"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^18.0.9"
+  },
+  "devDependencies": {
+    "prisma": "^7.10.1"
+  },
+  "private": true
+}

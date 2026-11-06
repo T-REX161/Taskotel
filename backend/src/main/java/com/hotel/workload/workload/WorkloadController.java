@@ -19,14 +19,12 @@ public class WorkloadController {
 
     /**
      * GET /api/workload
-     * Returns the current workload for every staff member, calculated
-     * on-the-fly from PostgreSQL. Accessible to ADMIN, MANAGER, and STAFF.
+     * Returns the current workload the caller may see, calculated on-the-fly from PostgreSQL: every department for an ADMIN, the own
+     * department for a valid MANAGER, the own row for STAFF. Accessible to ADMIN, MANAGER, and STAFF.
      */
     @GetMapping
-    public ResponseEntity<List<WorkloadDto>> getWorkload(org.springframework.security.core.Authentication authentication) {
-        boolean isAdminOrManager = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_MANAGER"));
-        
-        return ResponseEntity.ok(workloadService.calculateWorkload(authentication.getName(), isAdminOrManager));
+    public ResponseEntity<List<WorkloadDto>> getWorkload() {
+        // The service decides what this caller may see (CurrentUserScopeResolver); nothing here grants access
+        return ResponseEntity.ok(workloadService.calculateWorkload());
     }
 }

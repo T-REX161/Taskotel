@@ -61,7 +61,7 @@ public class SupportConcurrencyTest {
         List<Future<Boolean>> results = new ArrayList<>();
         for (SupportPlanRequest plan : plans) {
             Callable<Boolean> call = () -> {
-                SupportTestFixture.signInAs("racer", "MANAGER");
+                SupportTestFixture.signInAs("racer", "ADMIN"); // confirm is Admin-only (Step 2G-3); these tests are about races
                 ready.countDown();
                 go.await();
                 try {
@@ -131,7 +131,7 @@ public class SupportConcurrencyTest {
     @DisplayName("Six managers ending the same support at once: exactly one ends it, the rest get a clean 409, the task goes back to waiting once")
     void endingTheSameSupportOnlyOneWins() throws Exception {
         var s = fx.overloaded(2, 3);
-        SupportTestFixture.signInAs("setup", "MANAGER");
+        SupportTestFixture.signInAs("setup", "ADMIN");
         SupportAssignmentDto created = service.confirm(fx.plan(s.receiving, s.donors.get(0), s.tasks.get(0))).get(0);
         SupportTestFixture.signOut();
 
@@ -141,7 +141,7 @@ public class SupportConcurrencyTest {
         List<Future<Boolean>> results = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
             results.add(pool.submit(() -> {
-                SupportTestFixture.signInAs("racer", "MANAGER");
+                SupportTestFixture.signInAs("racer", "ADMIN"); // confirm is Admin-only (Step 2G-3); these tests are about races
                 ready.countDown();
                 go.await();
                 try {
@@ -210,5 +210,54 @@ public class SupportConcurrencyTest {
 
         assertEquals(1, outcomes.stream().filter(b -> b).count(), outcomes.toString());
         assertEquals(1, assignmentRepository.findAllByTaskId(s.tasks.get(0).getId()).size());
+    }
+
+    @Test
+    @DisplayName("Managers racing to end the same support (receiver, donor and an unrelated department): exactly one ends it, the other involved ones get a clean 409, the unrelated ones a 404")
+    void managersEndingTheSameSupportOnlyOneWins() throws Exception {
+        var s = fx.overloaded(2, 3);
+        com.hotel.workload.staff.Department unrelated = fx.department("O");
+        var avail = com.hotel.workload.staff.Availability.UNAVAILABLE;
+        var role = com.hotel.workload.security.Role.MANAGER;
+        String receiverManager = fx.person("Receiver Manager", s.receiving, role, true, false, true, avail, true).getUser().getUsername();
+        String donorManager = fx.person("Donor Manager", s.donor, role, true, false, true, avail, true).getUser().getUsername();
+        String outsideManager = fx.person("Outside Manager", unrelated, role, true, false, true, avail, true).getUser().getUsername();
+        SupportTestFixture.signInAs("setup", "ADMIN");
+        SupportAssignmentDto created = service.confirm(fx.plan(s.receiving, s.donors.get(0), s.tasks.get(0))).get(0);
+        SupportTestFixture.signOut();
+
+        List<String> callers = List.of(receiverManager, receiverManager, donorManager, donorManager, outsideManager, outsideManager);
+        ExecutorService pool = Executors.newFixedThreadPool(callers.size());
+        CountDownLatch ready = new CountDownLatch(callers.size());
+        CountDownLatch go = new CountDownLatch(1);
+        List<Future<String>> results = new ArrayList<>();
+        for (String caller : callers) {
+            results.add(pool.submit(() -> {
+                SupportTestFixture.signInAs(caller, "MANAGER");
+                ready.countDown();
+                go.await();
+                try {
+                    service.end(created.id());
+                    return caller + ":ended";
+                } catch (SupportPlanException e) {
+                    return caller + ":" + e.getStatus().value();
+                } finally {
+                    SupportTestFixture.signOut();
+                }
+            }));
+        }
+        ready.await();
+        go.countDown();
+        List<String> outcomes = new ArrayList<>();
+        for (Future<String> f : results) outcomes.add(f.get());
+        pool.shutdown();
+
+        assertEquals(1, outcomes.stream().filter(o -> o.endsWith(":ended")).count(), outcomes.toString());
+        assertEquals(2, outcomes.stream().filter(o -> o.equals(outsideManager + ":404")).count(), "the unrelated Manager never reaches the record: " + outcomes);
+        assertEquals(3, outcomes.stream().filter(o -> o.endsWith(":409") && !o.startsWith(outsideManager)).count(), outcomes.toString());
+        SupportAssignment stored = supportRepository.findById(created.id()).orElseThrow();
+        assertEquals(SupportStatus.CANCELLED, stored.getStatus());
+        assertEquals(SupportEndReason.MANUALLY_ENDED, stored.getEndReason());
+        assertEquals(0, assignmentRepository.findAllByTaskId(s.tasks.get(0).getId()).size());
     }
 }

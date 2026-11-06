@@ -9,7 +9,6 @@ import {
   formatDepartment,
   formatDate,
   formatTime,
-  formatDueDate,
   formatDuration,
 } from './taskFormatters';
 
@@ -127,8 +126,6 @@ export default function TasksTable({
               filteredTasks.map((task) => {
                 const assignment = assignmentsByTaskId.get(task.id);
                 const assignedStaffName = assignment?.staffName;
-                const isTaskAssigned = Boolean(assignment);
-                const isTerminalStatus = task.status === 'COMPLETED' || task.status === 'CANCELLED';
                 const isMenuOpen = activeMenu?.task?.id === task.id;
 
                 return (

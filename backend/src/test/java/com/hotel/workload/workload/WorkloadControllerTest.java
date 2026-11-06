@@ -57,6 +57,9 @@ public class WorkloadControllerTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private com.hotel.workload.staff.DepartmentRepository departmentRepository;
+
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -138,8 +141,12 @@ public class WorkloadControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "wl_ctl_manager", roles = "MANAGER")
+    @Transactional
     public void testManagerCanRetrieveWorkloadReturns200() throws Exception {
+        // A Manager is department-scoped: it needs an active Staff record in an active department
+        new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder)
+                .manager("wl_ctl_manager", TestDepartments.HOUSEKEEPING);
         mockMvc.perform(get("/api/workload"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());

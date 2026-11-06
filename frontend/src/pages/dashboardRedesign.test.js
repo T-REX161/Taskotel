@@ -135,6 +135,12 @@ describe('operational highlights', () => {
     assert.ok(page.includes("getUserRole() !== 'STAFF' ? [loadStaffWorkload(), loadRecommendations(), loadTasks()] : []"));
     assert.ok(!page.includes('<OperationalHighlights'), 'the old strip is replaced by the Operations Insights card');
   });
+
+  it('a Manager\'s dashboard neither requests nor shows the (not yet department-scoped) support recommendations', () => {
+    const page = read('pages', 'Dashboard.jsx');
+    assert.ok(/const loadRecommendations = async \(\) => \{[^}]*if \(getUserRole\(\) === 'MANAGER'\) return;/s.test(page), 'the recommendations request is skipped for a Manager');
+    assert.ok(page.includes("showSupport: userRole !== 'MANAGER'"), 'and the support insight is hidden for a Manager');
+  });
 });
 
 describe('dashboard layout balance', () => {
@@ -249,6 +255,17 @@ describe('operations insights', () => {
     assert.deepEqual(pendingPriorityTasks(null), { urgent: 0, high: 0, total: 0 });
     const { items } = buildInsights({ ...base, tasks: ready([task('PENDING', 'LOW'), task('PENDING', 'MEDIUM')]) });
     assert.deepEqual(items, [], 'a pile of ordinary pending tasks is not an alert');
+  });
+
+  it('hides the support insight for a Manager (showSupport false): never shown, never waited for, and a failed or loading support source is ignored', () => {
+    const support = ready({ recommendations: [], unsupported: [rec('FD', 'Front Desk', 'CRITICAL', 3)] });
+    const withSupport = buildInsights({ ...base, recommendations: support });
+    assert.ok(withSupport.items.some((i) => i.key === 'support'), 'Admin still sees it');
+    const manager = buildInsights({ ...base, recommendations: support, showSupport: false });
+    assert.ok(!manager.items.some((i) => i.key === 'support'), 'a Manager never sees another department\'s support row');
+    assert.equal(buildInsights({ ...base, recommendations: { status: 'loading', data: null }, showSupport: false }).state, 'clear', 'a Manager does not wait for it');
+    assert.equal(buildInsights({ ...base, recommendations: { status: 'error', data: null }, showSupport: false }).state, 'clear');
+    assert.deepEqual(buildInsights({ ...base, recommendations: { status: 'error', data: null }, showSupport: false }).unavailable, []);
   });
 
   it('builds one row per kind from the real data, with the existing destinations only', () => {

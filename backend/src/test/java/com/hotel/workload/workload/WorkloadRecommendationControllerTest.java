@@ -75,9 +75,19 @@ public class WorkloadRecommendationControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
     public void managerCanReadRecommendations() throws Exception {
-        mockMvc.perform(get(URL)).andExpect(status().isOk());
+        // A valid Manager (active account, linked active Staff record, active department) reads their own department's recommendations
+        new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder)
+                .manager("rec_ctl_manager", com.hotel.workload.staff.TestDepartments.HOUSEKEEPING);
+        mockMvc.perform(get(URL).with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user("rec_ctl_manager").roles("MANAGER")))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @WithMockUser(roles = "MANAGER")
+    public void managerWithoutStaffRecordIsRefused() throws Exception {
+        // The mock Manager has no account or Staff record, so it has no department: refused (Step 2G-1)
+        mockMvc.perform(get(URL)).andExpect(status().isForbidden());
     }
 
     @Test
@@ -150,7 +160,7 @@ public class WorkloadRecommendationControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(roles = "ADMIN") // the global view (a Manager now gets only their own department, see WorkloadRecommendationDepartmentIsolationTest)
     @Transactional
     public void recommendsFromRealRowsAndChangesNothing() throws Exception {
         String tag = UUID.randomUUID().toString().substring(0, 8);

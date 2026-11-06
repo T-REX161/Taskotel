@@ -3,15 +3,19 @@ package com.hotel.workload.dashboard;
 import com.hotel.workload.assignment.Assignment;
 import com.hotel.workload.assignment.AssignmentDto;
 import com.hotel.workload.assignment.AssignmentRepository;
+import com.hotel.workload.security.CurrentUserScopeResolver;
+import com.hotel.workload.security.DepartmentScope;
 import com.hotel.workload.staff.Availability;
+import com.hotel.workload.staff.Department;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
 import com.hotel.workload.workload.WorkloadDto;
-import com.hotel.workload.workload.WorkloadService;
+import com.hotel.workload.workload.ScopedWorkloadCalculator;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -19,6 +23,14 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * The dashboard summary for the signed-in user. The scope is resolved once from the database ({@link CurrentUserScopeResolver}), never
+ * from role strings alone: Admin sees every department, a valid Manager sees only their own department (an invalid Manager is refused
+ * with 403 for the whole dashboard, no sign-in with 401), and Staff see only their own data.
+ *
+ * A Manager's workload figures come from {@link ScopedWorkloadCalculator} under the SAME resolved scope (one scope snapshot per request), the same calculation as GET /api/workload,
+ * so the two always agree (support-loan work and tasks with no department are excluded for a Manager, see RBAC specification 12.1).
+ */
 @Service
 public class DashboardServiceImpl implements DashboardService {
 
@@ -31,32 +43,37 @@ public class DashboardServiceImpl implements DashboardService {
     private final StaffRepository staffRepository;
     private final TaskRepository taskRepository;
     private final AssignmentRepository assignmentRepository;
-    private final WorkloadService workloadService;
+    private final ScopedWorkloadCalculator workloadCalculator;
+    private final CurrentUserScopeResolver scopeResolver;
 
     public DashboardServiceImpl(StaffRepository staffRepository,
                                 TaskRepository taskRepository,
                                 AssignmentRepository assignmentRepository,
-                                WorkloadService workloadService) {
+                                ScopedWorkloadCalculator workloadCalculator,
+                                CurrentUserScopeResolver scopeResolver) {
         this.staffRepository = staffRepository;
         this.taskRepository = taskRepository;
         this.assignmentRepository = assignmentRepository;
-        this.workloadService = workloadService;
+        this.workloadCalculator = workloadCalculator;
+        this.scopeResolver = scopeResolver;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Object getDashboardSummary(Authentication authentication) {
-        boolean isAdminOrManager = authentication.getAuthorities().stream()
-                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_MANAGER"));
-
-        if (isAdminOrManager) {
-            return buildAdminDashboardSummary();
-        } else {
-            return buildStaffDashboardSummary(authentication.getName());
+        DepartmentScope scope = scopeResolver.resolve();
+        if (scope.isAll()) {
+            return buildAdminDashboardSummary(scope);
         }
+        if (scope.isDepartment()) {
+            return buildDepartmentDashboardSummary(scope);
+        }
+        // The user name comes from the signed-in context (the same one the scope was resolved from), never from a caller-supplied value
+        return buildStaffDashboardSummary(scope, SecurityContextHolder.getContext().getAuthentication().getName());
     }
 
-    private AdminDashboardSummaryDto buildAdminDashboardSummary() {
+    /** Admin: every department, unchanged. */
+    private AdminDashboardSummaryDto buildAdminDashboardSummary(DepartmentScope scope) {
         AdminDashboardSummaryDto dto = new AdminDashboardSummaryDto();
 
         // Staff metrics
@@ -76,9 +93,41 @@ public class DashboardServiceImpl implements DashboardService {
         // Assignment metrics
         dto.setTotalActiveAssignments(assignmentRepository.countActiveAssignments(ACTIVE_STATUSES));
 
-        // Workload metrics (reuse WorkloadService)
-        List<WorkloadDto> workloads = workloadService.calculateWorkload("admin", true);
-        
+        applyWorkloadBuckets(dto, scope);
+        return dto;
+    }
+
+    /**
+     * Manager: only the Manager's own department. Every count is a database query filtered by the department; nothing global is loaded
+     * and filtered afterwards. Tasks with no department never match, and active assignments are the same rows a Manager's workload counts
+     * (task and holder both in the department), so support-loan work is excluded in both directions.
+     */
+    private AdminDashboardSummaryDto buildDepartmentDashboardSummary(DepartmentScope scope) {
+        Department department = scope.department();
+        AdminDashboardSummaryDto dto = new AdminDashboardSummaryDto();
+
+        dto.setTotalStaff(staffRepository.countOperationalInDepartment(department));
+        dto.setAvailableStaff(staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.AVAILABLE));
+        dto.setUnavailableStaff(staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.UNAVAILABLE));
+        dto.setInactiveStaff(staffRepository.countOperationalInactiveInDepartment(department));
+
+        dto.setTotalTasks(taskRepository.countByDepartment(department));
+        dto.setPendingTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.PENDING));
+        dto.setAssignedTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.ASSIGNED));
+        dto.setInProgressTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.IN_PROGRESS));
+        dto.setCompletedTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.COMPLETED));
+        dto.setCancelledTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.CANCELLED));
+
+        dto.setTotalActiveAssignments(assignmentRepository.countActiveByTaskAndStaffDepartment(ACTIVE_STATUSES, department));
+
+        applyWorkloadBuckets(dto, scope);
+        return dto;
+    }
+
+    /** Workload buckets from the caller's scoped workload (the same calculation as GET /api/workload). */
+    private void applyWorkloadBuckets(AdminDashboardSummaryDto dto, DepartmentScope scope) {
+        List<WorkloadDto> workloads = workloadCalculator.calculateWorkload(scope);
+
         long staffWithWorkload = 0;
         long low = 0;
         long normal = 0;
@@ -102,16 +151,15 @@ public class DashboardServiceImpl implements DashboardService {
         dto.setNormalWorkloadStaff(normal);
         dto.setHighWorkloadStaff(high);
         dto.setAtRiskStaff(atRisk);
-
-        return dto;
     }
 
-    private StaffDashboardSummaryDto buildStaffDashboardSummary(String username) {
+    /** Staff: their own data only (the username comes from the authentication, never from a request parameter). */
+    private StaffDashboardSummaryDto buildStaffDashboardSummary(DepartmentScope scope, String username) {
         Staff staff = staffRepository.findByUserUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff record not found"));
 
-        // Use existing logic for their workload
-        List<WorkloadDto> workloads = workloadService.calculateWorkload(username, false);
+        // For a Staff caller the scoped workload is their own row
+        List<WorkloadDto> workloads = workloadCalculator.calculateWorkload(scope);
         WorkloadDto workload = workloads.isEmpty() ? null : workloads.get(0);
 
         List<Assignment> assignments = assignmentRepository.findByStaffId(staff.getId());

@@ -158,9 +158,30 @@ public class DashboardControllerTest {
     @Test
     @WithMockUser(username = "manager1", roles = {"MANAGER"})
     public void testManagerDashboard() throws Exception {
+        // A valid Manager (linked, active Staff record in an active department) sees only that department: John Doe (HOUSEKEEPING).
+        // The two tasks in this fixture have no department, so they are not counted for a Manager.
+        Staff managerRecord = new Staff();
+        managerRecord.setName("Manager One");
+        managerRecord.setEmail("manager1-staff@example.com");
+        managerRecord.setDepartment(TestDepartments.HOUSEKEEPING);
+        managerRecord.setAvailability(Availability.AVAILABLE);
+        managerRecord.setActive(true);
+        managerRecord.setUser(managerUser);
+        staffRepository.save(managerRecord);
+
         mockMvc.perform(get("/api/dashboard/summary"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalStaff").value(2));
+                .andExpect(jsonPath("$.totalStaff").value(1))
+                .andExpect(jsonPath("$.totalTasks").value(0))
+                .andExpect(jsonPath("$.totalActiveAssignments").value(0));
+    }
+
+    @Test
+    @WithMockUser(username = "manager1", roles = {"MANAGER"})
+    public void testManagerWithoutStaffRecordIsRefused() throws Exception {
+        // This Manager account has no Staff record, so it has no department: the whole dashboard is refused
+        mockMvc.perform(get("/api/dashboard/summary"))
+                .andExpect(status().isForbidden());
     }
 
     @Test

@@ -5,9 +5,11 @@
 .DESCRIPTION
     1. Reads the live database in a read-only session (default_transaction_read_only=on):
        a custom-format pg_dump, a schema-only dump and a verification fingerprint.
-    2. Restores the dump into a NEW, uniquely named database: wb_restore_check_<yyyyMMdd_HHmmss>.
-    3. Compares the restored schema (ignoring PostgreSQL 18 \restrict lines, which carry a random key)
-       and the fingerprint with the live database, exactly. Prints BACKUP VERIFIED only if both match.
+    2. Records the dump's SHA-256 in wb_<stamp>.dump.sha256, next to the dump.
+    3. Restores the dump into a NEW, uniquely named database: wb_restore_check_<yyyyMMdd_HHmmss>.
+    4. Compares the restored schema (ignoring PostgreSQL 18 \restrict lines, which carry a random key)
+       and the seven-table data fingerprint with the live database, exactly, and checks that the dump
+       still has the recorded SHA-256. Prints BACKUP VERIFIED only if all of that passes.
 
     Safety:
     - The live database is only read, and only inside the read-only session.
@@ -57,7 +59,8 @@ $liveSchemaFile  = "$base.live-schema.sql"
 $liveFingerprint = "$base.live-fingerprint.txt"
 $checkSchemaFile = "$base.check-schema.sql"
 $restoreErrorLog = "$base.restore-errors.log"
-Assert-FilesDoNotExist @($dumpFile, $liveSchemaFile, $liveFingerprint, $checkSchemaFile, $restoreErrorLog)
+$dumpChecksumFile = "$base.dump.sha256"
+Assert-FilesDoNotExist @($dumpFile, $dumpChecksumFile, $liveSchemaFile, $liveFingerprint, $checkSchemaFile, $restoreErrorLog)
 
 if (-not (Test-Path -LiteralPath $outputPath)) {
     New-Item -ItemType Directory -Path $outputPath | Out-Null
@@ -75,6 +78,8 @@ try {
     Write-Host "Backing up $LiveDb (read-only session) ..."
     Register-File $dumpFile
     Invoke-Pg 'pg_dump.exe' ($Conn + @('-d', $LiveDb, '-Fc', '-f', $dumpFile))
+    Register-File $dumpChecksumFile
+    [System.IO.File]::WriteAllText($dumpChecksumFile, (Format-Sha256Sidecar -Hash (Get-DumpSha256 $dumpFile) -DumpFileName (Split-Path $dumpFile -Leaf)) + "`n")
     Register-File $liveSchemaFile
     Invoke-Pg 'pg_dump.exe' ($Conn + @('-d', $LiveDb, '--schema-only', '--no-owner', '--no-privileges', '-f', $liveSchemaFile))
     $liveFp = Get-VerificationFingerprint -Database $LiveDb
@@ -101,11 +106,13 @@ try {
 
     $checkFp = Get-VerificationFingerprint -Database $checkDb
     Assert-SameText -Expected $liveFp -Actual $checkFp -What "The data fingerprint of $checkDb"
+    $dumpSha = Assert-DumpMatchesSidecar -DumpPath $dumpFile -SidecarPath $dumpChecksumFile   # the dump is unchanged since it was recorded
 
     Write-Host ''
     Write-Host "BACKUP VERIFIED: $dumpFile"
     Write-Host "  Schema and data of the restore-check database $checkDb match the live database exactly."
-    Write-Host '  Verification fingerprint (counts, table names and MD5 hashes only):'
+    Write-Host "  Dump SHA-256 (recorded in $dumpChecksumFile): $dumpSha"
+    Write-Host '  Verification fingerprint (counts, table names and MD5 hashes only, seven application tables):'
     Write-Host $liveFp
     Write-ArtifactReport -Heading 'Created by this run (kept; nothing is removed automatically):'
 } catch {

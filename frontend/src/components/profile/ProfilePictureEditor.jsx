@@ -104,6 +104,7 @@ export default function ProfilePictureEditor({ isOpen, savedImageUrl, onClose, o
     setConfirmingRemove(false);
     inFlight.current = false;
     dialogRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resets only when the dialog opens or closes, not when the saved image URL changes
   }, [isOpen]);
 
   // A chosen file's object URL is released when it is replaced or the editor closes

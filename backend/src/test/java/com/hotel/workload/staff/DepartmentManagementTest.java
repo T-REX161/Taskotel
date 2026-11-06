@@ -228,9 +228,9 @@ public class DepartmentManagementTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
-    @DisplayName("A manager can create a department; omitted icon and colour use the fallback")
-    public void testManagerCanCreateWithFallbacks() throws Exception {
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("An admin can create a department; omitted icon and colour use the fallback")
+    public void testAdminCanCreateWithFallbacks() throws Exception {
         MvcResult result = createDepartment(departmentJson("Concierge"));
         assertEquals(201, result.getResponse().getStatus());
         assertEquals(DepartmentCatalog.DEFAULT_ICON_KEY, body(result).get("iconKey").asText());
@@ -323,7 +323,7 @@ public class DepartmentManagementTest {
     // ── updating ─────────────────────────────────────────────────────────────
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(roles = "ADMIN")
     @DisplayName("Renaming keeps the code, so staff and tasks follow the new name")
     public void testRenameKeepsCode() throws Exception {
         int before = departmentFromList("MAINTENANCE").get("staffCount").asInt();
@@ -358,17 +358,84 @@ public class DepartmentManagementTest {
 
     // ── authorization ────────────────────────────────────────────────────────
 
-    @Test
-    @WithMockUser(roles = "STAFF")
-    @DisplayName("Staff can read departments but cannot create or edit them")
-    public void testStaffCannotWrite() throws Exception {
+    /** Every write the department API offers (and two it does not) against a department that exists, asserting 403 and no change. */
+    private void assertAllDepartmentWritesForbiddenAndNothingChanged() throws Exception {
+        long before = departmentRepository.count();
         mockMvc.perform(get("/api/departments")).andExpect(status().isOk());
         mockMvc.perform(post("/api/departments").contentType(MediaType.APPLICATION_JSON).content(departmentJson("Valet")))
                 .andExpect(status().isForbidden());
         mockMvc.perform(put("/api/departments/SECURITY").contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"Safety\", \"active\": true}"))
                 .andExpect(status().isForbidden());
-        assertEquals(6, departmentRepository.count());
-        assertEquals("Security", departmentRepository.findByCode("SECURITY").orElseThrow().getName());
+        mockMvc.perform(delete("/api/departments/SECURITY")).andExpect(status().isForbidden());
+        // Methods the API does not define are refused for the same reason, not left to a default rule
+        mockMvc.perform(patch("/api/departments/SECURITY").contentType(MediaType.APPLICATION_JSON).content("{\"active\": false}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/departments/SECURITY").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        // Refused before any validation: even an invalid body gets 403, not 400
+        mockMvc.perform(post("/api/departments").contentType(MediaType.APPLICATION_JSON).content("{}")).andExpect(status().isForbidden());
+        assertEquals(before, departmentRepository.count(), "No department was created or removed");
+        Department security = departmentRepository.findByCode("SECURITY").orElseThrow();
+        assertEquals("Security", security.getName(), "No department was renamed");
+        assertTrue(security.isActive(), "No department was deactivated");
+    }
+
+    @Test
+    @WithMockUser(roles = "STAFF")
+    @DisplayName("Staff can read departments but every create, update and delete attempt gets 403 and changes nothing")
+    public void testStaffCannotWrite() throws Exception {
+        assertAllDepartmentWritesForbiddenAndNothingChanged();
+    }
+
+    @Test
+    @WithMockUser(roles = "MANAGER")
+    @DisplayName("A manager can read departments but every create, update and delete attempt gets 403 and changes nothing")
+    public void testManagerCannotWrite() throws Exception {
+        assertAllDepartmentWritesForbiddenAndNothingChanged();
+    }
+
+    @Test
+    @WithMockUser(roles = "MANAGER")
+    @DisplayName("A manager cannot delete an unused custom department or a department that is in use; both stay")
+    public void testManagerCannotDeleteCustomOrInUseDepartments() throws Exception {
+        // Created by the repository, as the manager's own request would be refused
+        Department valet = new Department("VALET_HOLD", "Valet Hold");
+        valet.setCreatedAt(java.time.LocalDateTime.now());
+        departmentRepository.save(valet);
+        mockMvc.perform(delete("/api/departments/VALET_HOLD")).andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/departments/MAINTENANCE")).andExpect(status().isForbidden());
+        assertTrue(departmentRepository.findByCode("VALET_HOLD").isPresent());
+        assertTrue(departmentRepository.findByCode("MAINTENANCE").isPresent());
+    }
+
+    @Test
+    @WithMockUser(roles = "MANAGER")
+    @DisplayName("A manager sees the same department list as an admin (read access is unchanged)")
+    public void testManagerCanViewDepartments() throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/departments")).andExpect(status().isOk()).andReturn();
+        assertEquals(departmentRepository.count(), body(result).size());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("An admin can create, update and delete a custom department end to end")
+    public void testAdminHasFullDepartmentManagement() throws Exception {
+        MvcResult created = createDepartment(departmentJson("Valet Parking"));
+        assertEquals(201, created.getResponse().getStatus());
+        String code = body(created).get("code").asText();
+        mockMvc.perform(put("/api/departments/" + code).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\": \"Valet Services\", \"active\": true}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.name").value("Valet Services"));
+        mockMvc.perform(delete("/api/departments/" + code)).andExpect(status().isNoContent());
+        assertTrue(departmentRepository.findByCode(code).isEmpty());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("Admin keeps the existing protections: built-in departments cannot be deleted")
+    public void testAdminStillCannotDeleteBuiltInDepartment() throws Exception {
+        mockMvc.perform(delete("/api/departments/SECURITY")).andExpect(status().isConflict());
+        assertTrue(departmentRepository.findByCode("SECURITY").isPresent());
     }
 
     @Test

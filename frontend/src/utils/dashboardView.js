@@ -161,11 +161,13 @@ export const tasksNeedingAttention = (tasks) =>
  *   own             – the Staff summary's own workload record ({ workloadStatus, totalEstimatedDuration })
  *   staffWorkload   – { status, data } from GET /api/workload (Admin / Manager)
  *   tasks           – { status, data } from GET /api/tasks (Admin / Manager: all tasks)
- *   recommendations – { status, data } normalised GET /api/workload/recommendations (Admin / Manager)
+ *   recommendations – { status, data } normalised GET /api/workload/recommendations (Admin only)
+ *   showSupport     – false for a Manager: the recommendations endpoint is not yet department-scoped (Support isolation step), so a Manager's
+ *                     dashboard neither requests nor shows the support insight
  * Returns { state, items, unavailable }: state is 'items' | 'clear' | 'loading' | 'unavailable' | 'hidden'. 'clear' (nothing to
  * report) is only ever returned when every source loaded, so a failed source is never mistaken for "no alerts".
  */
-export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendations }) {
+export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendations, showSupport = true }) {
   if (isStaff) {
     const status = own?.workloadStatus;
     if (status !== 'HIGH' && status !== 'AT_RISK') return { state: 'hidden', items: [], unavailable: [] };
@@ -178,7 +180,7 @@ export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendati
     };
   }
 
-  const sources = { workload: staffWorkload, tasks, support: recommendations };
+  const sources = showSupport ? { workload: staffWorkload, tasks, support: recommendations } : { workload: staffWorkload, tasks };
   const items = [];
 
   if (staffWorkload?.status === 'ready') {
@@ -192,7 +194,7 @@ export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendati
     }
   }
 
-  if (recommendations?.status === 'ready') {
+  if (showSupport && recommendations?.status === 'ready') {
     const departments = supportHighlights(recommendations.data);
     if (departments.length > 0) {
       const top = departments[0];

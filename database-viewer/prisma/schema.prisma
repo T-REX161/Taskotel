@@ -1,0 +1,125 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model assignments {
+  assigned_at DateTime @db.Timestamp(6)
+  id          String   @id @db.Uuid
+  staff_id    String   @db.Uuid
+  task_id     String   @db.Uuid
+  staff       staff    @relation(fields: [staff_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fkctyvh6n67tltno1j411wenm4h")
+  tasks       tasks    @relation(fields: [task_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fkedsmfsq5iq0j8a74fpkgleyn4")
+}
+
+model departments {
+  id            String    @id @db.Uuid
+  active        Boolean
+  code          String    @unique(map: "uk_departments_code") @db.VarChar(64)
+  color_key     String    @db.VarChar(50)
+  created_at    DateTime  @db.Timestamp(6)
+  description   String?   @db.VarChar(500)
+  icon_key      String    @db.VarChar(50)
+  name          String    @db.VarChar(100)
+  updated_at    DateTime? @db.Timestamp(6)
+  head_staff_id String?   @db.Uuid
+  staff         staff?    @relation(fields: [head_staff_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_departments_head_staff")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model staff {
+  active       Boolean
+  created_at   DateTime      @db.Timestamp(6)
+  updated_at   DateTime?     @db.Timestamp(6)
+  id           String        @id @db.Uuid
+  user_id      String        @unique @db.Uuid
+  availability String        @db.VarChar(255)
+  department   String        @db.VarChar(64)
+  email        String        @unique @db.VarChar(255)
+  name         String        @db.VarChar(255)
+  phone        String?       @db.VarChar(255)
+  assignments  assignments[]
+  departments  departments[]
+  users        users         @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fkdlvw23ak3u9v9bomm8g12rtc0")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model support_assignments {
+  id                        String    @id @db.Uuid
+  approved_by_user_id       String?   @db.Uuid
+  approved_by_username      String    @db.VarChar(255)
+  assignment_id             String?   @db.Uuid
+  completed_at              DateTime? @db.Timestamp(6)
+  created_at                DateTime  @db.Timestamp(6)
+  end_reason                String?   @db.VarChar(30)
+  home_department_code      String    @db.VarChar(64)
+  plan_id                   String    @db.Uuid
+  receiving_department_code String    @db.VarChar(64)
+  staff_id                  String    @unique(map: "uk_support_assignments_active_staff", where: raw("((status)::text = 'ACTIVE'::text)")) @db.Uuid
+  staff_name                String    @db.VarChar(255)
+  status                    String    @db.VarChar(20)
+  task_id                   String    @unique(map: "uk_support_assignments_active_task", where: raw("((status)::text = 'ACTIVE'::text)")) @db.Uuid
+  task_title                String    @db.VarChar(255)
+  version                   BigInt
+  archived_at               DateTime? @db.Timestamp(6)
+  archived_by_username      String?   @db.VarChar(255)
+
+  @@index([plan_id], map: "idx_support_assignments_plan")
+  @@index([staff_id, status], map: "idx_support_assignments_staff_status")
+  @@index([task_id, status], map: "idx_support_assignments_task_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tasks {
+  due_date           DateTime?     @db.Date
+  estimated_duration Int?
+  created_at         DateTime      @db.Timestamp(6)
+  updated_at         DateTime?     @db.Timestamp(6)
+  created_by_id      String        @db.Uuid
+  id                 String        @id @db.Uuid
+  category           String?       @db.VarChar(255)
+  department         String?       @db.VarChar(64)
+  description        String?
+  priority           String        @db.VarChar(255)
+  status             String        @db.VarChar(255)
+  title              String        @db.VarChar(255)
+  deadline_time      DateTime?     @db.Time(6)
+  assignments        assignments[]
+  users              users         @relation(fields: [created_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fkmeg3m9hk7eyq7u5kpot87f9ey")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model users {
+  active                       Boolean
+  created_at                   DateTime  @db.Timestamp(6)
+  updated_at                   DateTime? @db.Timestamp(6)
+  id                           String    @id @db.Uuid
+  email                        String    @unique @db.VarChar(255)
+  password                     String    @db.VarChar(255)
+  role                         String    @db.VarChar(255)
+  username                     String    @unique @db.VarChar(255)
+  email_verified               Boolean?
+  verification_attempt_count   Int?
+  verification_code_expires_at DateTime? @db.Timestamp(6)
+  verification_code_hash       String?   @db.VarChar(255)
+  verification_created_at      DateTime? @db.Timestamp(6)
+  credentials_setup_required   Boolean   @default(false)
+  setup_token                  String?   @db.VarChar(255)
+  password_reset_attempt_count Int?
+  password_reset_code_hash     String?   @db.VarChar(255)
+  password_reset_expires_at    DateTime? @db.Timestamp(6)
+  password_reset_last_sent_at  DateTime? @db.Timestamp(6)
+  first_login                  Boolean?  @default(true)
+  profile_image_public_id      String?   @db.VarChar(255)
+  profile_image_url            String?   @db.VarChar(512)
+  display_name                 String?   @db.VarChar(50)
+  last_login_at                DateTime? @db.Timestamp(6)
+  password_changed_at          DateTime? @db.Timestamp(6)
+  staff                        staff?
+  tasks                        tasks[]
+}

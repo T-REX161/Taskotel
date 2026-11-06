@@ -55,20 +55,39 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     private final AssignmentRepository assignmentRepository;
     private final SupportAssignmentRepository supportRepository;
     private final UserRepository userRepository;
+    private final com.hotel.workload.security.CurrentUserScopeResolver scopeResolver;
 
     public SupportAssignmentServiceImpl(DepartmentRepository departmentRepository,
                                         StaffRepository staffRepository,
                                         TaskRepository taskRepository,
                                         AssignmentRepository assignmentRepository,
                                         SupportAssignmentRepository supportRepository,
-                                        UserRepository userRepository) {
+                                        UserRepository userRepository,
+                                        com.hotel.workload.security.CurrentUserScopeResolver scopeResolver) {
         this.departmentRepository = departmentRepository;
         this.staffRepository = staffRepository;
         this.taskRepository = taskRepository;
         this.assignmentRepository = assignmentRepository;
         this.supportRepository = supportRepository;
         this.userRepository = userRepository;
+        this.scopeResolver = scopeResolver;
     }
+
+    // ── who is asking (read paths, Step 2G-2) ────────────────────────────────────────────────────────────────
+
+    /**
+     * Resolves the caller's scope ONCE for a read request, from the database (never from a request value). Admin: all; a valid Manager:
+     * their own department; Staff are refused (403, also at the URL level); an invalid Manager (403) and no sign-in (401) are refused by the
+     * resolver. Returns the Manager's department code, or null for an Admin.
+     */
+    private String readerDepartmentCode() {
+        com.hotel.workload.security.DepartmentScope scope = scopeResolver.resolve();
+        if (scope.isAll()) return null;
+        if (scope.isDepartment()) return scope.department().getCode();
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to perform this action.");
+    }
+
+    private static final String DEPARTMENT_NOT_FOUND_MESSAGE = "Department not found or not active";
 
     // ── current data ─────────────────────────────────────────────────────────────────────────────────────────
 
@@ -79,12 +98,18 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         final List<Staff> free = new ArrayList<>();
         final List<Staff> lendable = new ArrayList<>();
         final List<Task> waiting = new ArrayList<>();
+        /** Only for a donor in a Manager's narrowed load: how many tasks wait there (its task details are never loaded). */
+        Integer waitingCountOverride;
         int assignedMinutes = 0;
 
         Stats(Department department) { this.department = department; }
+
+        int waitingCount() { return waitingCountOverride != null ? waitingCountOverride : waiting.size(); }
     }
 
     private static final class State {
+        /** True for a Manager's narrowed load: donor departments carry counts, not tasks, and no donor workload figures exist. */
+        boolean narrowed;
         final LocalDate today = LocalDate.now();
         final Map<String, Stats> byCode = new LinkedHashMap<>();
         final Map<UUID, Staff> staffById = new HashMap<>();
@@ -93,6 +118,71 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         final Set<UUID> assignedTasks = new HashSet<>();
         final Map<UUID, Integer> minutesByStaff = new HashMap<>();
         final Map<UUID, Integer> countByStaff = new HashMap<>();
+    }
+
+    /**
+     * The state for a Manager's options and preview, read with queries limited to what the calculation needs: the receiving department's staff
+     * and waiting tasks, the people who are active and available anywhere (the possible helpers, and each donor's free count for the reserve
+     * rule), the NUMBER of waiting tasks per other department, the ids of busy staff and of held tasks, and one aggregate of assigned minutes.
+     * No other department's task, assignment or support record is loaded. The figures it produces are the same ones {@link #load()} produces
+     * for the receiving department and for the donors' reserve rule, so the algorithm and the stale-plan fingerprint are unchanged.
+     */
+    private State loadForReceiver(String receiverCode, java.util.Collection<UUID> itemStaffIds) {
+        State state = new State();
+        state.narrowed = true;
+        Department receiver = null;
+        for (Department department : departmentRepository.findAllByOrderByCreatedAtAscNameAsc()) {
+            if (!department.isActive()) continue;
+            state.byCode.put(department.getCode(), new Stats(department));
+            if (department.getCode().equals(receiverCode)) receiver = department;
+        }
+        if (receiver == null) return state;
+        Stats receiving = state.byCode.get(receiverCode);
+
+        state.busyStaff.addAll(assignmentRepository.findBusyStaffIds(ACTIVE_STATUSES));
+        state.assignedTasks.addAll(assignmentRepository.findHeldTaskIdsByDepartment(receiver, ACTIVE_STATUSES));
+        receiving.assignedMinutes = (int) assignmentRepository.sumSupportAttributedMinutes(receiver, receiverCode, ACTIVE_STATUSES);
+
+        Map<UUID, Staff> people = new LinkedHashMap<>();
+        for (Staff member : staffRepository.findActiveWithUserByDepartment(receiver)) people.put(member.getId(), member);
+        for (Staff member : staffRepository.findActiveWithUserByAvailability(Availability.AVAILABLE)) people.putIfAbsent(member.getId(), member);
+        for (Staff member : people.values()) {
+            state.staffById.put(member.getId(), member);
+            Stats stats = member.getDepartment() == null ? null : state.byCode.get(member.getDepartment().getCode());
+            if (stats == null || !member.isActive()) continue;
+            stats.activeStaff.add(member);
+            if (member.getAvailability() == Availability.AVAILABLE) {
+                stats.available.add(member);
+                if (!state.busyStaff.contains(member.getId())) {
+                    stats.free.add(member);
+                    if (WorkloadRecommendationEngine.canBeSuggested(member)) stats.lendable.add(member);
+                }
+            }
+        }
+        // The people named in a plan are looked up by id so each can be validated (a person outside the loaded set is validated as before)
+        if (!itemStaffIds.isEmpty()) {
+            for (Staff member : staffRepository.findAllById(itemStaffIds)) state.staffById.putIfAbsent(member.getId(), member);
+        }
+
+        for (Task task : taskRepository.findWaitingByDepartment(receiver, ACTIVE_STATUSES)) {
+            state.activeTasksById.put(task.getId(), task);
+            receiving.waiting.add(task);
+        }
+        for (Object[] row : taskRepository.countWaitingByDepartmentCode(ACTIVE_STATUSES)) {
+            Stats stats = state.byCode.get((String) row[0]);
+            if (stats != null && stats != receiving) stats.waitingCountOverride = ((Number) row[1]).intValue();
+        }
+        for (Stats stats : state.byCode.values()) {
+            if (stats != receiving && stats.waitingCountOverride == null) stats.waitingCountOverride = 0;
+        }
+
+        Comparator<Staff> byName = Comparator.comparing((Staff s) -> String.valueOf(s.getName()).toLowerCase()).thenComparing(s -> String.valueOf(s.getId()));
+        for (Stats stats : state.byCode.values()) {
+            stats.free.sort(byName);
+            stats.lendable.sort(byName);
+            stats.waiting.sort(WorkloadRecommendationEngine.MOST_IMPORTANT_FIRST);
+        }
+        return state;
     }
 
     private State load() {
@@ -174,10 +264,16 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     @Override
     @Transactional(readOnly = true)
     public Options getOptions(String receivingDepartmentCode) {
-        State state = load();
-        Stats receiving = state.byCode.get(receivingDepartmentCode == null ? "" : receivingDepartmentCode.trim());
+        String managerDepartment = readerDepartmentCode();
+        String requested = receivingDepartmentCode == null ? "" : receivingDepartmentCode.trim();
+        if (managerDepartment != null && !managerDepartment.equals(requested)) {
+            // Another department's options are refused exactly like a department that does not exist
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, DEPARTMENT_NOT_FOUND_MESSAGE);
+        }
+        State state = managerDepartment == null ? load() : loadForReceiver(managerDepartment, List.of());
+        Stats receiving = state.byCode.get(requested);
         if (receiving == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Department not found or not active");
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, DEPARTMENT_NOT_FOUND_MESSAGE);
         }
 
         int urgentOrHigh = 0;
@@ -197,10 +293,10 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         List<DonorDepartment> donors = new ArrayList<>();
         for (Stats donor : state.byCode.values()) {
             if (donor == receiving || donor.lendable.isEmpty()) continue;
-            int required = Math.max(1, donor.waiting.size());
+            int required = Math.max(1, donor.waitingCount());
             int maxLendable = Math.min(donor.lendable.size(), Math.max(0, donor.free.size() - required));
             // With the manager's acknowledgement the one-person reserve may go, but the donor's own waiting work stays covered
-            int overrideLendable = Math.max(maxLendable, Math.min(donor.lendable.size(), Math.max(0, donor.free.size() - donor.waiting.size())));
+            int overrideLendable = Math.max(maxLendable, Math.min(donor.lendable.size(), Math.max(0, donor.free.size() - donor.waitingCount())));
             String note = maxLendable > 0 ? null
                     : donor.free.size() <= 1 ? "Its only free staff member stays in reserve."
                     : "Its free staff are needed for its own waiting work and reserve.";
@@ -209,10 +305,21 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                 return new DonorStaff(s.getId(), s.getName(), s.getAvailability(), state.countByStaff.getOrDefault(s.getId(), 0), mins, WorkloadDto.deriveStatus(mins));
             }).toList();
             donors.add(new DonorDepartment(donor.department.getCode(), donor.department.getName(), donor.free.size(), donor.available.size(),
-                    donor.waiting.size(), maxLendable, overrideLendable, maxLendable > 0, note, staff));
+                    donor.waitingCount(), maxLendable, overrideLendable, maxLendable > 0, note, staff));
         }
 
-        return new Options(summary, tasks, receivingMetrics.uncoveredTasks(), donors, limitations());
+        Options options = new Options(summary, tasks, receivingMetrics.uncoveredTasks(), donors, limitations());
+        return managerDepartment == null ? options : redactOptionsForManager(options);
+    }
+
+    /**
+     * A Manager sees who could help (department, person's name and id, which the preview needs) but none of the donor department's figures:
+     * no free or available counts, waiting tasks, lendable limits, explanation note, or any person's task count, minutes or workload status.
+     */
+    private static Options redactOptionsForManager(Options options) {
+        List<DonorDepartment> donors = options.donors().stream().map(d -> new DonorDepartment(d.code(), d.name(), null, null, null, null, null, null, null,
+                d.staff().stream().map(s -> new DonorStaff(s.staffId(), s.name(), s.availability(), null, null, null)).toList())).toList();
+        return new Options(options.receiving(), options.tasks(), options.maxHelpers(), donors, options.limitations());
     }
 
     private static Severity severity(Stats stats, LocalDate today) {
@@ -302,7 +409,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         for (Map.Entry<String, Integer> lend : resolved.lendByDonor.entrySet()) {
             Stats donor = state.byCode.get(lend.getKey());
             if (donor == null) continue;
-            int ownWork = donor.waiting.size();
+            int ownWork = donor.waitingCount();
             int required = Math.max(1, ownWork);
             int freeAfter = donor.free.size() - lend.getValue();
             if (freeAfter < required) {
@@ -379,9 +486,61 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     @Override
     @Transactional(readOnly = true)
     public Preview preview(SupportPlanRequest request) {
-        State state = load();
+        String managerDepartment = readerDepartmentCode();
+        if (managerDepartment != null) {
+            String requested = request.getReceivingDepartment() == null ? "" : request.getReceivingDepartment().trim();
+            if (!managerDepartment.equals(requested)) {
+                // Another department as receiver is answered exactly like a department that does not exist (same body, nothing else loaded)
+                Resolved notFound = new Resolved();
+                notFound.problems.add(new Problem("DEPARTMENT_NOT_FOUND", "The receiving department does not exist or is not active.", null, null));
+                return buildPreview(null, notFound);
+            }
+        }
+        State state = managerDepartment == null ? load()
+                : loadForReceiver(managerDepartment, request.getItems().stream().map(SupportPlanRequest.Item::getStaffId).filter(java.util.Objects::nonNull).toList());
         Resolved resolved = resolve(request, state);
-        return buildPreview(state, resolved);
+        Preview preview = buildPreview(state, resolved);
+        return managerDepartment == null ? preview : redactPreviewForManager(preview, state, managerDepartment);
+    }
+
+    /**
+     * A Manager's preview keeps the receiving department's own impact, the valid pairs and the stale-plan fingerprint, but nothing about donor
+     * departments: no donor impact figures, no reserve explanation, no override hint, and no detail about any person or task that is not a
+     * possible helper or the department's own task (those problems read as "no longer exists", like a record that is not there).
+     */
+    private Preview redactPreviewForManager(Preview preview, State state, String ownCode) {
+        Set<UUID> visibleStaff = new HashSet<>();
+        for (Stats stats : state.byCode.values()) {
+            if (stats.department.getCode().equals(ownCode)) continue;
+            for (Staff s : stats.lendable) visibleStaff.add(s.getId());
+        }
+        for (Staff s : state.staffById.values()) {
+            if (s.getDepartment() != null && ownCode.equals(s.getDepartment().getCode())) visibleStaff.add(s.getId());
+        }
+        Set<UUID> ownWaiting = new HashSet<>();
+        Stats own = state.byCode.get(ownCode);
+        if (own != null) own.waiting.forEach(t -> ownWaiting.add(t.getId()));
+
+        List<Problem> problems = preview.problems().stream().map(p -> redactProblem(p, visibleStaff, ownWaiting)).toList();
+        List<Problem> warnings = preview.warnings().stream()
+                .map(p -> new Problem(p.code(), "The lending department's staffing is tight.", null, null)).toList();
+        return new Preview(preview.valid(), problems, warnings, false, preview.items(), preview.receiving(), List.of(), preview.fingerprint(), preview.limitations());
+    }
+
+    private static Problem redactProblem(Problem p, Set<UUID> visibleStaff, Set<UUID> ownWaiting) {
+        switch (p.code()) {
+            case "DONOR_RESERVE":
+                return new Problem(p.code(), "The lending department cannot spare this person right now.", null, null);
+            case "TASK_WRONG_DEPARTMENT":
+                return new Problem("TASK_NOT_FOUND", "A selected task no longer exists.", p.staffId(), p.taskId());
+            case "DUPLICATE_TASK":
+                return ownWaiting.contains(p.taskId()) ? p : new Problem("TASK_NOT_FOUND", "A selected task no longer exists.", p.staffId(), p.taskId());
+            case "STAFF_INACTIVE": case "STAFF_UNAVAILABLE": case "NOT_STAFF_ROLE": case "CANNOT_SIGN_IN": case "STAFF_BUSY":
+            case "DONOR_INACTIVE": case "DUPLICATE_STAFF": case "SAME_DEPARTMENT":
+                return visibleStaff.contains(p.staffId()) ? p : new Problem("STAFF_NOT_FOUND", "A selected staff member no longer exists.", p.staffId(), p.taskId());
+            default:
+                return p;
+        }
     }
 
     private Preview buildPreview(State state, Resolved resolved) {
@@ -402,7 +561,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         List<DepartmentImpact> donors = new ArrayList<>();
         for (Map.Entry<String, Integer> lend : resolved.lendByDonor.entrySet()) {
             Stats donor = state.byCode.get(lend.getKey());
-            if (donor == null) continue;
+            if (donor == null || state.narrowed) continue;   // a Manager's response carries no donor impact, so none is computed
             // The lent person's task minutes are counted under the receiving department, so the donor's minutes do not change
             donors.add(new DepartmentImpact("DONOR", donor.department.getCode(), donor.department.getName(), metrics(donor),
                     metrics(donor, donor.waiting, Math.max(0, donor.free.size() - lend.getValue()), donor.assignedMinutes),
@@ -434,7 +593,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         }
         for (Map.Entry<String, Integer> lend : resolved.lendByDonor.entrySet()) {
             Stats donor = state.byCode.get(lend.getKey());
-            if (donor != null) sb.append(lend.getKey()).append('|').append(donor.free.size()).append('|').append(donor.waiting.size()).append(';');
+            if (donor != null) sb.append(lend.getKey()).append('|').append(donor.free.size()).append('|').append(donor.waitingCount()).append(';');
         }
         try {
             byte[] hash = MessageDigest.getInstance("SHA-256").digest(sb.toString().getBytes(StandardCharsets.UTF_8));
@@ -449,6 +608,11 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     @Override
     @Transactional
     public List<SupportAssignmentDto> confirm(SupportPlanRequest request) {
+        // Confirmation is Admin-only, decided from the database before anything is locked or read. A Manager (valid or not), Staff and an
+        // unauthenticated caller are refused by the resolver or here, whatever the HTTP rules say.
+        if (readerDepartmentCode() != null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to perform this action.");
+        }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in to confirm support");
@@ -528,7 +692,12 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     @Override
     @Transactional
     public List<SupportAssignmentDto> list(SupportStatus status) {
-        reconcile();
+        String managerDepartment = readerDepartmentCode();
+        // An Admin's read reconciles every active record (existing behaviour). A Manager's read only reconciles the records that involve their
+        // own department, so reading the history can never change another department's support records.
+        reconcile(managerDepartment == null ? supportRepository.findByStatus(SupportStatus.ACTIVE)
+                : supportRepository.findByStatusInvolvingDepartment(SupportStatus.ACTIVE, managerDepartment));
+        if (managerDepartment != null) return listForManager(managerDepartment, status);
         // Archived records stay in the database as an audit trail but are no longer listed
         List<SupportAssignment> rows = status == null
                 ? supportRepository.findAllByArchivedAtIsNullOrderByCreatedAtDesc()
@@ -537,6 +706,25 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         taskRepository.findAllById(rows.stream().filter(r -> r.getStatus() == SupportStatus.ACTIVE).map(SupportAssignment::getTaskId).toList())
                 .forEach(task -> taskStatuses.put(task.getId(), task.getStatus()));
         return rows.stream().map(row -> SupportAssignmentDto.from(row, taskStatuses.get(row.getTaskId()))).toList();
+    }
+
+    /**
+     * A Manager's history: only records involving their department, selected in the database. Where the department received the support the
+     * details are shown (without the approver); where it only lent the person, only the person's name and the temporary loan are shown.
+     */
+    private List<SupportAssignmentDto> listForManager(String code, SupportStatus status) {
+        List<SupportAssignment> rows = status == null
+                ? supportRepository.findHistoryInvolvingDepartment(code)
+                : supportRepository.findHistoryInvolvingDepartmentAndStatus(code, status);
+        Map<UUID, TaskStatus> taskStatuses = new HashMap<>();
+        taskRepository.findAllById(rows.stream().filter(r -> r.getStatus() == SupportStatus.ACTIVE && code.equals(r.getReceivingDepartmentCode()))
+                        .map(SupportAssignment::getTaskId).toList())
+                .forEach(task -> taskStatuses.put(task.getId(), task.getStatus()));
+        return rows.stream()
+                .map(row -> code.equals(row.getReceivingDepartmentCode())
+                        ? SupportAssignmentDto.forReceivingManager(row, taskStatuses.get(row.getTaskId()))
+                        : SupportAssignmentDto.forDonorManager(row))
+                .toList();
     }
 
     // ── removing an ended record from the history ────────────────────────────────────────────────────────────
@@ -548,18 +736,35 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         if (auth == null || auth.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in to remove support history");
         }
+        // Admin: any record. A valid Manager: only a record involving their department, looked up and locked by that filter, so another
+        // department's record is never loaded and answers exactly like one that does not exist. Staff and invalid Managers are refused.
+        String managerDepartment = readerDepartmentCode();
         // Only this record is touched: no task, assignment, staff or department is read for change
-        SupportAssignment support = supportRepository.lockById(supportId).orElseThrow(() -> supportNotFound());
+        SupportAssignment support = (managerDepartment == null ? supportRepository.lockById(supportId)
+                : supportRepository.lockByIdInvolvingDepartment(supportId, managerDepartment)).orElseThrow(() -> supportNotFound());
         if (support.getStatus() == SupportStatus.ACTIVE) {
             throw new SupportPlanException(HttpStatus.CONFLICT, "This support is still active. End it first, then remove it from the history.",
-                    List.of(new Problem("SUPPORT_ACTIVE", "Active support cannot be removed from the history.", support.getStaffId(), support.getTaskId())));
+                    List.of(new Problem("SUPPORT_ACTIVE", "Active support cannot be removed from the history.", support.getStaffId(), taskIdFor(support, managerDepartment))));
         }
         if (support.getArchivedAt() != null) {
             throw new SupportPlanException(HttpStatus.CONFLICT, "This record has already been removed from the history. Refresh to see the latest.",
-                    List.of(new Problem("ALREADY_ARCHIVED", "This record was already removed from the history.", support.getStaffId(), support.getTaskId())));
+                    List.of(new Problem("ALREADY_ARCHIVED", "This record was already removed from the history.", support.getStaffId(), taskIdFor(support, managerDepartment))));
         }
         support.archive(auth.getName(), LocalDateTime.now());
-        return SupportAssignmentDto.from(supportRepository.saveAndFlush(support), null);
+        return view(supportRepository.saveAndFlush(support), null, managerDepartment);
+    }
+
+    /** The record as the caller may see it: everything for an Admin, the receiving or donor projection (never the approver) for a Manager. */
+    private static SupportAssignmentDto view(SupportAssignment support, TaskStatus taskStatus, String managerDepartment) {
+        if (managerDepartment == null) return SupportAssignmentDto.from(support, taskStatus);
+        return managerDepartment.equals(support.getReceivingDepartmentCode())
+                ? SupportAssignmentDto.forReceivingManager(support, taskStatus)
+                : SupportAssignmentDto.forDonorManager(support);
+    }
+
+    /** A donor-only Manager never learns the receiving department's task id, not even from an error. */
+    private static UUID taskIdFor(SupportAssignment support, String managerDepartment) {
+        return managerDepartment != null && !managerDepartment.equals(support.getReceivingDepartmentCode()) ? null : support.getTaskId();
     }
 
     // ── ending support by hand ───────────────────────────────────────────────────────────────────────────────
@@ -569,32 +774,40 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     public SupportAssignmentDto end(UUID supportId) {
         // Lock in the same order as the task flows (task, staff, then the support record) and read the record only
         // after the locks, so a request that waited sees what the winner did instead of a stale copy.
-        UUID taskId = supportRepository.findTaskIdById(supportId).orElseThrow(() -> supportNotFound());
+        // Admin: any record. A valid Manager: only a record involving their department, found and locked by that filter (another department's
+        // record is never loaded and answers like one that does not exist). Staff and invalid Managers are refused before anything is read.
+        String managerDepartment = readerDepartmentCode();
+        UUID taskId = (managerDepartment == null ? supportRepository.findTaskIdById(supportId)
+                : supportRepository.findTaskIdByIdInvolvingDepartment(supportId, managerDepartment)).orElseThrow(() -> supportNotFound());
         taskRepository.lockByIds(Set.of(taskId));
-        SupportAssignment support = supportRepository.lockById(supportId).orElseThrow(() -> supportNotFound());
+        SupportAssignment support = (managerDepartment == null ? supportRepository.lockById(supportId)
+                : supportRepository.lockByIdInvolvingDepartment(supportId, managerDepartment)).orElseThrow(() -> supportNotFound());
         staffRepository.lockByIds(Set.of(support.getStaffId()));
 
         if (support.getStatus() != SupportStatus.ACTIVE) {
             throw new SupportPlanException(HttpStatus.CONFLICT, "This support has already ended. Refresh to see the latest.",
-                    List.of(new Problem("ALREADY_ENDED", "This support has already ended.", support.getStaffId(), support.getTaskId())));
+                    List.of(new Problem("ALREADY_ENDED", "This support has already ended.", support.getStaffId(), taskIdFor(support, managerDepartment))));
         }
 
         LocalDateTime now = LocalDateTime.now();
         Task task = taskRepository.findById(support.getTaskId()).orElse(null);
         if (task == null) {
             support.end(SupportStatus.CANCELLED, SupportEndReason.TASK_DELETED, now);
-            return SupportAssignmentDto.from(supportRepository.saveAndFlush(support), null);
+            return view(supportRepository.saveAndFlush(support), null, managerDepartment);
         }
         // The task finished or moved meanwhile: record what really happened rather than a manual end
         if (task.getStatus() == TaskStatus.COMPLETED || task.getStatus() == TaskStatus.CANCELLED
                 || task.getDepartment() == null || !task.getDepartment().getCode().equals(support.getReceivingDepartmentCode())) {
             endIfTaskDone(support, task);
-            return SupportAssignmentDto.from(support, task.getStatus());
+            return view(support, task.getStatus(), managerDepartment);
         }
         if (task.getStatus() == TaskStatus.IN_PROGRESS) {
+            // A donor-only Manager is told nothing about the receiving department's task: no title, no id
+            boolean donorOnly = managerDepartment != null && !managerDepartment.equals(support.getReceivingDepartmentCode());
             throw new SupportPlanException(HttpStatus.CONFLICT,
-                    "\"" + task.getTitle() + "\" is already in progress. Support cannot be ended until the task is completed or reassigned.",
-                    List.of(new Problem("TASK_IN_PROGRESS", "The task is already in progress.", support.getStaffId(), task.getId())));
+                    donorOnly ? "The task is already in progress. Support cannot be ended until the task is completed or reassigned."
+                            : "\"" + task.getTitle() + "\" is already in progress. Support cannot be ended until the task is completed or reassigned.",
+                    List.of(new Problem("TASK_IN_PROGRESS", "The task is already in progress.", support.getStaffId(), donorOnly ? null : task.getId())));
         }
 
         List<Assignment> held = assignmentRepository.findAllByTaskId(task.getId());
@@ -610,7 +823,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             support.end(SupportStatus.CANCELLED, SupportEndReason.MANUALLY_ENDED, now);
         }
         supportRepository.saveAndFlush(support);
-        return SupportAssignmentDto.from(support, task.getStatus());
+        return view(support, task.getStatus(), managerDepartment);
     }
 
     /** A coded 404, so a client can tell "this record does not exist" from "this server has no such route". */
@@ -620,8 +833,12 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     }
 
     /** Safety net: closes active support whose task is gone or finished, whatever path changed it. */
-    private void reconcile() {
-        for (SupportAssignment support : supportRepository.findByStatus(SupportStatus.ACTIVE)) {
+    /**
+     * Ends the given active records whose task is gone, finished or moved. Each record is judged on its own task only, so reconciling a subset
+     * applies exactly the same rules as reconciling all of them.
+     */
+    private void reconcile(List<SupportAssignment> activeRecords) {
+        for (SupportAssignment support : activeRecords) {
             Optional<Task> task = taskRepository.findById(support.getTaskId());
             if (task.isEmpty()) {
                 support.end(SupportStatus.CANCELLED, SupportEndReason.TASK_DELETED, LocalDateTime.now());

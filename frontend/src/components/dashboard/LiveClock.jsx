@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import useCurrentUserProfile from '../../hooks/useCurrentUserProfile';
 import { getPreferences } from '../../utils/preferences';
 import { clockParts, secondsPart, sharedTicker, splitTime, startClock } from '../../utils/liveClock';
@@ -16,6 +16,49 @@ const CalendarIcon = (props) => (
     <path d="M16 2v4M8 2v4M3 10h18" />
   </Icon>
 );
+
+/**
+ * One character of the time. When its value changes, the old character rolls up and out while the new one rolls up and in (CSS only,
+ * ~300 ms); an unchanged character never re-animates, and the first paint is static. The new character stays in normal flow, so the width,
+ * height and baseline are exactly those of a plain character.
+ */
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function RollChar({ value, animateOnMount }) {
+  const [state, setState] = useState({ cur: value, prev: null, n: animateOnMount ? 1 : 0 });
+  if (state.cur !== value) setState({ cur: value, prev: prefersReducedMotion() ? null : state.cur, n: state.n + 1 });
+  const rolling = state.n > 0;
+  return (
+    <span className="relative inline-block">
+      <span key={state.n} className={rolling ? 'clock-roll-in inline-block' : 'inline-block'}>{state.cur}</span>
+      {state.prev !== null && (
+        <span
+          key={'out' + state.n}
+          className="clock-roll-out absolute left-0 top-0"
+          onAnimationEnd={() => setState((s) => (s.prev === null ? s : { ...s, prev: null }))}
+        >
+          {state.prev}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** Hours and minutes as individually animated characters, keyed from the right so ":" and the minute digits keep their identity. */
+export function RollingTime({ text }) {
+  const mounted = useRef(false);
+  useEffect(() => { mounted.current = true; }, []);
+  const chars = Array.from(text);
+  return chars.map((ch, i) => <RollChar key={chars.length - i} value={ch} animateOnMount={mounted.current} />);
+}
+
+/** AM/PM: a subtle fade only when it actually changes. */
+export function FadeText({ value, className }) {
+  const [state, setState] = useState({ cur: value, n: 0 });
+  if (state.cur !== value) setState({ cur: value, n: state.n + 1 });
+  return <span key={state.n} className={`${className} ${state.n > 0 ? 'clock-fade-in' : ''}`} aria-hidden="true">{state.cur}</span>;
+}
 
 /**
  * The Dashboard's live date and time, with no container and no clock icon: two rows that start at the same left edge. The first row is the
@@ -47,10 +90,10 @@ export default function LiveClock() {
     >
       <span className="flex items-baseline gap-1.5 whitespace-nowrap leading-none">
         <span className="inline-flex items-baseline gap-0.5">
-          <span className="text-2xl font-semibold leading-[1.05] tracking-tight text-gray-900" aria-hidden="true">{main}</span>
+          <span className="text-2xl font-semibold leading-[1.05] tracking-tight text-gray-900" aria-hidden="true"><RollingTime text={main} /></span>
           <span className="text-sm font-medium text-gray-500" aria-hidden="true">:{secondsPart(now)}</span>
         </span>
-        {meridiem && <span className="text-xs font-semibold text-gray-500" aria-hidden="true">{meridiem}</span>}
+        {meridiem && <FadeText className="text-xs font-semibold text-gray-500" value={meridiem} />}
         {/* Screen readers get the time once (hours and minutes), not a new announcement every second */}
         <span className="sr-only">{time}</span>
       </span>

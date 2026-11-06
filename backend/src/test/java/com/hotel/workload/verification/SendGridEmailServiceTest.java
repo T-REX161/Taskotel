@@ -302,7 +302,7 @@ public class SendGridEmailServiceTest {
     }
 
     @Test
-    @DisplayName("The sent email names the sender \"Taskotel | Hotel Operations\" by default, keeps the configured address, and an override still wins")
+    @DisplayName("The sent email names the sender \"Taskotel\" by default, keeps the configured address, and an override still wins")
     public void testSenderDisplayNameInSentRequest() throws Exception {
         SendGrid mockSendGrid = mock(SendGrid.class);
         Response ok = new Response();
@@ -319,7 +319,7 @@ public class SendGridEmailServiceTest {
         verify(mockSendGrid, times(3)).api(captor.capture());
         for (int i = 0; i < 2; i++) {
             String body = captor.getAllValues().get(i).getBody();
-            assertTrue(body.contains("\"name\":\"Taskotel | Hotel Operations\""), body);
+            assertTrue(body.contains("\"name\":\"Taskotel\""), body);
             assertTrue(body.contains("\"email\":\"me@example.test\""), "the sender address is unchanged");
             assertFalse(body.contains("Hotel Workload Balancer") || body.contains("EquiFlow"));
         }
@@ -331,7 +331,7 @@ public class SendGridEmailServiceTest {
     public void testSenderNameDefaultsInConfiguration() throws Exception {
         for (String file : new String[] {"src/main/resources/application.yml", "src/main/resources/application-prod.yml", "src/main/resources/application-production.yml"}) {
             String yaml = java.nio.file.Files.readString(java.nio.file.Path.of(file));
-            assertTrue(yaml.contains("from-name: ${SENDGRID_FROM_NAME:Taskotel | Hotel Operations}"), file);
+            assertTrue(yaml.contains("from-name: ${SENDGRID_FROM_NAME:Taskotel}"), file);
             assertFalse(yaml.contains("EquiFlow"), file);
         }
         assertEquals("My Hotel", new SendGridProperties("SG.key", "noreply@hotelwb.com", "My Hotel").getFromName());
@@ -340,8 +340,8 @@ public class SendGridEmailServiceTest {
     @Test
     @DisplayName("Default sender display name is Taskotel, and email texts carry no old product branding")
     public void testTaskotelBranding() {
-        assertEquals("Taskotel | Hotel Operations", new SendGridProperties().getFromName(), "Default sender display name");
-        assertEquals("Taskotel | Hotel Operations", new SendGridProperties("SG.key", "noreply@hotelwb.com", null).getFromName(), "Null display name falls back to the default");
+        assertEquals("Taskotel", new SendGridProperties().getFromName(), "Default sender display name");
+        assertEquals("Taskotel", new SendGridProperties("SG.key", "noreply@hotelwb.com", null).getFromName(), "Null display name falls back to the default");
 
         SendGridEmailService emailService = new SendGridEmailService(new SendGridProperties());
         String texts = String.join("\n",

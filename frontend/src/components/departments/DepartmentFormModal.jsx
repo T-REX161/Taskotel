@@ -186,7 +186,7 @@ export default function DepartmentFormModal({ isOpen, onClose, department = null
       if (err.status === 409) {
         setFormError(err.message || 'A department with this name already exists.');
       } else if (err.status === 403) {
-        setFormError('Permission denied. Only ADMIN or MANAGER users can manage departments.');
+        setFormError('Permission denied. Only ADMIN users can manage departments.');
       } else if (err.status === 404) {
         setFormError(err.message || 'Department not found. It may have been removed; close this dialog and refresh.');
       } else if (err.status === 400) {

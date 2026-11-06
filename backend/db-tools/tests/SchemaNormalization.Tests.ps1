@@ -36,7 +36,7 @@ function Assert-Case {
 $tempDir = Join-Path $env:TEMP ('wb-schema-tests-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 
-# A minimal schema dump: the four application tables, each followed by the given CHECK lines
+# A minimal schema dump: the seven application tables, each followed by the given CHECK lines
 function New-SchemaFile {
     param([string]$Name, [string[]]$CheckLines, [string]$RestrictKey = 'k1', [string]$ColumnType = 'character varying(255)')
     $content = @(
@@ -44,9 +44,18 @@ function New-SchemaFile {
         'CREATE TABLE public.assignments (',
         '    id uuid NOT NULL',
         ');',
+        'CREATE TABLE public.departments (',
+        '    id uuid NOT NULL',
+        ');',
+        'CREATE TABLE public.notification_preferences (',
+        '    id uuid NOT NULL',
+        ');',
         'CREATE TABLE public.staff (',
         "    availability $ColumnType NOT NULL,"
     ) + $CheckLines + @(
+        ');',
+        'CREATE TABLE public.support_assignments (',
+        '    id uuid NOT NULL',
         ');',
         'CREATE TABLE public.tasks (',
         '    id uuid NOT NULL',

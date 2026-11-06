@@ -61,7 +61,7 @@ export default function AssignmentsPage() {
   const [selectedStaffId, setSelectedStaffId] = useState('');
   const [assignModalError, setAssignModalError] = useState('');
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
-  const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+  const [isLoadingStaff] = useState(false);
 
   const [viewModalTask, setViewModalTask] = useState(null);
 

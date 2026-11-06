@@ -43,6 +43,14 @@ public class StaffControllerTest {
         @Autowired
         private jakarta.persistence.EntityManager entityManager;
 
+        @Autowired
+        private DepartmentRepository departmentRepository;
+
+        @Autowired
+        private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
+        private com.hotel.workload.security.ScopeFixtures fixtures;
+
         private MockMvc mockMvc;
 
         @BeforeEach
@@ -50,6 +58,15 @@ public class StaffControllerTest {
                 mockMvc = MockMvcBuilders.webAppContextSetup(context)
                                 .apply(springSecurity())
                                 .build();
+                // Every Manager request below comes from a valid Manager: active account, active Staff record, in Front Desk (where
+                // these tests create their staff). A Manager with no department assignment would be refused.
+                fixtures = new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder);
+                fixtures.manager("ctl_manager", fixtures.department("FRONT_DESK"));
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        public void removeManagerFixture() {
+                fixtures.remove("ctl_manager");
         }
 
         @Test
@@ -61,7 +78,7 @@ public class StaffControllerTest {
         }
 
         @Test
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         public void testGetStaffWithManagerRole() throws Exception {
                 mockMvc.perform(get("/api/staff"))
                                 .andExpect(status().isOk())
@@ -104,7 +121,7 @@ public class StaffControllerTest {
         }
 
         @Test
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         @org.springframework.transaction.annotation.Transactional
         public void testCreateStaffWithManagerRole() throws Exception {
                 String json = """
@@ -272,7 +289,7 @@ public class StaffControllerTest {
         }
 
         @Test
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         @org.springframework.transaction.annotation.Transactional
         public void testUpdateStaffWithManagerRole() throws Exception {
                 String id = createStaffHelper("managerupdate", "managerupdate@staff.com");
@@ -282,7 +299,7 @@ public class StaffControllerTest {
                                     "fullName": "Updated By Manager",
                                     "email": "updated_manager@staff.com",
                                     "phone": "987654321",
-                                    "department": "MAINTENANCE",
+                                    "department": "FRONT_DESK",
                                     "availability": "UNAVAILABLE",
                                     "active": true
                                 }
@@ -404,7 +421,7 @@ public class StaffControllerTest {
         }
 
         @Test
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         @org.springframework.transaction.annotation.Transactional
         public void testDeactivateStaffWithManagerRole() throws Exception {
                 String id = createStaffHelper("manager_deact", "manager_deact@staff.com");
@@ -664,7 +681,7 @@ public class StaffControllerTest {
         }
 
         @Test
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         @org.springframework.transaction.annotation.Transactional
         public void testManagerCannotRemoveStaff() throws Exception {
                 Staff staff = createTestStaff("mgr_forbidden_staff", "mgrforbidden@hotel.com", false);
@@ -796,7 +813,7 @@ public class StaffControllerTest {
         }
 
         @Test
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         @org.springframework.transaction.annotation.Transactional
         public void testActivateStaffWithManagerRole() throws Exception {
                 String id = createStaffHelper("manager_act", "manager_act@staff.com");
@@ -981,7 +998,7 @@ public class StaffControllerTest {
         }
 
         @Test
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         @org.springframework.transaction.annotation.Transactional
         public void testDeactivateStaffWithOnlyCompletedOrCancelledAssignmentsSucceeds() throws Exception {
                 Staff staff = createStaffWithAssignedTask("deact_history", true, com.hotel.workload.task.TaskStatus.COMPLETED);
@@ -1017,7 +1034,7 @@ public class StaffControllerTest {
 
         @org.junit.jupiter.params.ParameterizedTest
         @org.junit.jupiter.params.provider.EnumSource(value = com.hotel.workload.task.TaskStatus.class, names = { "PENDING", "ASSIGNED", "IN_PROGRESS" })
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         @org.springframework.transaction.annotation.Transactional
         public void testUpdateStaffToInactiveWithActiveAssignmentReturns409AndLeavesRecordUnchanged(com.hotel.workload.task.TaskStatus taskStatus) throws Exception {
                 Staff staff = createStaffWithAssignedTask("upd_busy_" + taskStatus.name().toLowerCase(), true, taskStatus);
@@ -1129,7 +1146,7 @@ public class StaffControllerTest {
 
         @org.junit.jupiter.params.ParameterizedTest
         @org.junit.jupiter.params.provider.EnumSource(value = com.hotel.workload.task.TaskStatus.class, names = { "PENDING", "ASSIGNED", "IN_PROGRESS" })
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(roles = "ADMIN") // only an administrator transfers staff between departments (a Manager gets 403, see StaffDepartmentIsolationTest)
         @org.springframework.transaction.annotation.Transactional
         public void testChangingDepartmentOfStaffWithActiveTaskReturns409AndLeavesStaffAndLoginUnchanged(com.hotel.workload.task.TaskStatus taskStatus) throws Exception {
                 String username = "p2_staff_" + taskStatus.name().toLowerCase();
@@ -1300,7 +1317,7 @@ public class StaffControllerTest {
         }
 
         @Test
-        @WithMockUser(roles = "MANAGER")
+        @WithMockUser(username = "ctl_manager", roles = "MANAGER")
         @org.springframework.transaction.annotation.Transactional
         public void testManagerCannotCreateManagerOrAdmin() throws Exception {
                 long usersBefore = userRepository.count();

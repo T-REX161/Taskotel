@@ -2,6 +2,8 @@ package com.hotel.workload.task;
 
 import com.hotel.workload.assignment.Assignment;
 import com.hotel.workload.assignment.AssignmentRepository;
+import com.hotel.workload.security.CurrentUserScopeResolver;
+import com.hotel.workload.security.DepartmentScope;
 import com.hotel.workload.security.User;
 import com.hotel.workload.security.UserRepository;
 import com.hotel.workload.staff.Department;
@@ -10,8 +12,6 @@ import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.support.SupportLifecycle;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,40 +32,47 @@ public class TaskServiceImpl implements TaskService {
     private final AssignmentRepository assignmentRepository;
     private final DepartmentResolver departmentResolver;
     private final SupportLifecycle supportLifecycle;
+    private final CurrentUserScopeResolver scopeResolver;
+
+    private static final String OWN_DEPARTMENT_ONLY_MESSAGE = "Managers can only create tasks in their own department.";
+    private static final String NO_DEPARTMENT_CHANGE_MESSAGE = "Managers cannot move a task to another department or remove its department.";
 
     public TaskServiceImpl(TaskRepository taskRepository,
                            UserRepository userRepository,
                            StaffRepository staffRepository,
                            AssignmentRepository assignmentRepository,
                            DepartmentResolver departmentResolver,
-                           SupportLifecycle supportLifecycle) {
+                           SupportLifecycle supportLifecycle,
+                           CurrentUserScopeResolver scopeResolver) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
         this.assignmentRepository = assignmentRepository;
         this.departmentResolver = departmentResolver;
         this.supportLifecycle = supportLifecycle;
+        this.scopeResolver = java.util.Objects.requireNonNull(scopeResolver, "scopeResolver");
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<TaskDto> getAllTasks() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            return Collections.emptyList();
-        }
+        // The scope decides, from the database, what this caller may see; no sign-in is 401 and an invalid Manager is 403
+        DepartmentScope scope = scopeResolver.resolve();
 
-        if (isAdminOrManager(auth)) {
+        if (scope.isAll()) {
             return taskRepository.findAll().stream()
                     .map(this::mapToDto)
                     .collect(Collectors.toList());
         }
-
-        String username = auth.getName();
-        if (username == null) {
-            return Collections.emptyList();
+        if (scope.isDepartment()) {
+            // A Manager: the department is part of the query. Tasks with no department are never returned.
+            return taskRepository.findByDepartment(scope.department()).stream()
+                    .map(this::mapToDto)
+                    .collect(Collectors.toList());
         }
 
+        // Staff: unchanged. Only the tasks assigned to the signed-in staff member.
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
         return staffRepository.findByUserUsername(username)
                 .map(staff -> taskRepository.findTasksByStaffId(staff.getId()).stream()
                         .map(this::mapToDto)
@@ -73,19 +80,42 @@ public class TaskServiceImpl implements TaskService {
                 .orElse(Collections.emptyList());
     }
 
-    private boolean isAdminOrManager(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return false;
+    /**
+     * The scope for changing tasks: global for an administrator, one department for a valid Manager. A Staff member is refused, and an
+     * invalid Manager (403) or a missing sign-in (401) is refused by the resolver itself.
+     */
+    private DepartmentScope requireTaskManagementScope() {
+        DepartmentScope scope = scopeResolver.resolve();
+        if (!scope.isAll() && !scope.isDepartment()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to manage tasks.");
         }
-        return auth.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ADMIN") 
-                            || a.equals("ROLE_MANAGER") || a.equals("MANAGER"));
+        return scope;
+    }
+
+    /**
+     * Locks and loads the task for a change. An administrator uses the existing lock. A Manager uses the department-scoped lock, so a task
+     * of another department, or one with no department, is reported as not found, exactly like an id that does not exist, and is never locked.
+     */
+    private Task lockTask(DepartmentScope scope, UUID id) {
+        if (scope.isAll()) {
+            taskRepository.lockByIds(Set.of(id));
+            return taskRepository.findById(id)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+        }
+        return taskRepository.lockByIdAndDepartment(id, scope.department())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
     }
 
     @Override
     @Transactional
     public TaskDto createTask(CreateTaskRequest request) {
+        DepartmentScope scope = requireTaskManagementScope();
+        // A Manager creates tasks in their own department only. A blank department means their own; any other value is refused before
+        // anything is looked up or saved, so the refusal says nothing about whether that department exists.
+        if (scope.isDepartment() && request.getDepartment() != null && !request.getDepartment().isBlank()
+                && !request.getDepartment().trim().equals(scope.departmentCode())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, OWN_DEPARTMENT_ONLY_MESSAGE);
+        }
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         User createdBy = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated user not found"));
@@ -99,7 +129,8 @@ public class TaskServiceImpl implements TaskService {
         task.setEstimatedDuration(request.getEstimatedDuration());
         task.setDueDate(request.getDueDate());
         task.setDeadlineTime(request.getDeadlineTime());
-        task.setDepartment(departmentResolver.optionalActive(request.getDepartment()));
+        // For a Manager the department is the one resolved from their own records, never the one from the request
+        task.setDepartment(scope.isDepartment() ? scope.department() : departmentResolver.optionalActive(request.getDepartment()));
         task.setCreatedBy(createdBy);
         // createdAt / updatedAt handled by @PrePersist on the entity
         task = taskRepository.save(task);
@@ -109,11 +140,15 @@ public class TaskServiceImpl implements TaskService {
     @Override
     @Transactional
     public TaskDto updateTask(UUID id, UpdateTaskRequest request) {
+        DepartmentScope scope = requireTaskManagementScope();
         // Lock the task before reading it, as assignment, reassignment and support do (task first, then staff / support), so a
-        // status change and an assignment of this task are applied one after the other, each seeing what the other committed
-        taskRepository.lockByIds(Set.of(id));
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+        // status change and an assignment of this task are applied one after the other, each seeing what the other committed.
+        // A Manager can only lock (and so only reach) a task of their own department.
+        Task task = lockTask(scope, id);
+        // Only an administrator moves a task to another department or removes its department. This is refused before any field changes.
+        if (scope.isDepartment() && !isCurrentDepartment(task, request.getDepartment())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, NO_DEPARTMENT_CHANGE_MESSAGE);
+        }
 
         // Reject before any field changes so a refused update leaves the task untouched
         // Unchanged department: kept even if it is now inactive. Changed department: must be an active one.
@@ -206,9 +241,8 @@ public class TaskServiceImpl implements TaskService {
     @Override
     @Transactional
     public void deleteTask(UUID id) {
-        taskRepository.lockByIds(Set.of(id)); // see updateTask
-        Task task = taskRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+        DepartmentScope scope = requireTaskManagementScope();
+        Task task = lockTask(scope, id); // see updateTask
         supportLifecycle.onTaskDeleted(id);
         List<Assignment> assignments = assignmentRepository.findAllByTaskId(id);
         if (!assignments.isEmpty()) {
@@ -217,6 +251,10 @@ public class TaskServiceImpl implements TaskService {
         }
         taskRepository.delete(task);
         taskRepository.flush();
+    }
+
+    private static boolean isCurrentDepartment(Task task, String requestedCode) {
+        return task.getDepartment() != null && requestedCode != null && requestedCode.trim().equals(task.getDepartment().getCode());
     }
 
     private TaskDto mapToDto(Task task) {

@@ -66,6 +66,8 @@ export default function Dashboard() {
   };
 
   const loadRecommendations = async () => {
+    // A Manager's support recommendations are not department-scoped yet (Support isolation step): a Manager's dashboard does not request or show them
+    if (getUserRole() === 'MANAGER') return;
     try {
       const next = { status: 'ready', data: normalizeRecommendations(await getWorkloadRecommendations()) };
       setRecommendations((prev) => keepIfSame(prev, next));
@@ -170,7 +172,7 @@ export default function Dashboard() {
     userRole === 'STAFF' ||
     (data && data.workload !== undefined && data.totalStaff === undefined);
 
-  const insights = buildInsights({ isStaff, own: data?.workload, staffWorkload, tasks, recommendations });
+  const insights = buildInsights({ isStaff, own: data?.workload, staffWorkload, tasks, recommendations, showSupport: userRole !== 'MANAGER' });
   const welcomeName = preferredName(profile, describeUser(getUsername(), userRole).displayName);
 
   return (

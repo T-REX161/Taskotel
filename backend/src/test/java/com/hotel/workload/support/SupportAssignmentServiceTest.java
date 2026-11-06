@@ -51,13 +51,32 @@ public class SupportAssignmentServiceTest {
     @Autowired private DepartmentRepository departmentRepository;
     @Autowired private SupportAssignmentRepository supportRepository;
     @Autowired private EntityManager entityManager;
+    @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     private SupportTestFixture fx;
 
     @BeforeEach
     void setUp() {
         fx = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository);
-        SupportTestFixture.signInAs("manager_test", "MANAGER");
+        SupportTestFixture.signInAs("manager_test", "ADMIN"); // the global view: these tests are about support behaviour, a Manager's scope is in SupportReadDepartmentIsolationTest
+    }
+
+    /**
+     * The task service now decides by the caller's department, so the user name these tests sign in with ("manager_test") must be a valid
+     * Manager of the department whose tasks are changed: an active account with an active Staff record in it. Support itself is unchanged.
+     */
+    private void validManagerOf(com.hotel.workload.staff.Department department) {
+        new com.hotel.workload.security.ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).manager("manager_test", department);
+    }
+
+    /** The workload an Administrator sees (these tests are about support behaviour in the global view, not about a Manager's scope). */
+    private java.util.List<WorkloadDto> adminWorkload() {
+        SupportTestFixture.signInAs("support_admin", "ADMIN");
+        try {
+            return workloadService.calculateWorkload();
+        } finally {
+            SupportTestFixture.signInAs("manager_test", "ADMIN"); // the global view: these tests are about support behaviour, a Manager's scope is in SupportReadDepartmentIsolationTest
+        }
     }
 
     @AfterEach
@@ -113,6 +132,8 @@ public class SupportAssignmentServiceTest {
     @Test
     @DisplayName("Existing assignment rules are untouched: the ordinary endpoint still refuses a cross-department assignment")
     void ordinaryAssignmentStillRequiresTheSameDepartment() {
+        // The task/staff department rule is checked for an Admin (a Manager is limited to one department and would be refused earlier, with 404)
+        SupportTestFixture.signInAs("support_admin", "ADMIN");
         var s = fx.overloaded(2, 3);
         CreateAssignmentRequest request = new CreateAssignmentRequest();
         request.setTaskId(s.tasks.get(0).getId());
@@ -168,7 +189,7 @@ public class SupportAssignmentServiceTest {
         service.confirm(fx.plan(s.receiving, helper, s.tasks.get(0)));
         entityManager.flush();
 
-        WorkloadDto dto = workloadService.calculateWorkload("manager_test", true).stream()
+        WorkloadDto dto = adminWorkload().stream()
                 .filter(w -> w.getStaffId().equals(helper.getId())).findFirst().orElseThrow();
 
         assertEquals(1, dto.getActiveTaskCount());
@@ -398,6 +419,7 @@ public class SupportAssignmentServiceTest {
         service.confirm(fx.plan(s.receiving, helper, task));
         entityManager.flush();
 
+        validManagerOf(s.receiving);
         taskService.updateTask(task.getId(), update(task, TaskStatus.COMPLETED));
         entityManager.flush();
         entityManager.clear();
@@ -409,7 +431,7 @@ public class SupportAssignmentServiceTest {
         assertEquals(s.donor.getCode(), staffRepository.findById(helper.getId()).orElseThrow().getDepartment().getCode());
         assertEquals(1, service.list(SupportStatus.COMPLETED).stream().filter(x -> x.taskId().equals(task.getId())).count());
         assertEquals(0, service.list(SupportStatus.ACTIVE).stream().filter(x -> x.taskId().equals(task.getId())).count());
-        WorkloadDto dto = workloadService.calculateWorkload("manager_test", true).stream().filter(w -> w.getStaffId().equals(helper.getId())).findFirst().orElseThrow();
+        WorkloadDto dto = adminWorkload().stream().filter(w -> w.getStaffId().equals(helper.getId())).findFirst().orElseThrow();
         assertNull(dto.getSupportDepartment());
         assertEquals(0, dto.getActiveTaskCount());
     }
@@ -427,6 +449,7 @@ public class SupportAssignmentServiceTest {
         service.confirm(fx.plan(s.receiving, s.donors.get(2), third));
         entityManager.flush();
 
+        validManagerOf(s.receiving);
         taskService.updateTask(cancelledTask.getId(), update(cancelledTask, TaskStatus.CANCELLED));
         taskService.deleteTask(deletedTask.getId());
         Assignment assignment = assignmentRepository.findByTaskId(third.getId()).orElseThrow();
@@ -458,6 +481,7 @@ public class SupportAssignmentServiceTest {
         UpdateTaskRequest edit = update(task, TaskStatus.IN_PROGRESS);
         edit.setTitle("Renamed while supported");
 
+        validManagerOf(s.receiving);
         taskService.updateTask(task.getId(), edit);
         entityManager.flush();
 

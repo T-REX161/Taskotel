@@ -64,10 +64,15 @@ public class WorkloadEligibilityTest {
     void setUp() {
         department = departmentRepository.findByCode("FRONT_DESK").orElseThrow();
         cleanUp();
+        // The assignment service decides by the caller's scope, so a direct call needs a signed-in user; these tests are about eligibility
+        // rules, not authorization, so they sign in as an administrator.
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken("elig_admin", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
     }
 
     @AfterEach
     void cleanUp() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
         for (Task task : taskRepository.findAll()) {
             if (task.getTitle().startsWith(TAG)) {
                 assignmentRepository.deleteAll(assignmentRepository.findAllByTaskId(task.getId()));
@@ -133,7 +138,7 @@ public class WorkloadEligibilityTest {
     }
 
     private List<WorkloadDto> rows() {
-        return workloadService.calculateWorkload("admin", true);
+        return workloadService.calculateWorkload();
     }
 
     // ── assignment ─────────────────────────────────────────────────────────────────────────────────────────

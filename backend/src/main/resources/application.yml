@@ -82,8 +82,8 @@ jwt:
 
 sendgrid:
   api-key: ${SENDGRID_API_KEY:}
-  from-email: ${SENDGRID_FROM_EMAIL:noreply@hotelwb.com}
-  from-name: ${SENDGRID_FROM_NAME:Taskotel | Hotel Operations}
+  from-email: ${SENDGRID_FROM_EMAIL:}
+  from-name: ${SENDGRID_FROM_NAME:Taskotel}
 
 # Profile pictures (Cloudinary). Values come only from the environment or backend/.env; never write credentials here.
 # While any of the three is missing the backend still starts, and profile picture uploads are simply unavailable.

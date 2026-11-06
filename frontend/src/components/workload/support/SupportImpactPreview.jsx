@@ -82,7 +82,7 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
               </ul>
               {data.canOverrideReserve === true && (
                 <div className="mt-2 pt-2 border-t border-amber-200 space-y-1.5">
-                  <p>Only the department's reserve blocks this plan. As a manager you can acknowledge the staffing risk and continue.</p>
+                  <p>Only the department&apos;s reserve blocks this plan. As a manager you can acknowledge the staffing risk and continue.</p>
                   <button
                     type="button"
                     onClick={onAcknowledge}

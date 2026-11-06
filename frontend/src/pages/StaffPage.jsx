@@ -100,6 +100,7 @@ export default function StaffPage() {
 
   useEffect(() => {
     fetchStaffData(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount; fetchStaffData is intentionally not a trigger
   }, []);
 
   // Combined real filtering logic with alphabetical sorting (A to Z) before pagination
@@ -191,13 +192,6 @@ export default function StaffPage() {
     }
     return Array.from(pages).sort((a, b) => a - b);
   }, [totalPages, currentPage]);
-
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setSelectedDepartment('');
-    setSelectedAvailability('');
-    setSelectedStatus('');
-  };
 
   const showNotification = (msg) => {
     setSuccessMessage(msg);

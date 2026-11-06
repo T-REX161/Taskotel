@@ -1,16 +1,25 @@
--- Application-data fingerprint: one line per application table (assignments, staff, tasks, users,
--- which are all the tables in public before Flyway) with the row count and an MD5 of all rows in
--- id order. READ-ONLY. Prints no column values, so no personal data, emails or password hashes.
+-- Application-data fingerprint: one line per application table, in this fixed order (assignments, departments,
+-- notification_preferences, staff, support_assignments, tasks, users), each with the row count and an MD5 of
+-- all rows in id order. READ-ONLY. Prints no column values, so no personal data, emails or password hashes.
 --
--- Used by PostgresMigrationIT to prove that a migration left application rows unchanged, and by
--- backup-and-verify.ps1 / restore-to-new-db.ps1, which additionally check (DbToolsCommon.ps1) that
--- public contains no table this file does not cover and fingerprint flyway_schema_history when present.
-SELECT string_agg(line, E'\n' ORDER BY line) FROM (
-    SELECT 'assignments ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) AS line FROM public.assignments t
+-- Used by backup-and-verify.ps1 / restore-to-new-db.ps1 / create-rehearsal-dbs.ps1, which additionally check
+-- (DbToolsCommon.ps1) that public contains every one of these tables and no table this file does not cover,
+-- and fingerprint flyway_schema_history when present. The result is nine lines in total: these seven, the
+-- table list, and the Flyway history line.
+--
+-- The opt-in migration tests use fingerprint-original-tables.sql (the four tables that exist before V4) instead.
+SELECT string_agg(line, E'\n' ORDER BY ord) FROM (
+    SELECT 1 AS ord, 'assignments ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) AS line FROM public.assignments t
     UNION ALL
-    SELECT 'staff ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.staff t
+    SELECT 2, 'departments ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.departments t
     UNION ALL
-    SELECT 'tasks ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.tasks t
+    SELECT 3, 'notification_preferences ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.notification_preferences t
     UNION ALL
-    SELECT 'users ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.users t
+    SELECT 4, 'staff ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.staff t
+    UNION ALL
+    SELECT 5, 'support_assignments ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.support_assignments t
+    UNION ALL
+    SELECT 6, 'tasks ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.tasks t
+    UNION ALL
+    SELECT 7, 'users ' || count(*) || ' ' || md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) FROM public.users t
 ) x;

@@ -545,3 +545,100 @@ describe('the seconds beside the time', () => {
     });
   });
 });
+
+describe('clock digit animation', () => {
+  const jsx = () => read('..', 'components', 'dashboard', 'LiveClock.jsx');
+  const css = () => read('..', 'index.css');
+
+  it('rolls only hours/minutes characters; seconds stay a plain value', () => {
+    const src = jsx();
+    assert.match(src, /<RollingTime text=\{main\} \/>/);
+    assert.match(src, /:\{secondsPart\(now\)\}<\/span>/);
+    assert.doesNotMatch(src, /RollChar[^\n]*secondsPart/);
+  });
+
+  it('animates only on a real value change, never on first paint', () => {
+    const src = jsx();
+    assert.match(src, /state\.cur !== value/);
+    assert.match(src, /n: animateOnMount \? 1 : 0/);
+  });
+
+  it('adds no timers of its own and leaves the ticker untouched', () => {
+    const src = jsx();
+    assert.doesNotMatch(src, /setInterval|setTimeout|requestAnimationFrame/);
+    assert.match(src, /startClock\(setNow, \{ subscribe: sharedTicker\.subscribe, granularity: 'second' \}\)/);
+  });
+
+  it('fades AM/PM only when it changes', () => {
+    assert.match(jsx(), /state\.n > 0 \? 'clock-fade-in'/);
+  });
+
+  it('uses 250-350 ms CSS animations and disables them for reduced motion', () => {
+    const c = css();
+    const durations = [...c.matchAll(/animation: clock\w+ (\d+)ms/g)].map((m) => Number(m[1]));
+    assert.equal(durations.length, 3);
+    durations.forEach((d) => assert.ok(d >= 250 && d <= 350));
+    assert.match(c, /prefers-reduced-motion: reduce\)\s*\{\s*\.clock-roll-in, \.clock-fade-in \{ animation: none; \}\s*\.clock-roll-out \{ display: none; \}/);
+    assert.match(jsx(), /prefers-reduced-motion: reduce/);
+  });
+
+  it('uses no hard-coded colours, so it follows the light and dark themes', () => {
+    const block = css().slice(css().indexOf('Dashboard clock: subtle digit roll'));
+    assert.doesNotMatch(block, /#[0-9a-f]{3,6}\b|rgb/i);
+  });
+});
+
+describe('clock follows the saved time-format preference', () => {
+  const at = (h, m, s) => new Date(2026, 10, 4, h, m, s);
+  const shown = (date, prefs) => {
+    const { main, meridiem } = splitTime(clockParts(date, prefs).time);
+    return `${main}:${secondsPart(date)}${meridiem ? ' ' + meridiem : ''}`;
+  };
+
+  it('12-hour: 9:46:06 AM, with AM/PM', () => {
+    assert.equal(shown(at(9, 46, 6), { timeFormat: 'H12' }), '9:46:06 AM');
+  });
+
+  it('24-hour: 09:46:06, no AM/PM', () => {
+    assert.equal(shown(at(9, 46, 6), { timeFormat: 'H24' }), '09:46:06');
+  });
+
+  it('handles midnight, noon and leading zeros in both formats', () => {
+    assert.equal(shown(at(0, 5, 9), { timeFormat: 'H12' }), '12:05:09 AM');
+    assert.equal(shown(at(0, 5, 9), { timeFormat: 'H24' }), '00:05:09');
+    assert.equal(shown(at(12, 0, 0), { timeFormat: 'H12' }), '12:00:00 PM');
+    assert.equal(shown(at(12, 0, 0), { timeFormat: 'H24' }), '12:00:00');
+    assert.equal(shown(at(23, 59, 59), { timeFormat: 'H12' }), '11:59:59 PM');
+    assert.equal(shown(at(23, 59, 59), { timeFormat: 'H24' }), '23:59:59');
+  });
+
+  it('the date does not depend on the time format', () => {
+    const d = at(15, 3, 0);
+    assert.equal(clockParts(d, { dateFormat: 'MDY', timeFormat: 'H12' }).date, clockParts(d, { dateFormat: 'MDY', timeFormat: 'H24' }).date);
+  });
+
+  it('switching the saved preference changes what the clock reads, with no reload', async () => {
+    const store = new Map();
+    globalThis.localStorage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: (k) => store.delete(k) };
+    try {
+      localStorage.setItem('username', 'bob');
+      setCurrentProfile({ username: 'bob', preferences: { themePreference: 'LIGHT', dateFormat: 'DMY', timeFormat: 'H12' } });
+      const { savePreferences } = await import('../utils/preferences.js');
+      const d = at(21, 4, 5);
+      assert.equal(shown(d, getPreferences()), '9:04:05 PM');
+      await savePreferences({ timeFormat: 'H24' }, { send: async (p) => ({ username: 'bob', preferences: p }) });
+      assert.equal(shown(d, getPreferences()), '21:04:05');
+      await savePreferences({ timeFormat: 'H12' }, { send: async (p) => ({ username: 'bob', preferences: p }) });
+      assert.equal(shown(d, getPreferences()), '9:04:05 PM');
+    } finally {
+      resetCurrentProfile();
+      delete globalThis.localStorage;
+    }
+  });
+
+  it('LiveClock reads the shared preferences and hardcodes no 12-hour override', () => {
+    const src = read('..', 'components', 'dashboard', 'LiveClock.jsx') + read('..', 'utils', 'liveClock.js');
+    assert.match(src, /getPreferences\(\)/);
+    assert.doesNotMatch(src, /hour12\s*:\s*true|toLocaleTimeString/);
+  });
+});

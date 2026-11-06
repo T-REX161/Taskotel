@@ -21,9 +21,10 @@ export default function DepartmentsPage() {
   const [removingDepartment, setRemovingDepartment] = useState(null);
   const menuRef = useRef(null);
 
-  // Only ADMIN and MANAGER may create or edit departments; the server enforces this too
+  // Only ADMIN may create, edit or remove departments; MANAGER and STAFF can only view them. This only hides the controls:
+  // the server enforces it too (403 for any other role), and is the real boundary.
   const role = getUserRole();
-  const canManage = role === 'ADMIN' || role === 'MANAGER';
+  const canManage = role === 'ADMIN';
 
   // silent: refresh the list in place after a change, without replacing the page with the loading spinner
   const fetchDepartments = async (silent = false) => {
@@ -47,6 +48,7 @@ export default function DepartmentsPage() {
 
   useEffect(() => {
     fetchDepartments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once on mount; fetchDepartments is intentionally not a trigger
   }, []);
 
   // The success message goes away by itself

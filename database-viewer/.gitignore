@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Local connection settings (contain the database password); never commit
+.env
+.env.*
+!.env.example
+
+# Prisma client output (this folder only inspects the database; the client is not part of the app)
+generated/
+
+# Logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# Files that `prisma skills sync` and similar tools write for AI editors
+.agents/
+.claude/
+.cursor/
+.devin/

@@ -65,6 +65,11 @@ public class TaskControllerTest {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
+    private com.hotel.workload.staff.DepartmentRepository departmentRepository;
+
+    private com.hotel.workload.security.ScopeFixtures scopeFixtures;
+
+    @Autowired
     private jakarta.persistence.EntityManager entityManager;
 
     private MockMvc mockMvc;
@@ -86,6 +91,11 @@ public class TaskControllerTest {
             userRepository.save(admin);
         }
 
+        // Every Manager request below comes from a valid Manager: active account, active Staff record, in Housekeeping (where most of these tests keep their tasks). A Manager with no
+        // department assignment would be refused (fail closed).
+        scopeFixtures = new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder);
+        scopeFixtures.manager("task_ctl_manager", scopeFixtures.department("HOUSEKEEPING"));
+
         // Seed manager user if not present
         if (userRepository.findByUsername("testmanager").isEmpty()) {
             User manager = new User();
@@ -95,6 +105,15 @@ public class TaskControllerTest {
             manager.setRole(Role.MANAGER);
             manager.setActive(true);
             userRepository.save(manager);
+        }
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    public void removeManagerFixture() {
+        // A @Transactional test rolls the fixture back by itself (and tasks it created still reference the account); only a test without a
+        // transaction has committed it and must remove it
+        if (!org.springframework.test.context.transaction.TestTransaction.isActive()) {
+            scopeFixtures.remove("task_ctl_manager");
         }
     }
 
@@ -124,7 +143,7 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     public void testGetTasksWithManagerRole() throws Exception {
         mockMvc.perform(get("/api/tasks"))
                 .andExpect(status().isOk())
@@ -255,17 +274,19 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "testmanager", roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
-    public void testManagerCanRetrieveAllTasksRegardlessOfAssignment() throws Exception {
+    public void testManagerCanRetrieveAllTasksOfTheirDepartmentRegardlessOfAssignment() throws Exception {
         Staff staff1 = createTestStaff("taskstaff_mg1", "taskstaff_mg1@hotel.com");
         Staff staff2 = createTestStaff("taskstaff_mg2", "taskstaff_mg2@hotel.com");
 
         Task task1 = createTestTask();
+        task1.setDepartment(TestDepartments.HOUSEKEEPING); // the Manager's own department
         task1.setTitle("Manager Visible Task 1");
         task1 = taskRepository.saveAndFlush(task1);
 
         Task task2 = createTestTask();
+        task2.setDepartment(TestDepartments.HOUSEKEEPING);
         task2.setTitle("Manager Visible Task 2");
         task2 = taskRepository.saveAndFlush(task2);
 
@@ -340,7 +361,7 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "testmanager", roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testCreateTaskWithManagerRole() throws Exception {
         mockMvc.perform(post("/api/tasks")
@@ -480,7 +501,7 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testManagerCanUpdateTask() throws Exception {
         Task task = createAssignedTaskForUpdate("upd_manager");
@@ -615,7 +636,7 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "testmanager", roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testCreatedByRemainsUnchanged() throws Exception {
         Task task = createAssignedTaskForUpdate("upd_created_by");
@@ -698,10 +719,12 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testManagerCanDeleteTaskReturns204() throws Exception {
         Task task = createTestTask();
+        task.setDepartment(TestDepartments.HOUSEKEEPING); // the Manager's own department
+        task = taskRepository.saveAndFlush(task);
 
         mockMvc.perform(delete("/api/tasks/" + task.getId()))
                 .andExpect(status().isNoContent());
@@ -788,11 +811,12 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testManagerCanDeleteAssignedTaskSafelyCascadesAssignment() throws Exception {
         Staff staff = createTestStaff("deletestaff2", "deletestaff2@hotel.com");
         Task task = createTestTask();
+        task.setDepartment(TestDepartments.HOUSEKEEPING); // the Manager's own department
         task.setStatus(TaskStatus.ASSIGNED);
         task = taskRepository.saveAndFlush(task);
 
@@ -1007,7 +1031,7 @@ public class TaskControllerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.EnumSource(TaskStatus.class)
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(roles = "ADMIN") // only an administrator moves a task to another department (a Manager gets 403, see TaskDepartmentIsolationTest)
     @Transactional
     public void testChangingAssignedTaskDepartmentAwayFromAssigneeReturns409AndLeavesTaskUnchanged(TaskStatus status) throws Exception {
         String username = "p2_task_" + status.name().toLowerCase();
@@ -1047,7 +1071,7 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testEditingAssignedTaskWithoutChangingDepartmentSucceeds() throws Exception {
         Task task = createAssignedTask("p2_task_same_dept", TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.ASSIGNED);
@@ -1158,7 +1182,7 @@ public class TaskControllerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.EnumSource(value = TaskStatus.class, names = { "ASSIGNED", "IN_PROGRESS" })
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testAssignedTaskCannotBeSetBackToPending(TaskStatus currentStatus) throws Exception {
         String username = "p3_to_pending_" + currentStatus.name().toLowerCase();
@@ -1191,7 +1215,7 @@ public class TaskControllerTest {
 
     @org.junit.jupiter.params.ParameterizedTest
     @org.junit.jupiter.params.provider.EnumSource(value = TaskStatus.class, names = { "PENDING", "ASSIGNED", "IN_PROGRESS", "CANCELLED" })
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testCompletedTaskCannotBeReopenedOrMoved(TaskStatus requestedStatus) throws Exception {
         Task task = createAssignedTask("p3_completed_" + requestedStatus.name().toLowerCase(),
@@ -1245,7 +1269,7 @@ public class TaskControllerTest {
             "IN_PROGRESS, COMPLETED",
             "IN_PROGRESS, CANCELLED"
     })
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testValidStatusChangesOnAssignedTaskSucceed(TaskStatus from, TaskStatus to) throws Exception {
         Task task = createAssignedTask("p3_valid_" + from.name().toLowerCase() + "_" + to.name().toLowerCase(),
@@ -1276,7 +1300,7 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testCompletedTaskFieldsCanStillBeEditedWhenStatusIsUnchanged() throws Exception {
         Task task = createAssignedTask("p3_completed_edit", TestDepartments.HOUSEKEEPING, TestDepartments.HOUSEKEEPING, TaskStatus.COMPLETED);
@@ -1322,7 +1346,7 @@ public class TaskControllerTest {
     }
 
     @Test
-    @WithMockUser(username = "testmanager", roles = "MANAGER")
+    @WithMockUser(username = "task_ctl_manager", roles = "MANAGER")
     @Transactional
     public void testFullLifecycleThroughAssignmentEndpointKeepsStatusConsistent() throws Exception {
         Staff staff = createTestStaff("p3_lifecycle", "p3_lifecycle@hotel.com"); // HOUSEKEEPING, active, AVAILABLE

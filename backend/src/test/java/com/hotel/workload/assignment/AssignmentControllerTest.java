@@ -58,6 +58,9 @@ public class AssignmentControllerTest {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private com.hotel.workload.staff.DepartmentRepository departmentRepository;
+
     private MockMvc mockMvc;
     private ObjectMapper objectMapper = new ObjectMapper();
 
@@ -86,6 +89,12 @@ public class AssignmentControllerTest {
             manager.setActive(true);
             userRepository.save(manager);
         }
+    }
+
+    /** Managers are department-scoped: "testmanager" must have an active Staff record in the department of the tasks these tests use. */
+    private void validManager() {
+        new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder)
+                .manager("testmanager", TestDepartments.HOUSEKEEPING);
     }
 
     private Staff createTestStaff(String username, String email, boolean active, Availability availability) {
@@ -138,9 +147,10 @@ public class AssignmentControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "testmanager", roles = "MANAGER")
     @Transactional
     public void testManagerCanAssignTaskReturns201() throws Exception {
+        validManager();
         Staff staff = createTestStaff("mgrstaff", "mgrstaff@hotel.com", true, Availability.AVAILABLE);
         Task task = createTestTask("Manager Assign Task", TaskStatus.PENDING);
 
@@ -357,8 +367,10 @@ public class AssignmentControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "testmanager", roles = "MANAGER")
+    @Transactional
     public void testManagerCanRetrieveAssignmentsReturns200() throws Exception {
+        validManager();
         mockMvc.perform(get("/api/assignments"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray());
@@ -457,6 +469,7 @@ public class AssignmentControllerTest {
     @WithMockUser(username = "testmanager", roles = "MANAGER")
     @Transactional
     public void testManagerCanRetrieveAllAssignmentsAcrossAllStaff() throws Exception {
+        validManager();
         Staff staff1 = createTestStaff("mgr_staff_a1", "mgr_staff_a1@hotel.com", true, Availability.AVAILABLE);
         Staff staff2 = createTestStaff("mgr_staff_a2", "mgr_staff_a2@hotel.com", true, Availability.AVAILABLE);
 
@@ -596,9 +609,10 @@ public class AssignmentControllerTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "testmanager", roles = "MANAGER")
     @Transactional
     public void testManagerCanReassignTaskReturns200() throws Exception {
+        validManager();
         Staff staffA = createTestStaff("reassignmgrA", "reassignmgrA@hotel.com", true, Availability.AVAILABLE);
         Staff staffB = createTestStaff("reassignmgrB", "reassignmgrB@hotel.com", true, Availability.AVAILABLE);
         Task task = createTestTask("Reassign Task Mgr", TaskStatus.PENDING);

@@ -44,7 +44,7 @@ export default function DeleteTaskModal({
         </div>
 
         <p className="text-sm text-gray-600 leading-relaxed">
-          Are you sure you want to delete <span className="font-semibold text-gray-900">"{task.title}"</span>?
+          Are you sure you want to delete <span className="font-semibold text-gray-900">&quot;{task.title}&quot;</span>?
           {isAssigned && (
             <span className="block mt-2 text-xs text-amber-700 bg-amber-50 p-2.5 rounded-lg border border-amber-200">
               Note: This task is currently assigned. Its assignment record will also be safely removed.

@@ -65,7 +65,7 @@ export default function RemoveDepartmentModal({ department, onClose, onRemoved }
       if (err.status === 409) {
         setError(err.message || 'This department is still in use and was not removed.');
       } else if (err.status === 403) {
-        setError('Permission denied. Only ADMIN or MANAGER users can remove departments.');
+        setError('Permission denied. Only ADMIN users can remove departments.');
       } else if (err.status === 404) {
         setError('This department no longer exists. Close this dialog and refresh the page.');
       } else if (err.status === 405) {

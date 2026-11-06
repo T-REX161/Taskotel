@@ -48,6 +48,18 @@ public class JwtDeactivationIntegrationTest {
                 .build();
     }
 
+    /** The staff service refuses callers who are not signed in; these tests act as an administrator. */
+    private void asAdmin() {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("jwt_test_admin", null,
+                        java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ADMIN"))));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    public void clearSecurityContext() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
     private User createTestUser(String username, Role role, boolean active) {
         User user = new User();
         user.setUsername(username);
@@ -97,6 +109,7 @@ public class JwtDeactivationIntegrationTest {
                 .andExpect(status().isOk());
 
         // Deactivate staff member (which also sets user.active = false)
+        asAdmin();
         staffService.deactivateStaff(staff.getId());
 
         // Verify the exact same token is now rejected with 401 Unauthorized
@@ -114,12 +127,14 @@ public class JwtDeactivationIntegrationTest {
         String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
 
         // Deactivate
+        asAdmin();
         staffService.deactivateStaff(staff.getId());
         mockMvc.perform(get("/api/test/staff")
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
 
         // Reactivate
+        asAdmin();
         staffService.activateStaff(staff.getId());
 
         // Token works again
@@ -167,6 +182,7 @@ public class JwtDeactivationIntegrationTest {
                 .andExpect(status().isOk());
 
         // Deactivate user A only
+        asAdmin();
         staffService.deactivateStaff(staffA.getId());
 
         // User A's token is rejected

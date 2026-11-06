@@ -5,8 +5,10 @@
 #   fresh | collide | copy | dupe (the same rule PostgresMigrationIT enforces).
 # - The live database, both existing restore-check databases, any wb_restore_check_* / wb_restored_*
 #   database and the PostgreSQL system databases are refused even if a name ever matched the pattern.
-# - Only the verified backup is accepted: its SHA-256 must match, and its side files must show a
-#   completed, clean verification of a pre-Flyway database.
+# - Only a verified backup is accepted: the dump's SHA-256 must equal the one recorded in its
+#   wb_<stamp>.dump.sha256 sidecar, and its side files must show a completed, clean verification
+#   (identical live and restored schema, valid seven-table fingerprint, empty restore log) of a
+#   pre-Flyway database.
 
 Set-StrictMode -Version Latest
 
@@ -14,7 +16,6 @@ $script:RehearsalRoles       = @('fresh', 'collide', 'copy', 'dupe')
 $script:RehearsalNamePattern = '^wb_rehearsal_\d{8}_\d{6}_(fresh|copy|dupe|collide)$'
 $script:ProtectedDatabases   = @('workload_balancer', 'wb_restore_check_20261020_140921', 'wb_restore_check_20261020_142245', 'postgres', 'template0', 'template1')
 $script:ProtectedPrefixes    = @('wb_restore_check_', 'wb_restored_')
-$script:VerifiedDumpSha256   = '37a58cb40577d51764edb72fe170d45adbb6e9a47c8442ba88e76b05c0586a90'
 
 # True only when the pattern matches the WHOLE value. ECMAScript mode makes \d ASCII-only, and the
 # index/length check closes .NET's "$ also matches before a trailing newline" gap.
@@ -57,19 +58,18 @@ function Get-RehearsalDatabaseNames {
 }
 
 # Validates the verified backup and its side files; returns the recorded live schema and fingerprint.
-# -ExpectedSha256 exists only so tests can use their own files; the creation script never sets it.
+# The expected checksum comes from the backup's own sidecar file (wb_<stamp>.dump.sha256), never from a constant.
 function Assert-VerifiedDump {
-    param([string]$Path, [string]$ExpectedSha256 = $script:VerifiedDumpSha256)
+    param([string]$Path)
     if (-not $Path -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "Verified dump not found: $Path" }
     $full = Resolve-FullPath $Path
     if ((Split-Path $full -Leaf) -cnotmatch '^wb_\d{8}_\d{6}\.dump$') { throw "Refusing: '$full' is not a wb_<yyyyMMdd_HHmmss>.dump backup." }
 
-    $actual = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
-    if (-not [string]::Equals($actual, $ExpectedSha256.ToLowerInvariant(), [System.StringComparison]::Ordinal)) {
-        throw "Refusing: SHA-256 of $full is $actual, not the verified $ExpectedSha256."
-    }
-
     $base = $full.Substring(0, $full.Length - '.dump'.Length)
+    $checksumFile = "$base.dump.sha256"
+    try { $null = Assert-DumpMatchesSidecar -DumpPath $full -SidecarPath $checksumFile }
+    catch { throw "Refusing: $($_.Exception.Message)" }
+
     $liveSchemaFile  = "$base.live-schema.sql"
     $checkSchemaFile = "$base.check-schema.sql"
     $fingerprintFile = "$base.live-fingerprint.txt"

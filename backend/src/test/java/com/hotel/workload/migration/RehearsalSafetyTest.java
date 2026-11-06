@@ -26,8 +26,6 @@ public class RehearsalSafetyTest {
     private static final Path REHEARSAL_COMMON = DB_TOOLS.resolve("RehearsalCommon.ps1");
     private static final Path SAFETY_TESTS = DB_TOOLS.resolve("tests").resolve("RehearsalSafety.Tests.ps1");
     private static final Path IT_SOURCE = Path.of("src/test/java/com/hotel/workload/migration/PostgresMigrationIT.java");
-    private static final String VERIFIED_SHA256 = "37a58cb40577d51764edb72fe170d45adbb6e9a47c8442ba88e76b05c0586a90";
-
     private static String read(Path file) throws IOException {
         return Files.readString(file);
     }
@@ -95,15 +93,19 @@ public class RehearsalSafetyTest {
     // ── RehearsalCommon.ps1 ────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("RehearsalCommon.ps1 pins the verified dump checksum, matches whole names with ASCII digits, and is pure")
+    @DisplayName("RehearsalCommon.ps1 validates the dump against its SHA-256 sidecar (no pinned checksum), matches whole names with ASCII digits, and is pure")
     public void testRehearsalCommonRules() throws IOException {
         String common = code(REHEARSAL_COMMON);
-        assertTrue(Pattern.compile("\\$script:VerifiedDumpSha256\\s*=\\s*'" + VERIFIED_SHA256 + "'").matcher(common).find(),
-                "The verified dump checksum must be pinned");
+        assertFalse(common.contains("VerifiedDumpSha256") || common.contains("37a58cb4") || common.contains("ExpectedSha256"),
+                "No checksum is built in and none can be overridden: the dump's own sidecar is the source");
+        assertTrue(common.contains("Assert-DumpMatchesSidecar -DumpPath $full -SidecarPath $checksumFile"), "The dump must match its recorded SHA-256");
+        assertTrue(common.contains("$checksumFile = \"$base.dump.sha256\""), "The checksum sidecar must be required");
+        assertTrue(common.indexOf("Assert-DumpMatchesSidecar") < common.indexOf("Get-NormalizedSchema $liveSchemaFile"),
+                "The checksum is checked before the other files are trusted");
         assertTrue(common.contains("[System.Text.RegularExpressions.RegexOptions]::ECMAScript"), "\\d must be ASCII-only");
         assertTrue(common.contains("$match.Index -eq 0 -and $match.Length -eq $Value.Length"), "Names must match as a whole string");
         assertTrue(common.contains("Assert-RehearsalDatabaseName $name"), "Every generated name must be validated");
-        for (String sideFile : List.of(".live-schema.sql", ".check-schema.sql", ".live-fingerprint.txt", ".restore-errors.log")) {
+        for (String sideFile : List.of(".dump.sha256", ".live-schema.sql", ".check-schema.sql", ".live-fingerprint.txt", ".restore-errors.log")) {
             assertTrue(common.contains("\"$base" + sideFile + "\""), "Side file must be required: " + sideFile);
         }
         assertTrue(common.contains("flyway_schema_history absent"), "Copies must start from a pre-Flyway backup");
@@ -120,7 +122,9 @@ public class RehearsalSafetyTest {
         assertTrue(script.contains(". (Join-Path $PSScriptRoot 'DbToolsCommon.ps1')"));
         assertTrue(script.contains(". (Join-Path $PSScriptRoot 'RehearsalCommon.ps1')"));
         assertTrue(script.contains("$verified = Assert-VerifiedDump -Path $Dump"), "The dump must be validated");
-        assertFalse(script.contains("-ExpectedSha256"), "The script must never override the pinned checksum");
+        assertFalse(script.contains("-ExpectedSha256"), "The script must never override the recorded checksum");
+        assertTrue(script.contains("[Parameter(Mandatory = $true)][string]$Dump"), "The dump must be named explicitly");
+        assertFalse(script.contains("wb_20261020_142245") || script.contains("db-backups"), "There is no built-in default dump");
 
         int connect = indexOrFail(script, "Save-PgEnvironment");
         for (String precondition : List.of("Assert-PgTools", "Assert-VerifiedDump -Path $Dump",

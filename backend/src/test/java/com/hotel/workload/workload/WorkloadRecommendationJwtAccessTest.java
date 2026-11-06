@@ -35,6 +35,16 @@ public class WorkloadRecommendationJwtAccessTest {
     @Autowired private WebApplicationContext context;
     @Autowired private UserRepository userRepository;
     @Autowired private JwtUtil jwtUtil;
+    @Autowired private com.hotel.workload.staff.StaffRepository staffRepository;
+    @Autowired private com.hotel.workload.staff.DepartmentRepository departmentRepository;
+    @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
+    /** The account becomes a valid Manager: an active Staff record in an active department (Step 2G-1 resolves a Manager's department). */
+    private User withDepartment(User manager) {
+        new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder)
+                .staffRecord(manager.getUsername(), Role.MANAGER, com.hotel.workload.staff.TestDepartments.HOUSEKEEPING);
+        return manager;
+    }
 
     private MockMvc mockMvc;
 
@@ -70,7 +80,7 @@ public class WorkloadRecommendationJwtAccessTest {
     @Test
     @DisplayName("A Manager JWT is allowed")
     public void managerJwtIsAllowed() throws Exception {
-        User manager = user("rec_jwt_manager", Role.MANAGER, true);
+        User manager = withDepartment(user("rec_jwt_manager", Role.MANAGER, true));
         mockMvc.perform(get(URL).header("Authorization", bearer(manager)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.recommendations").isArray());
     }
@@ -126,7 +136,7 @@ public class WorkloadRecommendationJwtAccessTest {
     @Test
     @DisplayName("Manager: GET and HEAD are authorized")
     public void managerGetAndHeadAreAuthorized() throws Exception {
-        String manager = bearer(user("rec_m_manager", Role.MANAGER, true));
+        String manager = bearer(withDepartment(user("rec_m_manager", Role.MANAGER, true)));
         mockMvc.perform(request(HttpMethod.GET, URL).header("Authorization", manager)).andExpect(status().isOk());
         mockMvc.perform(request(HttpMethod.HEAD, URL).header("Authorization", manager)).andExpect(status().isOk());
     }

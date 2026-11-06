@@ -1,5 +1,7 @@
 package com.hotel.workload.assignment;
 
+import com.hotel.workload.security.CurrentUserScopeResolver;
+import com.hotel.workload.security.DepartmentScope;
 import com.hotel.workload.staff.Availability;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
@@ -7,8 +9,6 @@ import com.hotel.workload.task.Task;
 import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,30 +35,58 @@ public class AssignmentServiceImpl implements AssignmentService {
     private final TaskRepository taskRepository;
     private final StaffRepository staffRepository;
     private final com.hotel.workload.support.SupportLifecycle supportLifecycle;
+    private final CurrentUserScopeResolver scopeResolver;
 
     public AssignmentServiceImpl(AssignmentRepository assignmentRepository,
                                  TaskRepository taskRepository,
                                  StaffRepository staffRepository,
-                                 com.hotel.workload.support.SupportLifecycle supportLifecycle) {
+                                 com.hotel.workload.support.SupportLifecycle supportLifecycle,
+                                 CurrentUserScopeResolver scopeResolver) {
         this.assignmentRepository = assignmentRepository;
         this.taskRepository = taskRepository;
         this.staffRepository = staffRepository;
         this.supportLifecycle = supportLifecycle;
+        this.scopeResolver = scopeResolver;
+    }
+
+    /**
+     * The scope for creating or reassigning: ALL (Admin) or one department (a valid Manager). Anyone else (Staff) is refused with 403
+     * before any repository is read; a refused Manager or a missing sign-in is refused by the resolver (403, 401).
+     */
+    private DepartmentScope requireAssignmentManagementScope() {
+        DepartmentScope scope = scopeResolver.resolve();
+        if (!scope.isAll() && !scope.isDepartment()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to perform this action.");
+        }
+        return scope;
     }
 
     @Override
     @Transactional
     public AssignmentDto createAssignment(CreateAssignmentRequest request) {
+        DepartmentScope scope = requireAssignmentManagementScope();
+
         // Serialize with every other flow that touches this task or this staff member (support confirm, reassign, deactivation),
         // always task first and staff second, then check the rules on what is committed now rather than on a stale read.
-        taskRepository.lockByIds(Set.of(request.getTaskId()));
-        staffRepository.lockByIds(Set.of(request.getStaffId()));
+        Task task;
+        Staff staff;
+        if (scope.isDepartment()) {
+            // A Manager reaches only their department's task and staff. Anything else (other department, task with no department,
+            // nonexistent) gives the same 404 and is never locked; the staff lock is taken only once the task is known to be in scope.
+            task = taskRepository.lockByIdAndDepartment(request.getTaskId(), scope.department())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+            staff = staffRepository.lockByIdAndDepartment(request.getStaffId(), scope.department())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+        } else {
+            taskRepository.lockByIds(Set.of(request.getTaskId()));
+            staffRepository.lockByIds(Set.of(request.getStaffId()));
 
-        Task task = taskRepository.findById(request.getTaskId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+            task = taskRepository.findById(request.getTaskId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
 
-        Staff staff = staffRepository.findById(request.getStaffId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+            staff = staffRepository.findById(request.getStaffId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+        }
 
         if (!staff.isActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Staff member is not active");
@@ -105,21 +134,22 @@ public class AssignmentServiceImpl implements AssignmentService {
     @Override
     @Transactional(readOnly = true)
     public List<AssignmentDto> getAllAssignments() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
-            return Collections.emptyList();
-        }
+        DepartmentScope scope = scopeResolver.resolve();
 
-        if (isAdminOrManager(auth)) {
+        if (scope.isAll()) {
             return assignmentRepository.findAllByOrderByAssignedAtDesc().stream()
                     .map(AssignmentDto::fromEntity)
                     .collect(Collectors.toList());
         }
-
-        String username = auth.getName();
-        if (username == null) {
-            return Collections.emptyList();
+        if (scope.isDepartment()) {
+            // Database-side filter on the task's department: other departments' assignments are never loaded
+            return assignmentRepository.findByTaskDepartmentOrderByAssignedAtDesc(scope.department()).stream()
+                    .map(AssignmentDto::fromEntity)
+                    .collect(Collectors.toList());
         }
+
+        // Staff: only their own assignments, as before
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
 
         return staffRepository.findByUserUsername(username)
                 .map(staff -> assignmentRepository.findByStaffIdOrderByAssignedAtDesc(staff.getId()).stream()
@@ -128,29 +158,37 @@ public class AssignmentServiceImpl implements AssignmentService {
                 .orElse(Collections.emptyList());
     }
 
-    private boolean isAdminOrManager(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            return false;
-        }
-        return auth.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ADMIN") 
-                            || a.equals("ROLE_MANAGER") || a.equals("MANAGER"));
-    }
-
     @Override
     @Transactional
     public AssignmentDto reassignTask(UUID assignmentId, UpdateAssignmentRequest request) {
+        DepartmentScope scope = requireAssignmentManagementScope();
+
         // Same lock order as createAssignment: the task, then the target staff member. The assignment itself is read only after
         // the locks, so a request that waited sees what the winner committed.
-        assignmentRepository.findTaskIdById(assignmentId).ifPresent(taskId -> taskRepository.lockByIds(Set.of(taskId)));
-        staffRepository.lockByIds(Set.of(request.getStaffId()));
+        Assignment assignment;
+        Staff targetStaff;
+        if (scope.isDepartment()) {
+            // Scope is decided by the task's department and the NEW holder's department, never by the current holder (who may be lent
+            // from another department by an approved support). A task outside the department, a task with no department and a
+            // nonexistent assignment all give the same 404 and lock nothing.
+            Optional<UUID> taskId = assignmentRepository.findTaskIdById(assignmentId);
+            if (taskId.isEmpty() || taskRepository.lockByIdAndDepartment(taskId.get(), scope.department()).isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found");
+            }
+            targetStaff = staffRepository.lockByIdAndDepartment(request.getStaffId(), scope.department())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+            assignment = assignmentRepository.findById(assignmentId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
+        } else {
+            assignmentRepository.findTaskIdById(assignmentId).ifPresent(taskId -> taskRepository.lockByIds(Set.of(taskId)));
+            staffRepository.lockByIds(Set.of(request.getStaffId()));
 
-        Assignment assignment = assignmentRepository.findById(assignmentId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
+            assignment = assignmentRepository.findById(assignmentId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
 
-        Staff targetStaff = staffRepository.findById(request.getStaffId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+            targetStaff = staffRepository.findById(request.getStaffId())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+        }
 
         if (!targetStaff.isActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target staff member is not active");

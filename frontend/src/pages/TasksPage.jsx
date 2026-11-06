@@ -142,6 +142,7 @@ export default function TasksPage() {
       fetchEligibleStaff();
       fetchWorkloadData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-runs only when permission changes; the fetch helpers are intentionally not triggers
   }, [canManageTasks]);
 
   // Auto-dismiss success notification
