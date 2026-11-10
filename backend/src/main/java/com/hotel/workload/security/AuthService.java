@@ -93,7 +93,7 @@ public class AuthService {
 
         recordLogin(user);
 
-        String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getRole(), user.getPasswordChangedAt());
         return new LoginResponse(token, user.getUsername(), user.getRole());
     }
 
@@ -146,6 +146,12 @@ public class AuthService {
             throw new CredentialsSetupException("Invalid or expired setup token");
         }
 
+        // A deactivated account cannot finish setup, whatever token it still holds. The answer is the one for a bad token, so it says
+        // nothing about the account, and nothing is changed or issued.
+        if (!user.isActive()) {
+            throw new CredentialsSetupException("Invalid or expired setup token");
+        }
+
         if (!user.isCredentialsSetupRequired() || !user.isEmailVerified()) {
             throw new CredentialsSetupException("Credentials setup is not required for this user");
         }
@@ -162,7 +168,8 @@ public class AuthService {
 
         user.setUsername(request.getNewUsername());
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        user.setPasswordChangedAt(java.time.LocalDateTime.now());
+        // Milliseconds: the session password version is derived from this value (see JwtUtil.passwordVersion)
+        user.setPasswordChangedAt(java.time.LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
         user.setCredentialsSetupRequired(false);
         user.setSetupToken(null);
         user.setFirstLogin(false);
@@ -175,7 +182,7 @@ public class AuthService {
         }
 
         // Generate standard JWT now that setup is complete
-        String token = jwtUtil.generateToken(user.getUsername(), user.getRole());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getRole(), user.getPasswordChangedAt());
         return LoginResponse.success(token, user.getUsername(), user.getRole());
     }
 }

@@ -115,7 +115,11 @@ public class EmailChangeControllerTest {
     }
 
     private static String requestBody(String email) {
-        return "{\"newEmail\":\"" + email + "\"}";
+        return requestBody(email, "Correct@123");
+    }
+
+    private static String requestBody(String email, String currentPassword) {
+        return "{\"newEmail\":\"" + email + "\",\"currentPassword\":\"" + currentPassword + "\"}";
     }
 
     private static String codeBody(String code) {
@@ -427,13 +431,17 @@ public class EmailChangeControllerTest {
     }
 
     @Test
-    @DisplayName("A failing notice to the old address never blocks or undoes the change")
-    void noticeFailureIsHarmless() throws Exception {
+    @DisplayName("A notice to the old address that cannot be sent is never lost silently: the request is refused and nothing is stored (Step 2L, fail closed)")
+    void noticeFailureBlocksTheRequest() throws Exception {
         User me = account("noticefail", Role.STAFF);
         doThrow(new EmailSendingException("nope")).when(emailService).sendEmailChangeNotice(anyString(), anyString(), anyBoolean());
-        assertEquals(200, call(REQUEST, me, requestBody("ec_noticefail@new.test")).getResponse().getStatus());
-        assertEquals(200, call(CONFIRM, me, codeBody(sentCode("ec_noticefail@new.test"))).getResponse().getStatus());
-        assertEquals("ec_noticefail@new.test", reload(me).getEmail());
+        MvcResult refused = call(REQUEST, me, requestBody("ec_noticefail@new.test"));
+        assertEquals(500, refused.getResponse().getStatus(), text(refused));
+        assertFalse(text(refused).contains("nope"), "no internals");
+        User stored = reload(me);
+        assertNull(stored.getPendingEmail(), "no change was started");
+        assertNull(stored.getPendingEmailCodeHash());
+        assertEquals(me.getEmail(), stored.getEmail());
     }
 
     @Test
@@ -476,7 +484,7 @@ public class EmailChangeControllerTest {
         MvcResult result = mockMvc.perform(post(REQUEST).param("userId", bob.getId().toString()).param("username", bob.getUsername())
                 .contentType(MediaType.APPLICATION_JSON)
                 .with(user(alice.getUsername()).roles("STAFF")).with(r -> { r.setRemoteAddr("10.55.5.5"); return r; })
-                .content("{\"userId\":\"" + bob.getId() + "\",\"username\":\"" + bob.getUsername() + "\",\"newEmail\":\"ec_alice@new.test\"}")).andReturn();
+                .content("{\"userId\":\"" + bob.getId() + "\",\"username\":\"" + bob.getUsername() + "\",\"newEmail\":\"ec_alice@new.test\",\"currentPassword\":\"Correct@123\"}")).andReturn();
         assertEquals(200, result.getResponse().getStatus(), text(result));
         assertEquals("ec_alice@new.test", reload(alice).getPendingEmail());
         assertNull(reload(bob).getPendingEmail(), "bob has nothing pending");
@@ -529,5 +537,119 @@ public class EmailChangeControllerTest {
         assertNull(after.getVerificationCodeHash());
         assertNull(after.getSetupToken());
         assertTrue(after.isActive());
+    }
+
+    // ── Step 2L (K-02): the current password is required, and the old address is always told ─────────────────────────────
+
+    @Test
+    @DisplayName("A request without the current password (missing, empty or blank) is refused with 400; nothing is sent or stored")
+    void passwordIsRequired() throws Exception {
+        User me = account("nopw", Role.STAFF);
+        for (String body : new String[]{"{\"newEmail\":\"ec_nopw@new.test\"}", requestBody("ec_nopw@new.test", ""), "{\"newEmail\":\"ec_nopw@new.test\",\"currentPassword\":null}"}) {
+            MvcResult result = call(REQUEST, me, body);
+            assertEquals(400, result.getResponse().getStatus(), body + " -> " + text(result));
+            assertTrue(text(result).contains(EmailChangeService.PASSWORD_REQUIRED), text(result));
+        }
+        assertNull(reload(me).getPendingEmail());
+        verify(emailService, never()).sendEmailChangeVerificationEmail(anyString(), anyString());
+        verify(emailService, never()).sendEmailChangeNotice(anyString(), anyString(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("A wrong current password is refused with 400 (never 401), nothing is sent or stored, and the password is not echoed")
+    void wrongPasswordIsRefused() throws Exception {
+        User me = account("wrongpw", Role.STAFF);
+        MvcResult result = call(REQUEST, me, requestBody("ec_wrongpw@new.test", "Not@Mypass9"));
+        assertEquals(400, result.getResponse().getStatus(), text(result));
+        assertTrue(text(result).contains(EmailChangeService.WRONG_PASSWORD));
+        assertFalse(text(result).contains("Not@Mypass9") || text(result).contains("Correct@123"), "no password in the answer");
+        assertNull(reload(me).getPendingEmail());
+        verify(emailService, never()).sendEmailChangeVerificationEmail(anyString(), anyString());
+        verify(emailService, never()).sendEmailChangeNotice(anyString(), anyString(), anyBoolean());
+        // The wrong attempt did not use up anything else: the right password still works at once
+        assertEquals(200, call(REQUEST, me, requestBody("ec_wrongpw@new.test")).getResponse().getStatus());
+    }
+
+    @Test
+    @DisplayName("The password must be the signed-in account's own: another account's password does not work, whoever the body names")
+    void passwordMustBeTheCallersOwn() throws Exception {
+        User alice = account("pw_alice", Role.STAFF);
+        User bob = account("pw_bob", Role.STAFF);
+        alice.setPassword(passwordEncoder.encode("Alice@Only1"));
+        userRepository.saveAndFlush(alice);
+        bob.setPassword(passwordEncoder.encode("Bob@Only123"));
+        userRepository.saveAndFlush(bob);
+
+        // Alice's session with Bob's password, and with a body that names Bob: refused
+        MvcResult withBobsPassword = mockMvc.perform(post(REQUEST).contentType(MediaType.APPLICATION_JSON)
+                .with(user(alice.getUsername()).roles("STAFF")).with(r -> { r.setRemoteAddr("10.55.9.9"); return r; })
+                .content("{\"username\":\"" + bob.getUsername() + "\",\"newEmail\":\"ec_pw_alice@new.test\",\"currentPassword\":\"Bob@Only123\"}")).andReturn();
+        assertEquals(400, withBobsPassword.getResponse().getStatus(), text(withBobsPassword));
+        assertNull(reload(alice).getPendingEmail());
+        assertNull(reload(bob).getPendingEmail());
+
+        assertEquals(200, call(REQUEST, alice, requestBody("ec_pw_alice@new.test", "Alice@Only1")).getResponse().getStatus());
+        assertEquals("ec_pw_alice@new.test", reload(alice).getPendingEmail());
+        assertNull(reload(bob).getPendingEmail());
+    }
+
+    @Test
+    @DisplayName("Wrong passwords are limited like every other request: after five from one client the right password is refused too (429)")
+    void passwordGuessingIsLimited() throws Exception {
+        User me = account("pwlimit", Role.STAFF);
+        String ip = "10.66.10.10";
+        for (int i = 0; i < 5; i++) {
+            assertEquals(400, call(REQUEST, me, requestBody("ec_pwlimit@new.test", "Wrong@Pass" + i), ip).getResponse().getStatus(), "guess " + i);
+        }
+        MvcResult blocked = call(REQUEST, me, requestBody("ec_pwlimit@new.test"), ip);
+        assertEquals(429, blocked.getResponse().getStatus(), text(blocked));
+        assertNull(reload(me).getPendingEmail());
+    }
+
+    @Test
+    @DisplayName("Whether another account uses the address is not revealed to someone who does not know the password")
+    void passwordIsCheckedBeforeAddressUseIsRevealed() throws Exception {
+        User me = account("reveal", Role.STAFF);
+        User other = account("reveal_other", Role.STAFF);
+        MvcResult wrong = call(REQUEST, me, requestBody(other.getEmail(), "Not@Mypass9"));
+        assertEquals(400, wrong.getResponse().getStatus());
+        assertTrue(text(wrong).contains(EmailChangeService.WRONG_PASSWORD), "the password is the first refusal, not 409");
+        assertEquals(409, call(REQUEST, me, requestBody(other.getEmail())).getResponse().getStatus(), "with the right password the 409 is still given");
+    }
+
+    @Test
+    @DisplayName("Any exception from the email client while sending the notice (not only EmailSendingException) also stops the request")
+    void anyNoticeFailureBlocksTheRequest() throws Exception {
+        User me = account("noticert", Role.STAFF);
+        doThrow(new IllegalStateException("socket closed")).when(emailService).sendEmailChangeNotice(anyString(), anyString(), anyBoolean());
+        MvcResult refused = call(REQUEST, me, requestBody("ec_noticert@new.test"));
+        assertEquals(500, refused.getResponse().getStatus(), text(refused));
+        assertFalse(text(refused).contains("socket"));
+        assertNull(reload(me).getPendingEmail());
+    }
+
+    @Test
+    @DisplayName("If the completion notice cannot be sent the change is rolled back (email unchanged, code still usable); once it can, the same code completes it")
+    void completionNoticeFailureRollsBackTheChange() throws Exception {
+        User me = account("compfail", Role.STAFF);
+        withStaffRecord(me);
+        String oldEmail = me.getEmail();
+        assertEquals(200, call(REQUEST, me, requestBody("ec_compfail@new.test")).getResponse().getStatus());
+        String code = sentCode("ec_compfail@new.test");
+
+        doThrow(new EmailSendingException("down")).when(emailService).sendEmailChangeNotice(anyString(), anyString(), eq(true));
+        MvcResult refused = call(CONFIRM, me, codeBody(code));
+        assertEquals(500, refused.getResponse().getStatus(), text(refused));
+        User stored = reload(me);
+        assertEquals(oldEmail, stored.getEmail(), "the email did not change");
+        assertEquals("ec_compfail@new.test", stored.getPendingEmail(), "the change is still pending");
+        assertNotNull(stored.getPendingEmailCodeHash(), "and the code was not used up");
+        assertEquals(oldEmail, staffRepository.findByUserUsername(me.getUsername()).orElseThrow().getEmail(), "the staff record did not change either");
+
+        reset(emailService); // the email service works again
+        MvcResult done = call(CONFIRM, me, codeBody(code));
+        assertEquals(200, done.getResponse().getStatus(), text(done));
+        assertEquals("ec_compfail@new.test", reload(me).getEmail());
+        verify(emailService).sendEmailChangeNotice(eq(oldEmail), anyString(), eq(true));
     }
 }

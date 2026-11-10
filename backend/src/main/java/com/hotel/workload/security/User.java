@@ -43,6 +43,14 @@ public class User {
     @Column(name = "verification_created_at")
     private LocalDateTime verificationCreatedAt;
 
+    // Step 2J stage 2. While in the future, verification attempts are refused (set 15 minutes after the fifth cumulative failure).
+    @Column(name = "verification_locked_until")
+    private LocalDateTime verificationLockedUntil;
+
+    // When a verification email was last attempted; a send within 60 seconds of it is suppressed.
+    @Column(name = "verification_last_sent_at")
+    private LocalDateTime verificationLastSentAt;
+
     @Column(name = "credentials_setup_required", columnDefinition = "boolean default false")
     private Boolean credentialsSetupRequired = false;
 
@@ -164,6 +172,10 @@ public class User {
     public void setVerificationAttemptCount(int verificationAttemptCount) { this.verificationAttemptCount = verificationAttemptCount; }
     public LocalDateTime getVerificationCreatedAt() { return verificationCreatedAt; }
     public void setVerificationCreatedAt(LocalDateTime verificationCreatedAt) { this.verificationCreatedAt = verificationCreatedAt; }
+    public LocalDateTime getVerificationLockedUntil() { return verificationLockedUntil; }
+    public void setVerificationLockedUntil(LocalDateTime verificationLockedUntil) { this.verificationLockedUntil = verificationLockedUntil; }
+    public LocalDateTime getVerificationLastSentAt() { return verificationLastSentAt; }
+    public void setVerificationLastSentAt(LocalDateTime verificationLastSentAt) { this.verificationLastSentAt = verificationLastSentAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

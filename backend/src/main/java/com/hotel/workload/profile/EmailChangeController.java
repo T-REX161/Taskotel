@@ -18,7 +18,8 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/profile/email-change")
 public class EmailChangeController {
 
-    public record NewEmailBody(String newEmail) {}
+    /** The new address and the signed-in user's CURRENT password (re-authentication). Neither names an account. */
+    public record NewEmailBody(String newEmail, String currentPassword) {}
     public record ConfirmBody(String code) {}
 
     private final EmailChangeService service;
@@ -32,7 +33,8 @@ public class EmailChangeController {
     /** Sends a code to the new address (and again for a resend). Answers with the masked address and the timings, never the code. */
     @PostMapping("/request")
     public EmailChangeService.CodeSent request(@RequestBody NewEmailBody body, Authentication authentication, HttpServletRequest http) {
-        return service.request(nameOf(authentication), http.getRemoteAddr(), body == null ? null : body.newEmail());
+        return service.request(nameOf(authentication), http.getRemoteAddr(), body == null ? null : body.newEmail(),
+                body == null ? null : body.currentPassword());
     }
 
     /** Verifies the code and switches the email. Answers with the updated profile, so the screen can show the new address at once. */

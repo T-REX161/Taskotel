@@ -25,6 +25,8 @@ const INPUT_CLASS = 'w-full h-11 px-4 rounded-xl border text-sm font-medium text
 export default function EmailChangeDialog({ isOpen, currentEmail, onClose, onChanged }) {
   const [step, setStep] = useState('enter'); // enter | verify
   const [newEmail, setNewEmail] = useState('');
+  const [currentPassword, setCurrentPassword] = useState(''); // re-authentication; lives only in this component, never in browser storage
+  const [passwordError, setPasswordError] = useState('');
   const [code, setCode] = useState('');
   const [info, setInfo] = useState(null); // { maskedEmail, expiresAt, resendAt }
   const [busy, setBusy] = useState(false);
@@ -38,7 +40,7 @@ export default function EmailChangeDialog({ isOpen, currentEmail, onClose, onCha
   // A fresh dialog every time it opens
   useEffect(() => {
     if (!isOpen) return;
-    setStep('enter'); setNewEmail(''); setCode(''); setInfo(null); setBusy(false); setError(''); setFieldError('');
+    setStep('enter'); setNewEmail(''); setCurrentPassword(''); setPasswordError(''); setCode(''); setInfo(null); setBusy(false); setError(''); setFieldError('');
     setNow(Date.now());
   }, [isOpen]);
 
@@ -73,10 +75,11 @@ export default function EmailChangeDialog({ isOpen, currentEmail, onClose, onCha
     if (sending.current) return; // no duplicate submissions
     const problem = validateNewEmail(newEmail, currentEmail);
     if (problem) { setFieldError(problem); return; }
+    if (!currentPassword) { setPasswordError(EMAIL_CHANGE_MESSAGES.passwordRequired); return; }
     sending.current = true;
-    setBusy(true); setError(''); setFieldError('');
+    setBusy(true); setError(''); setFieldError(''); setPasswordError('');
     try {
-      setInfo(await sendEmailChangeCode(newEmail, currentEmail));
+      setInfo(await sendEmailChangeCode(newEmail, currentEmail, currentPassword));
       setCode('');
       setNow(Date.now());
       setStep('verify');
@@ -151,6 +154,22 @@ export default function EmailChangeDialog({ isOpen, currentEmail, onClose, onCha
                 className={`${INPUT_CLASS} ${fieldError ? 'border-red-400' : 'border-gray-300'}`}
               />
               {fieldError && <p id="new-email-error" className="text-xs text-red-600 mt-1.5 font-medium">{fieldError}</p>}
+            </div>
+            <div>
+              <label htmlFor="email-change-password" className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Current password</label>
+              <input
+                id="email-change-password"
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                disabled={busy}
+                onChange={(event) => { setCurrentPassword(event.target.value); if (passwordError) setPasswordError(''); if (error) setError(''); }}
+                aria-invalid={passwordError ? 'true' : 'false'}
+                aria-describedby={passwordError ? 'email-change-password-error' : undefined}
+                className={`${INPUT_CLASS} ${passwordError ? 'border-red-400' : 'border-gray-300'}`}
+              />
+              {passwordError && <p id="email-change-password-error" className="text-xs text-red-600 mt-1.5 font-medium">{passwordError}</p>}
+              <p className="text-xs text-gray-500 mt-1.5">For your security, confirm it is you before the address is changed.</p>
             </div>
             {error && <p role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
             <div className="flex items-center justify-end gap-3 pt-1">

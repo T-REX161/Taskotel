@@ -45,7 +45,7 @@ public class AuthServiceTest {
         user.setEmailVerified(true); // every role must verify its email first
 
         when(userRepository.findByUsername("admin")).thenReturn(Optional.of(user));
-        when(jwtUtil.generateToken("admin", Role.ADMIN)).thenReturn("mock-token");
+        when(jwtUtil.generateToken("admin", Role.ADMIN, null)).thenReturn("mock-token");
 
         LoginRequest request = new LoginRequest("admin", "password");
         LoginResponse response = authService.authenticate(request);
@@ -56,7 +56,7 @@ public class AuthServiceTest {
         assertEquals(Role.ADMIN, response.getRole());
         assertFalse(response.isEmailVerificationRequired());
         verify(verificationCodeService, never()).sendVerificationCode(any());
-        verify(jwtUtil, times(1)).generateToken("admin", Role.ADMIN);
+        verify(jwtUtil, times(1)).generateToken("admin", Role.ADMIN, null);
         
         assertFalse(user.isFirstLogin());
         verify(userRepository, times(1)).save(user);
@@ -73,7 +73,7 @@ public class AuthServiceTest {
         user.setEmailVerified(true); // every role must verify its email first
 
         when(userRepository.findByUsername("manager1")).thenReturn(Optional.of(user));
-        when(jwtUtil.generateToken("manager1", Role.MANAGER)).thenReturn("manager-token");
+        when(jwtUtil.generateToken("manager1", Role.MANAGER, null)).thenReturn("manager-token");
 
         LoginRequest request = new LoginRequest("manager1", "password");
         LoginResponse response = authService.authenticate(request);
@@ -84,7 +84,7 @@ public class AuthServiceTest {
         assertEquals(Role.MANAGER, response.getRole());
         assertFalse(response.isEmailVerificationRequired());
         verify(verificationCodeService, never()).sendVerificationCode(any());
-        verify(jwtUtil, times(1)).generateToken("manager1", Role.MANAGER);
+        verify(jwtUtil, times(1)).generateToken("manager1", Role.MANAGER, null);
 
         assertFalse(user.isFirstLogin());
         verify(userRepository, times(1)).save(user);
@@ -102,7 +102,7 @@ public class AuthServiceTest {
         user.setActive(true);
 
         when(userRepository.findByUsername("staff_verified")).thenReturn(Optional.of(user));
-        when(jwtUtil.generateToken("staff_verified", Role.STAFF)).thenReturn("staff-token");
+        when(jwtUtil.generateToken("staff_verified", Role.STAFF, null)).thenReturn("staff-token");
 
         LoginRequest request = new LoginRequest("staff_verified", "password");
         LoginResponse response = authService.authenticate(request);
@@ -113,7 +113,7 @@ public class AuthServiceTest {
         assertEquals(Role.STAFF, response.getRole());
         assertFalse(response.isEmailVerificationRequired());
         verify(verificationCodeService, never()).sendVerificationCode(any());
-        verify(jwtUtil, times(1)).generateToken("staff_verified", Role.STAFF);
+        verify(jwtUtil, times(1)).generateToken("staff_verified", Role.STAFF, null);
 
         assertFalse(user.isFirstLogin());
         verify(userRepository, times(1)).save(user);
@@ -130,7 +130,7 @@ public class AuthServiceTest {
         user.setFirstLogin(false); // already false
 
         when(userRepository.findByUsername("returning")).thenReturn(Optional.of(user));
-        when(jwtUtil.generateToken("returning", Role.ADMIN)).thenReturn("mock-token");
+        when(jwtUtil.generateToken("returning", Role.ADMIN, null)).thenReturn("mock-token");
 
         LoginRequest request = new LoginRequest("returning", "password");
         authService.authenticate(request);
@@ -168,7 +168,7 @@ public class AuthServiceTest {
         // Verify verification code dispatch was triggered
         verify(verificationCodeService, times(1)).sendVerificationCode("staff_unverified");
         // Verify JWT generation was NEVER invoked
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
         
         // Verify user firstLogin was not updated
         assertTrue(user.isFirstLogin());
@@ -189,7 +189,7 @@ public class AuthServiceTest {
 
         assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(request));
         verify(verificationCodeService, never()).sendVerificationCode(any());
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
         verify(userRepository, never()).save(any());
     }
 
@@ -202,7 +202,7 @@ public class AuthServiceTest {
 
         assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(request));
         verify(verificationCodeService, never()).sendVerificationCode(any());
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
         verify(userRepository, never()).save(any());
     }
 
@@ -221,7 +221,7 @@ public class AuthServiceTest {
         InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(request));
         assertEquals("User account is disabled", ex.getMessage());
         verify(verificationCodeService, never()).sendVerificationCode(any());
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
         verify(userRepository, never()).save(any());
     }
 
@@ -252,7 +252,7 @@ public class AuthServiceTest {
 
         assertThrows(InvalidPasswordException.class, () -> authService.setupCredentials(request));
         verify(userRepository, never()).save(any());
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
     }
 
     @Test
@@ -267,7 +267,8 @@ public class AuthServiceTest {
 
         when(userRepository.findBySetupToken("token123.4102444800000")).thenReturn(Optional.of(user));
         when(userRepository.existsByUsername("new_username")).thenReturn(false);
-        when(jwtUtil.generateToken("new_username", Role.STAFF)).thenReturn("new-jwt-token");
+        // The third argument is the password version: setup has just stamped passwordChangedAt, so it is not null here
+        when(jwtUtil.generateToken(org.mockito.ArgumentMatchers.eq("new_username"), org.mockito.ArgumentMatchers.eq(Role.STAFF), org.mockito.ArgumentMatchers.any())).thenReturn("new-jwt-token");
 
         SetupCredentialsRequest request = new SetupCredentialsRequest();
         request.setSetupToken("token123.4102444800000");
@@ -307,7 +308,7 @@ public class AuthServiceTest {
         User user = account(username, username + "@hotel.com", role);
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
         when(userRepository.findAllByEmailIgnoreCase(username + "@hotel.com")).thenReturn(java.util.List.of(user));
-        when(jwtUtil.generateToken(username, role)).thenReturn("token-" + username);
+        when(jwtUtil.generateToken(username, role, null)).thenReturn("token-" + username);
 
         LoginResponse byUsername = authService.authenticate(new LoginRequest(username, "password"));
         LoginResponse byEmail = authService.authenticate(new LoginRequest(username + "@hotel.com", "password"));
@@ -318,7 +319,7 @@ public class AuthServiceTest {
             assertEquals(role, response.getRole());
             assertFalse(response.isEmailVerificationRequired());
         }
-        verify(jwtUtil, times(2)).generateToken(username, role);
+        verify(jwtUtil, times(2)).generateToken(username, role, null);
     }
 
     @ParameterizedTest
@@ -328,7 +329,7 @@ public class AuthServiceTest {
         User user = account("staff1", "staff1@hotel.com", Role.STAFF);
         when(userRepository.findByUsername(typed)).thenReturn(Optional.empty());
         when(userRepository.findAllByEmailIgnoreCase(typed.trim())).thenReturn(java.util.List.of(user));
-        when(jwtUtil.generateToken("staff1", Role.STAFF)).thenReturn("staff-token");
+        when(jwtUtil.generateToken("staff1", Role.STAFF, null)).thenReturn("staff-token");
 
         LoginResponse response = authService.authenticate(new LoginRequest(typed, "password"));
 
@@ -352,7 +353,7 @@ public class AuthServiceTest {
             InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(request));
             assertEquals("Invalid username/email or password", ex.getMessage());
         }
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
         verify(userRepository, never()).save(any());
     }
 
@@ -361,7 +362,7 @@ public class AuthServiceTest {
     public void testUsernameTakesPriority() {
         User user = account("frontdesk", "frontdesk@hotel.com", Role.STAFF);
         when(userRepository.findByUsername("frontdesk")).thenReturn(Optional.of(user));
-        when(jwtUtil.generateToken("frontdesk", Role.STAFF)).thenReturn("t");
+        when(jwtUtil.generateToken("frontdesk", Role.STAFF, null)).thenReturn("t");
 
         authService.authenticate(new LoginRequest("frontdesk", "password"));
         assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(new LoginRequest("unknown", "password")));
@@ -380,7 +381,7 @@ public class AuthServiceTest {
         InvalidCredentialsException ex = assertThrows(InvalidCredentialsException.class,
                 () -> authService.authenticate(new LoginRequest("shared@hotel.com", "password")));
         assertEquals("Invalid username/email or password", ex.getMessage());
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
     }
 
     @Test
@@ -394,7 +395,7 @@ public class AuthServiceTest {
         when(userRepository.findAllByEmailIgnoreCase("staff1@hotel.com")).thenReturn(java.util.List.of(staff));
 
         assertThrows(InvalidCredentialsException.class, () -> authService.authenticate(new LoginRequest("admin@hotel.com", "staff-only-password")));
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
     }
 
     @Test
@@ -414,7 +415,7 @@ public class AuthServiceTest {
         assertTrue(response.isEmailVerificationRequired());
         assertNull(response.getToken());
         verify(verificationCodeService).sendVerificationCode("newstaff");
-        verify(jwtUtil, never()).generateToken(any(), any());
+        verify(jwtUtil, never()).generateToken(any(), any(), any());
     }
 }
 

@@ -75,6 +75,20 @@ auth:
     max-attempts-per-client-and-account: ${CREDENTIAL_SETUP_RATE_LIMIT_PER_CLIENT:10}
     max-attempts-per-client: ${CREDENTIAL_SETUP_RATE_LIMIT_PER_CLIENT_MAX:20}
     max-attempts-per-account: 0
+  # Email verification (Step 2J). Same in-memory mechanism: per application instance, cleared by a restart, keyed on the connection's own
+  # address (forwarded headers are not trusted). The per-account failed-attempt count, lockout and resend cooldown are kept in the database.
+  verification-send-rate-limit:
+    enabled: ${VERIFICATION_SEND_RATE_LIMIT_ENABLED:true}
+    window-seconds: ${VERIFICATION_SEND_RATE_LIMIT_WINDOW_SECONDS:900}
+    max-attempts-per-client-and-account: ${VERIFICATION_SEND_RATE_LIMIT_PER_CLIENT_ACCOUNT:3}
+    max-attempts-per-client: ${VERIFICATION_SEND_RATE_LIMIT_PER_CLIENT:10}
+    max-attempts-per-account: ${VERIFICATION_SEND_RATE_LIMIT_PER_ACCOUNT:6}
+  verification-verify-rate-limit:
+    enabled: ${VERIFICATION_VERIFY_RATE_LIMIT_ENABLED:true}
+    window-seconds: ${VERIFICATION_VERIFY_RATE_LIMIT_WINDOW_SECONDS:900}
+    max-attempts-per-client-and-account: ${VERIFICATION_VERIFY_RATE_LIMIT_PER_CLIENT_ACCOUNT:5}
+    max-attempts-per-client: ${VERIFICATION_VERIFY_RATE_LIMIT_PER_CLIENT:20}
+    max-attempts-per-account: ${VERIFICATION_VERIFY_RATE_LIMIT_PER_ACCOUNT:30}
 
 jwt:
   secret: ${JWT_SECRET}

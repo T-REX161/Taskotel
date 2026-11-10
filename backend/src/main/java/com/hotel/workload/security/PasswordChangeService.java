@@ -77,7 +77,8 @@ public class PasswordChangeService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, SAME_MESSAGE);
         }
 
-        userRepository.updatePassword(user.getId(), passwordEncoder.encode(request.newPassword()), LocalDateTime.now());
+        userRepository.updatePassword(user.getId(), passwordEncoder.encode(request.newPassword()),
+                LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS)); // milliseconds: the session password version is derived from it
         limiter.succeeded(client, username);
     }
 

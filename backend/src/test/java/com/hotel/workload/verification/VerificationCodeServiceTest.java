@@ -74,7 +74,7 @@ public class VerificationCodeServiceTest {
         user.setVerificationAttemptCount(0);
         user.setVerificationCreatedAt(LocalDateTime.now());
 
-        when(userRepository.findByUsername("staff1")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1")).thenReturn(Optional.of(user));
         when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         String result = verificationCodeService.verifyCode("staff1", rawCode);
@@ -103,7 +103,7 @@ public class VerificationCodeServiceTest {
         user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(10));
         user.setVerificationAttemptCount(0);
 
-        when(userRepository.findByUsername("staff1")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1")).thenReturn(Optional.of(user));
 
         VerificationException ex = assertThrows(VerificationException.class, () ->
                 verificationCodeService.verifyCode("staff1", wrongCode)
@@ -129,7 +129,7 @@ public class VerificationCodeServiceTest {
         user.setVerificationCodeExpiresAt(LocalDateTime.now().minusMinutes(1)); // Expired 1 min ago
         user.setVerificationAttemptCount(0);
 
-        when(userRepository.findByUsername("staff1")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1")).thenReturn(Optional.of(user));
 
         VerificationException ex = assertThrows(VerificationException.class, () ->
                 verificationCodeService.verifyCode("staff1", code)
@@ -153,7 +153,7 @@ public class VerificationCodeServiceTest {
         user.setVerificationCodeHash(null); // Already used/cleared
         user.setVerificationCodeExpiresAt(null);
 
-        when(userRepository.findByUsername("staff1")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1")).thenReturn(Optional.of(user));
 
         VerificationException ex = assertThrows(VerificationException.class, () ->
                 verificationCodeService.verifyCode("staff1", "123456")
@@ -177,7 +177,7 @@ public class VerificationCodeServiceTest {
         user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(10));
         user.setVerificationAttemptCount(4); // 4 prior failed attempts
 
-        when(userRepository.findByUsername("staff1")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1")).thenReturn(Optional.of(user));
 
         // 5th attempt with wrong code
         VerificationException ex = assertThrows(VerificationException.class, () ->
@@ -186,6 +186,7 @@ public class VerificationCodeServiceTest {
 
         assertEquals(VerificationCodeServiceImpl.GENERIC_FAILURE, ex.getMessage());
         assertEquals(5, user.getVerificationAttemptCount());
+        assertNotNull(user.getVerificationLockedUntil(), "The fifth failure locks verification");
         assertNull(user.getVerificationCodeHash(), "Code hash must be invalidated upon 5th failure");
         assertNull(user.getVerificationCodeExpiresAt(), "Code expiration must be cleared upon 5th failure");
         assertFalse(user.isEmailVerified());
@@ -197,7 +198,7 @@ public class VerificationCodeServiceTest {
     }
 
     @Test
-    @DisplayName("sendVerificationCode resets attempt count, sets 10-minute expiry, and dispatches email")
+    @DisplayName("sendVerificationCode keeps the cumulative attempt count (Step 2J stage 2), sets 10-minute expiry, reserves the cooldown and dispatches email")
     public void testSendVerificationCode_ResetsAttemptCountAndDispatchesEmail() {
         User user = new User();
         user.setUsername("staff1");
@@ -206,11 +207,12 @@ public class VerificationCodeServiceTest {
         user.setEmailVerified(false);
         user.setVerificationAttemptCount(4); // Previous failed attempts
 
-        when(userRepository.findByUsername("staff1")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1")).thenReturn(Optional.of(user));
 
         verificationCodeService.sendVerificationCode("staff1");
 
-        assertEquals(0, user.getVerificationAttemptCount(), "Attempt count must reset to 0 on new code");
+        assertEquals(4, user.getVerificationAttemptCount(), "A resend must NOT reset the cumulative failed-attempt count");
+        assertNotNull(user.getVerificationLastSentAt(), "The resend cooldown is reserved");
         assertNotNull(user.getVerificationCodeHash(), "Hash must be populated");
         assertNotNull(user.getVerificationCodeExpiresAt(), "ExpiresAt must be populated");
         assertTrue(user.getVerificationCodeExpiresAt().isAfter(LocalDateTime.now().plusMinutes(9)),
@@ -236,7 +238,7 @@ public class VerificationCodeServiceTest {
         user.setRole(Role.STAFF);
         user.setEmailVerified(false);
 
-        when(userRepository.findByUsername("staff1")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1")).thenReturn(Optional.of(user));
         doThrow(new EmailSendingException("Failed to send verification email"))
                 .when(emailService).sendVerificationEmail(anyString(), anyString());
 
@@ -264,7 +266,7 @@ public class VerificationCodeServiceTest {
         user.setVerificationCodeExpiresAt(existingExpiry);
         user.setVerificationAttemptCount(2);
 
-        when(userRepository.findByUsername("staff1")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1")).thenReturn(Optional.of(user));
         doThrow(new EmailSendingException("SendGrid rejected"))
                 .when(emailService).sendVerificationEmail(anyString(), anyString());
 
@@ -291,8 +293,8 @@ public class VerificationCodeServiceTest {
         user.setVerificationCodeExpiresAt(LocalDateTime.now().plusMinutes(10));
         user.setVerificationAttemptCount(0);
 
-        when(userRepository.findByUsername("staff1@hotel.com")).thenReturn(Optional.empty());
-        when(userRepository.findByEmail("staff1@hotel.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByUsernameForUpdate("staff1@hotel.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailForUpdate("staff1@hotel.com")).thenReturn(Optional.of(user));
 
         String result = verificationCodeService.verifyCode("staff1@hotel.com", code);
         // assert result as appropriate

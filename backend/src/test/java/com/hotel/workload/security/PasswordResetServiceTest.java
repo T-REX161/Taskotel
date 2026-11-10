@@ -38,7 +38,7 @@ public class PasswordResetServiceTest {
     @Test
     @DisplayName("requestReset does nothing for unknown email")
     public void testRequestReset_UnknownEmail_DoesNothing() {
-        when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailForUpdate("unknown@test.com")).thenReturn(Optional.empty());
 
         ForgotPasswordRequest request = new ForgotPasswordRequest("unknown@test.com");
         passwordResetService.requestReset(request);
@@ -54,7 +54,7 @@ public class PasswordResetServiceTest {
         user.setEmail("inactive@test.com");
         user.setActive(false);
 
-        when(userRepository.findByEmail("inactive@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate("inactive@test.com")).thenReturn(Optional.of(user));
 
         ForgotPasswordRequest request = new ForgotPasswordRequest("inactive@test.com");
         passwordResetService.requestReset(request);
@@ -70,7 +70,7 @@ public class PasswordResetServiceTest {
         user.setEmail("active@test.com");
         user.setActive(true);
 
-        when(userRepository.findByEmail("active@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate("active@test.com")).thenReturn(Optional.of(user));
 
         ForgotPasswordRequest request = new ForgotPasswordRequest("active@test.com");
         passwordResetService.requestReset(request);
@@ -93,7 +93,7 @@ public class PasswordResetServiceTest {
         user.setActive(true);
         user.setPasswordResetLastSentAt(LocalDateTime.now().minusSeconds(30)); // 30s ago
 
-        when(userRepository.findByEmail("active@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate("active@test.com")).thenReturn(Optional.of(user));
 
         ForgotPasswordRequest request = new ForgotPasswordRequest("active@test.com");
         passwordResetService.requestReset(request);
@@ -112,25 +112,34 @@ public class PasswordResetServiceTest {
     }
 
     @Test
-    @DisplayName("requestReset propagates email sending exception")
+    @DisplayName("requestReset does not report a delivery failure (Step 2M) and stores no new code: the reset code is left unchanged")
     public void testRequestReset_EmailServiceThrowsException_Propagates() {
+        String existingHash = passwordEncoder.encode("123456");
+        LocalDateTime existingExpiry = LocalDateTime.now().plusMinutes(7);
         User user = new User();
         user.setEmail("active@test.com");
         user.setActive(true);
+        user.setPasswordResetCodeHash(existingHash);
+        user.setPasswordResetExpiresAt(existingExpiry);
+        user.setPasswordResetAttemptCount(2);
 
-        when(userRepository.findByEmail("active@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate("active@test.com")).thenReturn(Optional.of(user));
         doThrow(new EmailSendingException("Email failed")).when(emailService).sendPasswordResetEmail(any(), any());
 
         ForgotPasswordRequest request = new ForgotPasswordRequest("active@test.com");
-        assertThrows(EmailSendingException.class, () -> passwordResetService.requestReset(request));
+        assertDoesNotThrow(() -> passwordResetService.requestReset(request), "a delivery failure must look like any other answer");
 
-        verify(userRepository, times(1)).save(user);
+        verify(userRepository, never()).save(any());
+        assertEquals(existingHash, user.getPasswordResetCodeHash(), "an earlier valid code is preserved");
+        assertEquals(existingExpiry, user.getPasswordResetExpiresAt());
+        assertEquals(2, user.getPasswordResetAttemptCount());
+        assertNotNull(user.getPasswordResetLastSentAt(), "only the cooldown is reserved");
     }
 
     @Test
     @DisplayName("confirmReset throws for unknown email")
     public void testConfirmReset_UnknownEmail_ThrowsException() {
-        when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
+        when(userRepository.findByEmailForUpdate("unknown@test.com")).thenReturn(Optional.empty());
 
         ResetPasswordRequest request = new ResetPasswordRequest("unknown@test.com", "123456", "NewPass@123", "NewPass@123");
         assertThrows(InvalidVerificationCodeException.class, () -> passwordResetService.confirmReset(request));
@@ -144,7 +153,7 @@ public class PasswordResetServiceTest {
         user.setPasswordResetCodeHash(passwordEncoder.encode("123456"));
         user.setPasswordResetExpiresAt(LocalDateTime.now().minusMinutes(1)); // Expired
 
-        when(userRepository.findByEmail("active@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate("active@test.com")).thenReturn(Optional.of(user));
 
         ResetPasswordRequest request = new ResetPasswordRequest("active@test.com", "123456", "NewPass@123", "NewPass@123");
         assertThrows(InvalidVerificationCodeException.class, () -> passwordResetService.confirmReset(request));
@@ -159,7 +168,7 @@ public class PasswordResetServiceTest {
         user.setPasswordResetExpiresAt(LocalDateTime.now().plusMinutes(5));
         user.setPasswordResetAttemptCount(0);
 
-        when(userRepository.findByEmail("active@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate("active@test.com")).thenReturn(Optional.of(user));
 
         ResetPasswordRequest request = new ResetPasswordRequest("active@test.com", "654321", "NewPass@123", "NewPass@123");
         assertThrows(InvalidVerificationCodeException.class, () -> passwordResetService.confirmReset(request));
@@ -177,7 +186,7 @@ public class PasswordResetServiceTest {
         user.setPasswordResetExpiresAt(LocalDateTime.now().plusMinutes(5));
         user.setPasswordResetAttemptCount(4); // Next failure will be 5th
 
-        when(userRepository.findByEmail("active@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate("active@test.com")).thenReturn(Optional.of(user));
 
         ResetPasswordRequest request = new ResetPasswordRequest("active@test.com", "654321", "NewPass@123", "NewPass@123");
         assertThrows(InvalidVerificationCodeException.class, () -> passwordResetService.confirmReset(request));
@@ -200,7 +209,7 @@ public class PasswordResetServiceTest {
         user.setPasswordResetAttemptCount(2);
         user.setPasswordResetLastSentAt(LocalDateTime.now());
 
-        when(userRepository.findByEmail("active@test.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailForUpdate("active@test.com")).thenReturn(Optional.of(user));
 
         ResetPasswordRequest request = new ResetPasswordRequest("active@test.com", "123456", "NewPass@123", "NewPass@123");
         passwordResetService.confirmReset(request);

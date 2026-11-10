@@ -47,6 +47,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     java.util.Optional<User> optionalUser = userRepository.findByUsername(username);
                     if (optionalUser.isEmpty() || !optionalUser.get().isActive()) {
                         isUserActive = false;
+                    } else if (!JwtUtil.matchesCurrentPassword(jwtUtil.extractPasswordVersion(jwt), jwtUtil.extractIssuedAt(jwt),
+                            optionalUser.get().getPasswordChangedAt())) {
+                        // The password was changed or reset after this token was issued: the session ends (no authentication, so 401)
+                        isUserActive = false;
                     } else if (optionalUser.get().getRole() != null) {
                         role = optionalUser.get().getRole().name();
                     }

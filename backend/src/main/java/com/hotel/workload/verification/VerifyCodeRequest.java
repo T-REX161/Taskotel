@@ -1,16 +1,18 @@
 package com.hotel.workload.verification;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
-
+/**
+ * The body of a verification request. It deliberately carries NO bean-validation annotations: a request rejected by validation would
+ * be answered before the controller method runs, so it would never be charged to the rate limiter and a client could send unlimited
+ * malformed codes. The strict six-digit rule is enforced in {@link VerificationCodeServiceImpl#verifyCode} instead, after the limiter has
+ * counted the request; a missing, blank, non-numeric, too-short, too-long or non-ASCII-digit code never verifies and gets the same generic
+ * failure as a wrong one.
+ */
 public class VerifyCodeRequest {
 
     private String identifier;
     private String username;
     private String email;
 
-    @NotBlank(message = "Verification code is required")
-    @Pattern(regexp = "^\\d{6}$", message = "Verification code must be exactly 6 digits")
     private String code;
 
     public VerifyCodeRequest() {}

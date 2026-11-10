@@ -132,6 +132,17 @@ describe('row actions', () => {
     assert.deepStrictEqual(getUserActions(users[2], { staff: inactiveStaff, currentUsername: 'admin', isAdmin: false }).actions, ['view', 'edit', 'activate']);
   });
 
+  it('never offers to remove an Administrator account (the server refuses it), even an inactive one; other roles are unchanged', () => {
+    const inactiveAdmin = { id: 'u8', username: 'oldadmin', role: 'ADMIN', active: false };
+    const withStaff = { staff: { active: false }, currentUsername: 'someone-else', isAdmin: true };
+    assert.ok(!getUserActions(inactiveAdmin, withStaff).actions.includes('remove'));
+    assert.ok(getUserActions(inactiveAdmin, withStaff).actions.includes('activate'), 'it can still be reactivated');
+    assert.ok(!getUserActions(inactiveAdmin, { staff: null, currentUsername: 'someone-else', isAdmin: true }).actions.includes('remove'), 'with no staff record either');
+    for (const role of ['MANAGER', 'STAFF']) {
+      assert.ok(getUserActions({ ...inactiveAdmin, role }, withStaff).actions.includes('remove'), role);
+    }
+  });
+
   it('never offers to deactivate or remove your own account', () => {
     const own = getUserActions(users[0], { staff: activeStaff, currentUsername: 'RAHUL', isAdmin: true });
     assert.deepStrictEqual(own.actions, ['view', 'edit']);

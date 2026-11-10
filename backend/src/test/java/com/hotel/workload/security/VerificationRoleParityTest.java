@@ -93,6 +93,13 @@ public class VerificationRoleParityTest {
         return lastCodeSentTo(user.getEmail());
     }
 
+    /** Lets the 60-second resend cooldown (Step 2J stage 2) pass, as the passing of time would. */
+    private void letCooldownPass(User user) {
+        User stored = userRepository.findById(user.getId()).orElseThrow();
+        stored.setVerificationLastSentAt(LocalDateTime.now().minusSeconds(61));
+        userRepository.saveAndFlush(stored);
+    }
+
     private String lastCodeSentTo(String email) {
         ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
@@ -147,7 +154,7 @@ public class VerificationRoleParityTest {
     // ── resend, expiry, verification ─────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Resending a code works for every role: a new code goes to the same address, replaces the old one and resets the attempts")
+    @DisplayName("Resending a code works for every role: a new code goes to the same address, replaces the old one and keeps the cumulative failed attempts (Step 2J stage 2)")
     void resendWorksForEveryRole() throws Exception {
         for (Role role : ROLES) {
             reset(emailService);
@@ -156,13 +163,14 @@ public class VerificationRoleParityTest {
             call("/api/auth/email-verification/verify", "{\"identifier\":\"" + created.getUsername() + "\",\"code\":\"" + (first.equals("000000") ? "111111" : "000000") + "\"}");
             assertEquals(1, userRepository.findById(created.getId()).orElseThrow().getVerificationAttemptCount(), "one wrong try counted");
 
+            letCooldownPass(created);
             MvcResult resend = call("/api/auth/email-verification/send", "{\"identifier\":\"" + created.getUsername() + "\"}");
             assertEquals(200, resend.getResponse().getStatus(), role + ": " + resend.getResponse().getContentAsString());
             verify(emailService, times(2)).sendVerificationEmail(anyString(), anyString());
             String second = lastCodeSentTo(created.getEmail());
 
             User stored = userRepository.findById(created.getId()).orElseThrow();
-            assertEquals(0, stored.getVerificationAttemptCount(), "attempts reset");
+            assertEquals(1, stored.getVerificationAttemptCount(), "a resend must not reset the cumulative failed attempts");
             assertTrue(passwordEncoder.matches(second, stored.getVerificationCodeHash()), "the new code is the stored one");
             if (!first.equals(second)) {
                 MvcResult old = call("/api/auth/email-verification/verify", "{\"identifier\":\"" + created.getUsername() + "\",\"code\":\"" + first + "\"}");
@@ -188,6 +196,7 @@ public class VerificationRoleParityTest {
             assertNull(userRepository.findById(created.getId()).orElseThrow().getVerificationCodeHash());
             assertFalse(userRepository.findById(created.getId()).orElseThrow().isEmailVerified());
 
+            letCooldownPass(created);
             call("/api/auth/email-verification/send", "{\"identifier\":\"" + created.getUsername() + "\"}");
             String fresh = lastCodeSentTo(created.getEmail());
             MvcResult ok = call("/api/auth/email-verification/verify", "{\"identifier\":\"" + created.getUsername() + "\",\"code\":\"" + fresh + "\"}");

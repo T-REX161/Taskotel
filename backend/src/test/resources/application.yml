@@ -23,6 +23,14 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000
 
+# The in-memory client limits are shared by every test in a cached Spring context; the verification tests all call from one address, so
+# they are off here and the tests that exercise them switch them on with their own property source (a separate context).
+auth:
+  verification-send-rate-limit:
+    enabled: false
+  verification-verify-rate-limit:
+    enabled: false
+
 sendgrid:
   api-key: ${SENDGRID_API_KEY:test-sendgrid-api-key}
   from-email: ${SENDGRID_FROM_EMAIL:noreply@hotelwb.com}

@@ -8,6 +8,7 @@ import com.hotel.workload.staff.StaffRepository;
 import com.hotel.workload.verification.VerificationCodeService;
 import com.hotel.workload.verification.VerificationCodeServiceImpl;
 import com.hotel.workload.verification.EmailService;
+import com.hotel.workload.verification.EmailSendingException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import org.slf4j.Logger;
@@ -54,6 +55,10 @@ public class EmailChangeService {
     static final String EXPIRED = "That code has expired. Request a new code.";
     static final String ATTEMPTS_USED_UP = "Too many incorrect codes. Request a new code.";
     static final String CODE_FORMAT = "Enter the 6-digit code.";
+    static final String PASSWORD_REQUIRED = "Enter your current password to change your email address.";
+    static final String WRONG_PASSWORD = "Current password is incorrect.";
+    /** BCrypt only uses the first 72 bytes (the same bound as the password change). */
+    private static final int BCRYPT_MAX_BYTES = 72;
 
     private static final Pattern EMAIL = Pattern.compile("^[A-Za-z0-9._%+'-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}$");
 
@@ -89,13 +94,24 @@ public class EmailChangeService {
      * leaves nothing behind. The current address is told (best effort) that a change was requested.
      */
     @Transactional
-    public CodeSent request(String username, String client, String newEmail) {
+    public CodeSent request(String username, String client, String newEmail, String currentPassword) {
         User user = lockedUser(username);
         requireOnboarded(user);
 
+        // Checks that say nothing beyond what the caller typed come first and are not charged to the limiter (as before)
         String email = normalise(newEmail);
         if (email == null) throw bad(INVALID_EMAIL);
         if (email.equalsIgnoreCase(user.getEmail())) throw bad(SAME_EMAIL);
+
+        // Every request that gets this far is charged, so wrong passwords and every refusal below are limited together
+        AttemptLimiter.Decision decision = requestLimiter.begin(client, username);
+        if (!decision.allowed()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, TOO_MANY);
+
+        // Re-authentication (Step 2L): changing the email can hand the account over through a password reset, so a valid session alone is
+        // not enough. The password is checked before anything that reveals more (whether another account uses the address), and the
+        // account is the authenticated one, never one named by the caller.
+        requireCurrentPassword(user, currentPassword);
+
         if (inUseByAnother(user, email)) throw new ResponseStatusException(HttpStatus.CONFLICT, IN_USE);
 
         LocalDateTime now = LocalDateTime.now();
@@ -106,12 +122,13 @@ public class EmailChangeService {
                         "Please wait " + (RESEND_COOLDOWN_SECONDS - waited) + " seconds before requesting another code.");
             }
         }
-        AttemptLimiter.Decision decision = requestLimiter.begin(client, username);
-        if (!decision.allowed()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, TOO_MANY);
-
         String code = codes.generateCode();
         String hash = codes.hashCode(code);
         emailService.sendEmailChangeVerificationEmail(email, code); // throws if it cannot be sent: nothing is stored then
+
+        // The current address must be told before the change is allowed to start. If that notice cannot be sent the request fails and
+        // nothing is stored (the code that went to the new address is then useless), so a change can never be started silently.
+        noticeOldAddress(user.getEmail(), email, false);
 
         user.setPendingEmail(email);
         user.setPendingEmailCodeHash(hash);
@@ -120,7 +137,6 @@ public class EmailChangeService {
         user.setPendingEmailLastSentAt(now);
         userRepository.saveAndFlush(user);
 
-        notifyOldAddress(user.getEmail(), email, false);
         return new CodeSent(mask(email), CODE_LIFETIME_MINUTES * 60, RESEND_COOLDOWN_SECONDS);
     }
 
@@ -181,9 +197,12 @@ public class EmailChangeService {
             staff.setEmail(newEmail); // the staff record mirrors the account's email everywhere else in the app
             staffRepository.saveAndFlush(staff);
         });
-        confirmLimiter.succeeded(client, username);
 
-        notifyOldAddress(oldEmail, newEmail, true);
+        // The old address is told the change happened, inside this transaction: if that notice cannot be sent the exception rolls the
+        // switch back (the email stays as it was, the code stays usable) and the person tries again. A completed change therefore always
+        // has a notice behind it; nothing is lost silently, at the price that the change waits for the email service.
+        noticeOldAddress(oldEmail, newEmail, true);
+        confirmLimiter.succeeded(client, username);
         log.info("Email address changed for user: {}", user.getUsername());
     }
 
@@ -212,12 +231,29 @@ public class EmailChangeService {
                 .anyMatch(s -> s.getEmail() != null && s.getEmail().equalsIgnoreCase(email) && (mine.isEmpty() || !s.getId().equals(mine.get().getId())));
     }
 
-    private void notifyOldAddress(String oldEmail, String newEmail, boolean completed) {
+    /**
+     * Tells the CURRENT address that a change was requested or completed. A failure is not swallowed: it is logged (no address, no code) and
+     * rethrown as an EmailSendingException, which rolls the surrounding transaction back, so the change neither starts nor completes
+     * without the owner of the current mailbox having been told.
+     */
+    private void noticeOldAddress(String oldEmail, String newEmail, boolean completed) {
         try {
             emailService.sendEmailChangeNotice(oldEmail, mask(newEmail), completed);
+        } catch (EmailSendingException e) {
+            log.warn("Could not send the email change notice; the change was not {}", completed ? "completed" : "started");
+            throw e;
         } catch (RuntimeException e) {
-            // The notice is a courtesy: failing to send it must not undo or block the change. No address is logged.
-            log.warn("Could not send the email change notice ({})", e.getClass().getSimpleName());
+            log.warn("Could not send the email change notice ({}); the change was not {}", e.getClass().getSimpleName(), completed ? "completed" : "started");
+            throw new EmailSendingException("Could not send the email change notice", e);
+        }
+    }
+
+    /** The signed-in user must type their current password. Missing: 400. Wrong: 400 (never 401, which the client reads as an expired session). */
+    private void requireCurrentPassword(User user, String currentPassword) {
+        if (currentPassword == null || currentPassword.isEmpty()) throw bad(PASSWORD_REQUIRED);
+        if (currentPassword.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > BCRYPT_MAX_BYTES
+                || !passwordEncoder.matches(currentPassword, user.getPassword())) {
+            throw bad(WRONG_PASSWORD);
         }
     }
 

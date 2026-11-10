@@ -237,10 +237,11 @@ export const getProfile = () => {
  * whose account it is from the token. Resolves with { pendingEmailMasked, expiresInSeconds, resendAvailableInSeconds }; nothing about the
  * account changes yet.
  */
-export const requestEmailChange = (newEmail) => {
+export const requestEmailChange = (newEmail, currentPassword) => {
+  // The current password re-authenticates the signed-in user (the server checks it against the signed-in account only)
   return apiFetch('/api/profile/email-change/request', {
     method: 'POST',
-    body: JSON.stringify({ newEmail }),
+    body: JSON.stringify({ newEmail, currentPassword }),
   });
 };
 

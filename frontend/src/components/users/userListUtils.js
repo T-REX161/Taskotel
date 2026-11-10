@@ -125,7 +125,8 @@ export function indexStaffByUserId(staffList) {
  *  - view and edit: any account with a staff record
  *  - deactivate (confirmed in a dialog): active accounts; never your own
  *  - activate: inactive accounts
- *  - remove (confirmed in a dialog): administrators only, inactive accounts only; never your own
+ *  - remove (confirmed in a dialog): administrators only, inactive accounts only; never your own, and never an Administrator account
+ *    (the server refuses to delete one: deactivate it instead)
  */
 export function getUserActions(user, { staff = null, currentUsername = '', isAdmin = false } = {}) {
   const own = isCurrentUser(user, currentUsername);
@@ -139,7 +140,7 @@ export function getUserActions(user, { staff = null, currentUsername = '', isAdm
     if (!own) actions.push('deactivate');
   } else {
     actions.push('activate');
-    if (isAdmin && !own) actions.push('remove');
+    if (isAdmin && !own && normalizeRole(user?.role) !== 'ADMIN') actions.push('remove');
   }
   let note = null;
   if (own) note = 'This is your account, so it cannot be deactivated or removed here.';

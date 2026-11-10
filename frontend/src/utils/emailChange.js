@@ -10,6 +10,7 @@ export const EMAIL_CHANGE_MESSAGES = {
   required: 'Enter the new email address.',
   invalid: 'Enter a valid email address.',
   same: 'That is already your email address.',
+  passwordRequired: 'Enter your current password.',
   codeRequired: 'Enter the 6-digit code.',
   sendFailed: 'Could not send the verification code. Please try again.',
   verifyFailed: 'Could not verify the code. Please try again.',
@@ -55,14 +56,16 @@ export function formatCountdown(totalSeconds) {
 }
 
 /**
- * Asks the server to send a code to `newEmail` (also used to resend). Resolves with what the screen needs: the masked address and
+ * Asks the server to send a code to `newEmail` (also used to resend), after the user re-enters their current password. Resolves with what the screen needs: the masked address and
  * the moments the code expires and may be resent. Rejects with the server's error, or with a status-0 error holding the field
  * message when the address is not worth sending (nothing is sent then).
  */
-export async function sendEmailChangeCode(newEmail, currentEmail, { send = requestEmailChange, now = () => Date.now() } = {}) {
+export async function sendEmailChangeCode(newEmail, currentEmail, currentPassword, { send = requestEmailChange, now = () => Date.now() } = {}) {
   const problem = validateNewEmail(newEmail, currentEmail);
   if (problem) throw Object.assign(new Error(problem), { status: 0 });
-  const answer = await send(normalizeEmail(newEmail));
+  // Re-authentication: the server needs the current password too; there is no point asking without one
+  if (!currentPassword) throw Object.assign(new Error(EMAIL_CHANGE_MESSAGES.passwordRequired), { status: 0 });
+  const answer = await send(normalizeEmail(newEmail), currentPassword);
   const at = now();
   return {
     maskedEmail: answer?.pendingEmailMasked || '',

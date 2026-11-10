@@ -9,6 +9,21 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByUsername(String username);
     Optional<User> findByEmail(String email);
+
+    /**
+     * The account for a user name, locked for the rest of the transaction (SELECT ... FOR UPDATE). Email verification reads its state
+     * through these two finders and nothing else: because the row is loaded only after the lock is held, simultaneous sends and
+     * verifications are processed one at a time and each sees the committed result of the one before (no lost attempt counts, no
+     * double use of a code, no two sends inside one cooldown). Must be called inside a transaction.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.username = :username")
+    Optional<User> findByUsernameForUpdate(@org.springframework.data.repository.query.Param("username") String username);
+
+    /** As {@link #findByUsernameForUpdate}, by email address (exact match, like {@link #findByEmail}). */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.email = :email")
+    Optional<User> findByEmailForUpdate(@org.springframework.data.repository.query.Param("email") String email);
     // A list: the unique constraint on email is case-sensitive, so two accounts could differ only in case
     List<User> findAllByEmailIgnoreCase(String email);
     Optional<User> findBySetupToken(String setupToken);

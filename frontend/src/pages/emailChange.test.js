@@ -82,24 +82,55 @@ describe('error messages', () => {
 describe('sending the code', () => {
   it('sends only the normalised new address, and resolves with the masked address and the expiry and resend moments', async () => {
     let sent = null;
-    const info = await sendEmailChangeCode('  New@Example.com ', 'old@hotel.com', {
+    let sentPassword = null;
+    const info = await sendEmailChangeCode('  New@Example.com ', 'old@hotel.com', 'Correct@123', {
       now: () => 1_000_000,
-      send: async (email) => { sent = email; return { pendingEmailMasked: 'ne***@example.com', expiresInSeconds: 600, resendAvailableInSeconds: 60 }; },
+      send: async (email, password) => { sent = email; sentPassword = password; return { pendingEmailMasked: 'ne***@example.com', expiresInSeconds: 600, resendAvailableInSeconds: 60 }; },
     });
     assert.equal(sent, 'new@example.com');
+    assert.equal(sentPassword, 'Correct@123', 'the current password goes with the request');
     assert.deepEqual(info, { maskedEmail: 'ne***@example.com', expiresAt: 1_600_000, resendAt: 1_060_000 });
   });
 
   it('refuses an unsendable address without calling the server', async () => {
     let called = false;
-    await assert.rejects(sendEmailChangeCode('nope', 'old@hotel.com', { send: async () => { called = true; } }), (e) => e.status === 0 && e.message === EMAIL_CHANGE_MESSAGES.invalid);
-    await assert.rejects(sendEmailChangeCode('old@hotel.com', 'old@hotel.com', { send: async () => { called = true; } }), (e) => e.message === EMAIL_CHANGE_MESSAGES.same);
+    await assert.rejects(sendEmailChangeCode('nope', 'old@hotel.com', 'Correct@123', { send: async () => { called = true; } }), (e) => e.status === 0 && e.message === EMAIL_CHANGE_MESSAGES.invalid);
+    await assert.rejects(sendEmailChangeCode('old@hotel.com', 'old@hotel.com', 'Correct@123', { send: async () => { called = true; } }), (e) => e.message === EMAIL_CHANGE_MESSAGES.same);
     assert.equal(called, false);
   });
 
   it('passes a server refusal on (duplicate, cooldown, rate limit), never as a success', async () => {
-    await assert.rejects(sendEmailChangeCode('new@example.com', 'old@hotel.com', { send: async () => { throw Object.assign(new Error('This email address is already in use.'), { status: 409 }); } }),
+    await assert.rejects(sendEmailChangeCode('new@example.com', 'old@hotel.com', 'Correct@123', { send: async () => { throw Object.assign(new Error('This email address is already in use.'), { status: 409 }); } }),
       (e) => e.status === 409);
+  });
+});
+
+describe('re-authentication with the current password (Step 2L)', () => {
+  it('refuses to send without a password, and never calls the server then', async () => {
+    let called = false;
+    for (const missing of ['', null, undefined]) {
+      await assert.rejects(sendEmailChangeCode('new@example.com', 'old@hotel.com', missing, { send: async () => { called = true; } }),
+        (e) => e.status === 0 && e.message === EMAIL_CHANGE_MESSAGES.passwordRequired);
+    }
+    assert.equal(called, false);
+  });
+
+  it('shows the server answer for a wrong password (400) and for a rate limit (429), and keeps the user signed in', async () => {
+    for (const status of [400, 429]) {
+      globalThis.fetch = async () => ({ ok: false, status, json: async () => ({ message: status === 400 ? 'Current password is incorrect.' : 'Too many attempts. Please wait a few minutes and try again.' }) });
+      await assert.rejects(requestEmailChange('new@example.com', 'Wrong@Pass1'), (e) => e.status === status);
+      assert.equal(local.token, 'jwt-maria', 'a refusal is not a sign-out');
+    }
+    assert.equal(emailChangeErrorMessage({ status: 400, message: 'Current password is incorrect.' }, 'fallback'), 'Current password is incorrect.');
+  });
+
+  it('the dialog asks for it in a password field, validates it, passes it on, and keeps it only in its own state', () => {
+    const dialogSource = read('..', 'components', 'profile', 'EmailChangeDialog.jsx');
+    assert.ok(dialogSource.includes('id="email-change-password"') && dialogSource.includes('type="password"') && dialogSource.includes('autoComplete="current-password"'));
+    assert.ok(dialogSource.includes('if (!currentPassword) { setPasswordError(EMAIL_CHANGE_MESSAGES.passwordRequired); return; }'));
+    assert.ok(dialogSource.includes('sendEmailChangeCode(newEmail, currentEmail, currentPassword)'));
+    assert.ok(dialogSource.includes("setCurrentPassword(''); setPasswordError('');"), 'cleared every time the dialog opens');
+    for (const forbidden of ['localStorage', 'sessionStorage', 'console.']) assert.ok(!dialogSource.includes(forbidden), forbidden);
   });
 });
 
@@ -124,16 +155,16 @@ describe('the API calls', () => {
       calls.push({ url, method: options.method, auth: options.headers.Authorization, body: JSON.parse(options.body) });
       return { ok: true, status: 200, json: async () => ({ ok: true }) };
     };
-    await requestEmailChange('new@example.com');
+    await requestEmailChange('new@example.com', 'Correct@123');
     await confirmEmailChange('654321');
     assert.deepEqual(calls.map((c) => [c.method, c.url, c.auth]), [
       ['POST', '/api/profile/email-change/request', 'Bearer jwt-maria'],
       ['POST', '/api/profile/email-change/confirm', 'Bearer jwt-maria'],
     ]);
-    assert.deepEqual(calls[0].body, { newEmail: 'new@example.com' });
+    assert.deepEqual(calls[0].body, { newEmail: 'new@example.com', currentPassword: 'Correct@123' });
     assert.deepEqual(calls[1].body, { code: '654321' });
     const stored = JSON.stringify([local, session]);
-    assert.ok(!stored.includes('654321') && !stored.includes('new@example.com'), 'no code or address in browser storage');
+    assert.ok(!stored.includes('654321') && !stored.includes('new@example.com') && !stored.includes('Correct@123'), 'no code, address or password in browser storage');
   });
 
   it('a wrong code (400) keeps the user signed in', async () => {

@@ -29,6 +29,8 @@ import java.util.UUID;
 @Service
 public class UserAccountService {
 
+    /** Shared with StaffServiceImpl.removeStaff: the same rule on both deletion paths. */
+    public static final String ADMIN_ACCOUNT_MESSAGE = "Administrator accounts cannot be permanently removed. Deactivate the account instead.";
     static final String OWN_ACCOUNT_MESSAGE = "You cannot deactivate or remove your own account.";
     static final String LAST_ADMIN_MESSAGE = "Cannot deactivate the last active administrator.";
     static final String REMOVE_ACTIVE_MESSAGE = "Cannot remove an active account. Deactivate it first.";
@@ -92,6 +94,10 @@ public class UserAccountService {
         String actingUsername = scopeResolver.currentUsername(); // from the security context, never from the caller
         User user = find(id);
         requireNotSelf(user, actingUsername);
+        // An Admin account is never deleted (deactivate it instead), whether or not it has a staff record
+        if (user.getRole() == Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ADMIN_ACCOUNT_MESSAGE);
+        }
         Optional<Staff> staff = staffRepository.findByUserUsername(user.getUsername());
         if (staff.isPresent()) {
             staffService.removeStaff(staff.get().getId()); // staff rules: inactive only, no assignment history

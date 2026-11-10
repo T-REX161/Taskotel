@@ -135,10 +135,10 @@ public class VerificationEnumerationResistanceTest {
         verify(emailService, never()).sendVerificationEmail(anyString(), anyString());
 
         send(P + "known");
-        send(P + "known@hotel.test");
+        send(P + "known@hotel.test"); // inside the 60-second cooldown of the first: answered the same, nothing sent
         ArgumentCaptor<String> recipients = ArgumentCaptor.forClass(String.class);
-        verify(emailService, times(2)).sendVerificationEmail(recipients.capture(), anyString());
-        assertEquals(List.of(P + "known@hotel.test", P + "known@hotel.test"), recipients.getAllValues());
+        verify(emailService, times(1)).sendVerificationEmail(recipients.capture(), anyString());
+        assertEquals(List.of(P + "known@hotel.test"), recipients.getAllValues());
 
         User reloaded = userRepository.findById(inactive.getId()).orElseThrow();
         assertNull(reloaded.getVerificationCodeHash(), "no code was stored for an inactive account");
@@ -246,7 +246,7 @@ public class VerificationEnumerationResistanceTest {
         EmailService email = mock(EmailService.class);
         VerificationCodeServiceImpl service = new VerificationCodeServiceImpl(repository, encoder, email);
         if (user != null) {
-            when(repository.findByUsername(user.getUsername())).thenReturn(Optional.of(user));
+            when(repository.findByUsernameForUpdate(user.getUsername())).thenReturn(Optional.of(user));
         }
         clearInvocations(encoder); // the constructor's one-off hash is not part of a request
         return new Counting(service, encoder, repository, email);
@@ -374,10 +374,12 @@ public class VerificationEnumerationResistanceTest {
     @Test
     @DisplayName("send: any exception from the email client (not only EmailSendingException) gets the same generic answer")
     public void anyClientFailureLooksTheSame() throws Exception {
-        account("known", Role.STAFF, true, false, true);
+        User known = account("known", Role.STAFF, true, false, true);
         Answer unknown = send(P + "nobody");
         for (RuntimeException failure : List.of(new IllegalStateException("socket closed"), new NullPointerException(), new EmailSendingException("timeout"))) {
             reset(emailService);
+            known.setVerificationLastSentAt(null); // each failure is tried outside the cooldown the previous attempt reserved
+            userRepository.saveAndFlush(known);
             doThrow(failure).when(emailService).sendVerificationEmail(anyString(), anyString());
             assertEquals(unknown, send(P + "known"), failure.getClass().getSimpleName());
         }

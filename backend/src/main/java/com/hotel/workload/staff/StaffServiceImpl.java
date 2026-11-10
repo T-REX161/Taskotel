@@ -307,6 +307,11 @@ public class StaffServiceImpl implements StaffService {
         Staff staff = staffRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff member not found"));
 
+        // An Admin account is never deleted, by this path or by UserAccountService.remove (the same rule and message)
+        if (staff.getUser() != null && staff.getUser().getRole() == Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, com.hotel.workload.security.UserAccountService.ADMIN_ACCOUNT_MESSAGE);
+        }
+
         if (staff.isActive()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot remove an active staff member. Staff must be deactivated before removal.");
         }

@@ -1,9 +1,12 @@
 package com.hotel.workload.verification;
 
-import jakarta.validation.Valid;
+import com.hotel.workload.security.AttemptLimiter;
+import com.hotel.workload.security.VerificationAttemptLimiter;
+import com.hotel.workload.security.VerificationSendLimiter;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -22,10 +25,34 @@ public class EmailVerificationController {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EmailVerificationController.class);
 
-    private final VerificationCodeService verificationCodeService;
+    /** The one reply to every request refused by a rate limit, whatever the identifier. */
+    public static final String TOO_MANY_REQUESTS_MESSAGE = "Too many requests. Please wait a few minutes and try again.";
 
-    public EmailVerificationController(VerificationCodeService verificationCodeService) {
+    private final VerificationCodeService verificationCodeService;
+    private final VerificationSendLimiter sendLimiter;
+    private final VerificationAttemptLimiter attemptLimiter;
+
+    public EmailVerificationController(VerificationCodeService verificationCodeService, VerificationSendLimiter sendLimiter,
+                                       VerificationAttemptLimiter attemptLimiter) {
         this.verificationCodeService = verificationCodeService;
+        this.sendLimiter = sendLimiter;
+        this.attemptLimiter = attemptLimiter;
+    }
+
+    /**
+     * The client is the connection's own address. Forwarded headers (X-Forwarded-For and the like) are deliberately NOT read: any caller can
+     * set them, so trusting them would let an attacker choose which client the limit applies to. Behind a reverse proxy this address is the
+     * proxy's, so every user would share one client allowance until a trusted-proxy configuration is explicitly set up.
+     */
+    private static String client(HttpServletRequest http) {
+        return http.getRemoteAddr();
+    }
+
+    /** A 429 with one fixed message and Retry-After; it says nothing about the account. */
+    private static ResponseEntity<VerificationResponse> tooManyRequests(AttemptLimiter.Decision decision) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(org.springframework.http.HttpHeaders.RETRY_AFTER, String.valueOf(decision.retryAfterSeconds()))
+                .body(new VerificationResponse(false, TOO_MANY_REQUESTS_MESSAGE));
     }
 
     /**
@@ -35,13 +62,20 @@ public class EmailVerificationController {
     @PostMapping("/send")
     public ResponseEntity<VerificationResponse> sendVerificationCode(
             @RequestBody(required = false) SendVerificationRequest request,
-            Principal principal) {
+            Principal principal, HttpServletRequest http) {
         String identifier = null;
 
         if (principal != null && principal.getName() != null && !principal.getName().isBlank()) {
             identifier = principal.getName();
         } else if (request != null) {
             identifier = request.getEffectiveIdentifier();
+        }
+
+        // Every request that reaches this method is charged first, and before the account is looked up, so a refusal is the same whether
+        // or not the account exists and a request with no identifier cannot be sent for free
+        AttemptLimiter.Decision decision = sendLimiter.begin(client(http), identifier == null ? "" : identifier);
+        if (!decision.allowed()) {
+            return tooManyRequests(decision);
         }
 
         if (identifier == null || identifier.isBlank()) {
@@ -69,8 +103,8 @@ public class EmailVerificationController {
      */
     @PostMapping("/verify")
     public ResponseEntity<VerificationResponse> verifyCode(
-            @Valid @RequestBody VerifyCodeRequest request,
-            Principal principal) {
+            @RequestBody(required = false) VerifyCodeRequest request,
+            Principal principal, HttpServletRequest http) {
         String identifier = null;
 
         if (principal != null && principal.getName() != null && !principal.getName().isBlank()) {
@@ -79,12 +113,23 @@ public class EmailVerificationController {
             identifier = request.getEffectiveIdentifier();
         }
 
+        // Charged first, exactly once, for EVERY request that reaches this method: a missing, blank or malformed code is not rejected
+        // earlier by validation (see VerifyCodeRequest), so none of them is free. The malformed code itself is judged by the service,
+        // which answers it with the same generic failure as a wrong one and never accepts it.
+        String client = client(http);
+        String limiterKey = identifier == null ? "" : identifier;
+        AttemptLimiter.Decision decision = attemptLimiter.begin(client, limiterKey);
+        if (!decision.allowed()) {
+            return tooManyRequests(decision);
+        }
+
         if (identifier == null || identifier.isBlank()) {
             return ResponseEntity.badRequest()
                     .body(new VerificationResponse(false, "User identifier is required"));
         }
 
-        String setupToken = verificationCodeService.verifyCode(identifier, request.getCode());
+        String setupToken = verificationCodeService.verifyCode(identifier, request == null ? null : request.getCode());
+        attemptLimiter.succeeded(client, limiterKey); // a successful verification does not count against anyone
         return ResponseEntity.ok(new VerificationResponse(true, "Email verification successful", setupToken));
     }
 
@@ -100,13 +145,20 @@ public class EmailVerificationController {
                 .body(new VerificationResponse(false, "Failed to send verification email"));
     }
 
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<VerificationResponse> handleValidationException(MethodArgumentNotValidException ex) {
-        String message = ex.getBindingResult().getFieldErrors().stream()
-                .map(err -> err.getDefaultMessage())
-                .findFirst()
-                .orElse("Validation failed");
+    /**
+     * A body that is not readable (broken JSON, wrong types) is refused before the methods above run, so they cannot charge it. It is charged
+     * here, against the client and an empty account key, on the limiter of the endpoint that was called; a client cannot send unlimited
+     * garbage. The answer says nothing about any account: the generic failure for verify, a plain request error for send.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<VerificationResponse> handleUnreadableBody(HttpMessageNotReadableException ex, HttpServletRequest http) {
+        boolean verifying = http.getRequestURI() != null && http.getRequestURI().endsWith("/verify");
+        AttemptLimiter limiter = verifying ? attemptLimiter : sendLimiter;
+        AttemptLimiter.Decision decision = limiter.begin(client(http), "");
+        if (!decision.allowed()) {
+            return tooManyRequests(decision);
+        }
         return ResponseEntity.badRequest()
-                .body(new VerificationResponse(false, message));
+                .body(new VerificationResponse(false, verifying ? VerificationCodeServiceImpl.GENERIC_FAILURE : "Invalid request."));
     }
 }
