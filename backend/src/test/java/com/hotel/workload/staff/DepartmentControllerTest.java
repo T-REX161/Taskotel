@@ -28,6 +28,16 @@ public class DepartmentControllerTest {
                 .build();
     }
 
+    @Autowired private com.hotel.workload.security.UserRepository userRepository;
+    @Autowired private StaffRepository staffRepository;
+    @Autowired private DepartmentRepository departmentRepository;
+    @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+
+    private void validManager(String username) {
+        new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder)
+                .manager(username, departmentRepository.findByCode("HOUSEKEEPING").orElseThrow());
+    }
+
     @Test
     @WithMockUser(roles = "ADMIN")
     public void testGetAllDepartmentsReturnsSix() throws Exception {
@@ -36,9 +46,12 @@ public class DepartmentControllerTest {
                 .andExpect(jsonPath("$.length()").value(6));
     }
 
+    // A valid Manager (active account, active linked Staff record, active department): an invalid one is refused (403) by design
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "dct_manager", roles = "MANAGER")
+    @org.springframework.transaction.annotation.Transactional
     public void testGetAllDepartmentsManager() throws Exception {
+        validManager("dct_manager");
         mockMvc.perform(get("/api/departments"))
                 .andExpect(status().isOk());
     }

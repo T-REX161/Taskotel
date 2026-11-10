@@ -17,16 +17,19 @@ public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final StaffRepository staffRepository;
+    private final CurrentUserScopeResolver scopeResolver;
 
     @Autowired
-    public UserServiceImpl(UserRepository userRepository, StaffRepository staffRepository) {
+    public UserServiceImpl(UserRepository userRepository, StaffRepository staffRepository, CurrentUserScopeResolver scopeResolver) {
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
+        this.scopeResolver = scopeResolver;
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<UserDto> getAllUsers() {
+        scopeResolver.requireAdmin(); // the user list is for administrators only, whatever route reaches this
         List<User> users = userRepository.findAll();
         if (users.isEmpty()) {
             return Collections.emptyList();

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DepartmentsIcon, StaffIcon, TasksIcon, PlusIcon, DotsVerticalIcon, TrashIcon } from '../components/icons/Icons';
 import { getDepartments, getUserRole } from '../services/api';
+import { departmentCount, totalOfKnownCounts } from '../utils/departmentDisplay';
 import DepartmentIcon from '../components/common/DepartmentIcon';
 import DepartmentFormModal from '../components/departments/DepartmentFormModal';
 import RemoveDepartmentModal from '../components/departments/RemoveDepartmentModal';
@@ -168,8 +169,10 @@ export default function DepartmentsPage() {
 
   // An inactive department is not counted as one of the hotel's departments; its staff and tasks still are
   const totalDepartments = departments.filter((dept) => dept.active !== false).length;
-  const activeStaff = departments.reduce((sum, dept) => sum + (Number(dept.staffCount) || 0), 0);
-  const activeTasks = departments.reduce((sum, dept) => sum + (Number(dept.activeTasks) || 0), 0);
+  // Only an Admin receives every department's figures; for anyone else a total over departments with hidden figures would be wrong,
+  // so it reads as unavailable rather than as a smaller number (see utils/departmentDisplay.js)
+  const activeStaff = departmentCount(totalOfKnownCounts(departments, 'staffCount'));
+  const activeTasks = departmentCount(totalOfKnownCounts(departments, 'activeTasks'));
 
   const summaryCards = [
     { title: 'Total Departments', value: totalDepartments, icon: <DepartmentsIcon className="w-6 h-6 text-emerald-600" />, bg: 'bg-emerald-50' },
@@ -283,12 +286,12 @@ export default function DepartmentsPage() {
                   <div className="flex items-center gap-3">
                     <StaffIcon className="w-5 h-5 text-gray-400 shrink-0" />
                     <dt className="text-gray-500">Staff</dt>
-                    <dd className="ml-auto font-bold text-gray-900 tabular-nums">{Number(dept.staffCount) || 0}</dd>
+                    <dd className="ml-auto font-bold text-gray-900 tabular-nums">{departmentCount(dept.staffCount)}</dd>
                   </div>
                   <div className="flex items-center gap-3">
                     <TasksIcon className="w-5 h-5 text-gray-400 shrink-0" />
                     <dt className="text-gray-500">Active Tasks</dt>
-                    <dd className="ml-auto font-bold text-gray-900 tabular-nums">{Number(dept.activeTasks) || 0}</dd>
+                    <dd className="ml-auto font-bold text-gray-900 tabular-nums">{departmentCount(dept.activeTasks)}</dd>
                   </div>
                 </dl>
               </div>

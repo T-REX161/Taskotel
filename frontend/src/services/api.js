@@ -393,6 +393,17 @@ export const activateUser = (id) => apiFetch(`/api/users/${id}/activate`, { meth
 export const removeUser = (id) => apiFetch(`/api/users/${id}`, { method: 'DELETE' });
 
 /**
+ * A Manager's department (Admin only; the server refuses everyone else). The department lives on the Manager's linked staff record.
+ * assign: { department: <department code> }. The history is the audit trail of those changes, newest first.
+ */
+export const getManagerDepartment = (userId) => apiFetch(`/api/users/${userId}/manager-department`);
+export const assignManagerDepartment = (userId, departmentCode) => apiFetch(`/api/users/${userId}/manager-department`, {
+  method: 'PUT',
+  body: JSON.stringify({ department: departmentCode }),
+});
+export const getManagerDepartmentHistory = (userId) => apiFetch(`/api/users/${userId}/manager-department/history`);
+
+/**
  * Activate a staff member.
  */
 export const activateStaff = (id) => {

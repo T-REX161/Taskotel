@@ -32,6 +32,7 @@ import EditStaffModal from '../components/staff/EditStaffModal';
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
+import ManagerDepartmentModal from '../components/users/ManagerDepartmentModal';
 
 const SUCCESS_MESSAGE_MS = 6000;
 
@@ -99,6 +100,7 @@ export default function UsersPage() {
   const [removing, setRemoving] = useState(null); // { staff, user }
   const [isRemoving, setIsRemoving] = useState(false);
   const [removeError, setRemoveError] = useState('');
+  const [assigningDepartment, setAssigningDepartment] = useState(null); // the Manager account row (Admin only)
 
   // Users from /api/users; staff records (with workload, as on the Staff page) to manage the linked accounts
   const fetchUsers = useCallback(async (showLoading = true) => {
@@ -203,6 +205,10 @@ export default function UsersPage() {
       case 'edit':
         setEditing({ staff, user });
         break;
+      case 'department':
+        if (!isAdmin) return; // Admin only (the server refuses anyone else too)
+        setAssigningDepartment(user);
+        break;
       case 'deactivate':
         if (own) return; // never your own account
         setDeactivateError('');
@@ -242,6 +248,12 @@ export default function UsersPage() {
     setEditing(null);
     await fetchUsers(false);
     notify(`User "${username}" updated.`);
+  };
+
+  // The dialog has already shown the result; refresh the list so the staff record's department is current everywhere on the page
+  const handleManagerDepartmentChanged = async (updated) => {
+    await fetchUsers(false);
+    notify(`Department of "${assigningDepartment?.username || updated?.username}" changed to ${updated?.departmentName || updated?.departmentCode}.`);
   };
 
   const handleConfirmDeactivate = async () => {
@@ -458,6 +470,13 @@ export default function UsersPage() {
         staff={editing?.staff || null}
         onClose={() => setEditing(null)}
         onSuccess={handleEditSuccess}
+      />
+
+      <ManagerDepartmentModal
+        isOpen={isAdmin && Boolean(assigningDepartment)}
+        user={assigningDepartment}
+        onClose={() => setAssigningDepartment(null)}
+        onChanged={handleManagerDepartmentChanged}
       />
 
       <DeactivateStaffModal

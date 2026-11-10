@@ -122,7 +122,7 @@ public class WorkloadRecommendationJwtAccessTest {
 
     // ── the rule covers every method, not only GET ───────────────────────────────────────────────────────────
     // HEAD is answered by the GET handler, so a GET-only rule would let any signed-in user run the calculation.
-    // OPTIONS policy: it follows the same rule. The app has no CORS configuration (the browser reaches it through
+    // OPTIONS policy (Step 2I): deny by default lists methods one by one and OPTIONS is not listed, so it is refused for every role. The app has no CORS configuration (the browser reaches it through
     // the same-origin dev proxy), so there is no cross-origin preflight to protect or to break.
 
     @Test
@@ -158,13 +158,13 @@ public class WorkloadRecommendationJwtAccessTest {
     }
 
     @Test
-    @DisplayName("OPTIONS follows the same rule: allowed for Admin and Manager, 403 for Staff")
+    @DisplayName("OPTIONS is not a listed method (deny by default, Step 2I): refused with 403 for every signed-in role, as the app has no CORS preflight to serve")
     public void optionsFollowsTheSameRule() throws Exception {
         String admin = bearer(user("rec_o_admin", Role.ADMIN, true));
         String manager = bearer(user("rec_o_manager", Role.MANAGER, true));
         String staff = bearer(user("rec_o_staff", Role.STAFF, true));
-        mockMvc.perform(request(HttpMethod.OPTIONS, URL).header("Authorization", admin)).andExpect(status().isOk());
-        mockMvc.perform(request(HttpMethod.OPTIONS, URL).header("Authorization", manager)).andExpect(status().isOk());
+        mockMvc.perform(request(HttpMethod.OPTIONS, URL).header("Authorization", admin)).andExpect(status().isForbidden());
+        mockMvc.perform(request(HttpMethod.OPTIONS, URL).header("Authorization", manager)).andExpect(status().isForbidden());
         mockMvc.perform(request(HttpMethod.OPTIONS, URL).header("Authorization", staff)).andExpect(status().isForbidden());
     }
 }

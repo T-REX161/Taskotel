@@ -29,12 +29,18 @@ public class DepartmentServiceImplTest {
     @Mock
     private com.hotel.workload.assignment.AssignmentRepository assignmentRepository;
 
+    // Step 2I: who is asking now decides how much of each department is returned. These tests act as an Admin (full details);
+    // the other roles are covered by DepartmentVisibilityTest.
+    @Mock
+    private com.hotel.workload.security.CurrentUserScopeResolver scopeResolver;
+
     @InjectMocks
     private DepartmentServiceImpl departmentService;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        org.mockito.Mockito.when(scopeResolver.resolve()).thenReturn(com.hotel.workload.security.DepartmentScope.all());
     }
 
     @Test

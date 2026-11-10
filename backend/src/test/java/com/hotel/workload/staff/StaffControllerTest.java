@@ -760,9 +760,10 @@ public class StaffControllerTest {
                                 })
                                 .andExpect(status().isNoContent());
 
-                // Verifies that unsupported methods on /api/staff/{id} (e.g. POST) correctly return 405 Method Not Allowed
+                // Step 2I (deny by default): a method that is not listed for /api/staff/{id} (e.g. POST) is refused by the URL rules with 403,
+                // before the framework can answer 405
                 mockMvc.perform(post("/api/staff/" + staff.getId()))
-                                .andExpect(status().isMethodNotAllowed());
+                                .andExpect(status().isForbidden());
         }
 
         @Test

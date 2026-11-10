@@ -41,10 +41,12 @@ public class UserAccountService {
     private final TaskRepository taskRepository;
     private final SupportAssignmentRepository supportRepository;
     private final NotificationPreferenceRepository preferenceRepository;
+    private final CurrentUserScopeResolver scopeResolver;
 
     public UserAccountService(UserRepository userRepository, StaffRepository staffRepository, StaffService staffService,
                               TaskRepository taskRepository, SupportAssignmentRepository supportRepository,
-                              NotificationPreferenceRepository preferenceRepository) {
+                              NotificationPreferenceRepository preferenceRepository, CurrentUserScopeResolver scopeResolver) {
+        this.scopeResolver = scopeResolver;
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
         this.staffService = staffService;
@@ -54,7 +56,9 @@ public class UserAccountService {
     }
 
     @Transactional
-    public UserDto deactivate(UUID id, String actingUsername) {
+    public UserDto deactivate(UUID id) {
+        scopeResolver.requireAdmin();
+        String actingUsername = scopeResolver.currentUsername(); // from the security context, never from the caller
         User user = find(id);
         requireNotSelf(user, actingUsername);
         if (user.isActive() && user.getRole() == Role.ADMIN && userRepository.countByRoleAndActiveTrue(Role.ADMIN) <= 1) {
@@ -71,6 +75,7 @@ public class UserAccountService {
 
     @Transactional
     public UserDto activate(UUID id) {
+        scopeResolver.requireAdmin();
         User user = find(id);
         Optional<Staff> staff = staffRepository.findByUserUsername(user.getUsername());
         if (staff.isPresent()) {
@@ -82,7 +87,9 @@ public class UserAccountService {
     }
 
     @Transactional
-    public void remove(UUID id, String actingUsername) {
+    public void remove(UUID id) {
+        scopeResolver.requireAdmin();
+        String actingUsername = scopeResolver.currentUsername(); // from the security context, never from the caller
         User user = find(id);
         requireNotSelf(user, actingUsername);
         Optional<Staff> staff = staffRepository.findByUserUsername(user.getUsername());
@@ -110,7 +117,7 @@ public class UserAccountService {
     }
 
     private static void requireNotSelf(User user, String actingUsername) {
-        if (actingUsername != null && actingUsername.equalsIgnoreCase(user.getUsername())) {
+        if (actingUsername.equalsIgnoreCase(user.getUsername())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, OWN_ACCOUNT_MESSAGE);
         }
     }

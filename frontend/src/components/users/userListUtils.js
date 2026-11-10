@@ -133,6 +133,8 @@ export function getUserActions(user, { staff = null, currentUsername = '', isAdm
   const hasStaff = Boolean(staff);
   const active = hasStaff ? isActive(user?.active) && isActive(staff.active) : isActive(user?.active);
   const actions = hasStaff ? ['view', 'edit'] : [];
+  // Assigning a Manager's department is Admin only (the server refuses everyone else); it works through the Manager's staff record
+  if (isAdmin && hasStaff && normalizeRole(user?.role) === 'MANAGER') actions.push('department');
   if (active) {
     if (!own) actions.push('deactivate');
   } else {

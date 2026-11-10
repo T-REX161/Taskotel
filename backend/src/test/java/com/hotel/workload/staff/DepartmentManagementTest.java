@@ -61,6 +61,10 @@ public class DepartmentManagementTest {
             admin.setActive(true);
             userRepository.save(admin);
         }
+        // A valid Manager (active account, active Staff record, active department) for the tests that read as a Manager; an invalid one is
+        // refused by design. HOUSEKEEPING is one of the built-in departments, so nothing new is created.
+        new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder)
+                .manager("dm_manager", departmentRepository.findByCode("HOUSEKEEPING").orElseThrow());
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
@@ -150,7 +154,9 @@ public class DepartmentManagementTest {
             assertEquals(expected.colorKey(), actual.get("colorKey").asText());
             assertTrue(actual.get("active").asBoolean());
             assertTrue(actual.get("id").asText().length() == 36, "Departments have UUID ids");
-            assertEquals("Not Assigned", actual.get("supervisor").asText());
+            // Step 2I: Staff receive the identity of a department only, so the supervisor (and head, figures, description) is unavailable
+            assertTrue(actual.get("supervisor").isNull(), "Staff must not receive supervisor information");
+            assertTrue(actual.get("headStaffName").isNull() && actual.get("staffCount").isNull() && actual.get("activeTasks").isNull());
         }
     }
 
@@ -388,7 +394,7 @@ public class DepartmentManagementTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "dm_manager", roles = "MANAGER")
     @DisplayName("A manager can read departments but every create, update and delete attempt gets 403 and changes nothing")
     public void testManagerCannotWrite() throws Exception {
         assertAllDepartmentWritesForbiddenAndNothingChanged();
@@ -409,7 +415,7 @@ public class DepartmentManagementTest {
     }
 
     @Test
-    @WithMockUser(roles = "MANAGER")
+    @WithMockUser(username = "dm_manager", roles = "MANAGER")
     @DisplayName("A manager sees the same department list as an admin (read access is unchanged)")
     public void testManagerCanViewDepartments() throws Exception {
         MvcResult result = mockMvc.perform(get("/api/departments")).andExpect(status().isOk()).andReturn();

@@ -206,23 +206,27 @@ public class StaffServiceImplTest {
     @DisplayName("removeStaff throws FORBIDDEN when user does not have ADMIN role")
     public void testRemoveStaff_NotAdmin_ThrowsForbidden() {
         setSecurityContextRole("ROLE_MANAGER");
-        // The decision comes from the scope resolver, not from the authority text: a valid Manager has a department scope, not the global one
-        when(scopeResolver.resolve()).thenReturn(com.hotel.workload.security.DepartmentScope.department(TestDepartments.FRONT_DESK));
+        // The decision comes from the resolver's requireAdmin (Step 2I), not from the authority text: a Manager is refused
+        ResponseStatusException refusal = new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators are authorized to remove staff members");
+        when(scopeResolver.requireAdmin(anyString())).thenThrow(refusal);
         UUID staffId = UUID.randomUUID();
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> staffService.removeStaff(staffId));
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertSame(refusal, ex);
+        verify(scopeResolver).requireAdmin("Only administrators are authorized to remove staff members");
         verify(staffRepository, never()).delete(any());
-        verifyNoInteractions(staffRepository);
+        verifyNoInteractions(staffRepository, userRepository, assignmentRepository, taskRepository);
     }
 
     @Test
     @DisplayName("removeStaff throws FORBIDDEN for a Staff caller, before any repository is read")
     public void testRemoveStaff_StaffCaller_ThrowsForbidden() {
-        when(scopeResolver.resolve()).thenReturn(com.hotel.workload.security.DepartmentScope.own());
+        when(scopeResolver.requireAdmin(anyString())).thenThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators are authorized to remove staff members"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> staffService.removeStaff(UUID.randomUUID()));
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        verify(scopeResolver).requireAdmin(anyString());
         verifyNoInteractions(staffRepository, userRepository, assignmentRepository, taskRepository);
     }
 
@@ -230,21 +234,40 @@ public class StaffServiceImplTest {
     @DisplayName("removeStaff does not trust a bare 'ADMIN' authority: only the resolver's global scope counts")
     public void testRemoveStaff_AuthorityTextAloneIsNotEnough() {
         setSecurityContextRole("ADMIN"); // an authority the security filter never produces
-        when(scopeResolver.resolve()).thenReturn(com.hotel.workload.security.DepartmentScope.own());
+        when(scopeResolver.requireAdmin(anyString())).thenThrow(new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators are authorized to remove staff members"));
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> staffService.removeStaff(UUID.randomUUID()));
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
-        verifyNoInteractions(staffRepository);
+        verifyNoInteractions(staffRepository, userRepository, assignmentRepository, taskRepository);
     }
 
     @Test
-    @DisplayName("removeStaff stops when the resolver refuses (invalid Manager 403, no sign-in 401)")
+    @DisplayName("removeStaff stops when requireAdmin refuses (invalid Manager 403, no sign-in 401), before any repository is read")
     public void testRemoveStaff_ResolverRefusalStopsTheCall() {
-        ResponseStatusException refusal = new ResponseStatusException(HttpStatus.UNAUTHORIZED, "sign in");
-        when(scopeResolver.resolve()).thenThrow(refusal);
+        ResponseStatusException unauthenticated = new ResponseStatusException(HttpStatus.UNAUTHORIZED, "sign in");
+        when(scopeResolver.requireAdmin(anyString())).thenThrow(unauthenticated);
+        assertSame(unauthenticated, assertThrows(ResponseStatusException.class, () -> staffService.removeStaff(UUID.randomUUID())));
 
-        assertSame(refusal, assertThrows(ResponseStatusException.class, () -> staffService.removeStaff(UUID.randomUUID())));
-        verifyNoInteractions(staffRepository);
+        ResponseStatusException invalidManager = new ResponseStatusException(HttpStatus.FORBIDDEN, "Your account is not assigned to an active department.");
+        // doThrow: re-stubbing with when(...) would call the mock and trigger the earlier stub
+        doThrow(invalidManager).when(scopeResolver).requireAdmin(anyString());
+        assertSame(invalidManager, assertThrows(ResponseStatusException.class, () -> staffService.removeStaff(UUID.randomUUID())));
+
+        verifyNoInteractions(staffRepository, userRepository, assignmentRepository, taskRepository);
+    }
+
+    @Test
+    @DisplayName("removeStaff consults requireAdmin first and, for an Admin, carries on to the repository")
+    public void testRemoveStaff_AdminPassesRequireAdminAndProceeds() {
+        // requireAdmin returns normally for an Admin (the mock does not throw)
+        UUID staffId = UUID.randomUUID();
+        when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
+
+        ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> staffService.removeStaff(staffId));
+        assertEquals(HttpStatus.NOT_FOUND, ex.getStatusCode(), "past the Admin check, the staff lookup decides");
+        org.mockito.InOrder order = inOrder(scopeResolver, staffRepository);
+        order.verify(scopeResolver).requireAdmin("Only administrators are authorized to remove staff members");
+        order.verify(staffRepository).findById(staffId);
     }
 
     @Test

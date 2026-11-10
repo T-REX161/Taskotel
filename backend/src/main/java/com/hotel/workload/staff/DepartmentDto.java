@@ -12,8 +12,9 @@ public class DepartmentDto {
     private boolean active;
     private UUID headStaffId;
     private String headStaffName;
-    private long staffCount;
-    private long activeTasks;
+    // Null when the viewer may not see this department in full (see DepartmentServiceImpl.getAllDepartments)
+    private Long staffCount;
+    private Long activeTasks;
     private String status;
     /** Same as headStaffName, or "Not Assigned"; kept so existing consumers of this field keep working. */
     private String supervisor;
@@ -47,11 +48,11 @@ public class DepartmentDto {
     public String getHeadStaffName() { return headStaffName; }
     public void setHeadStaffName(String headStaffName) { this.headStaffName = headStaffName; }
 
-    public long getStaffCount() { return staffCount; }
-    public void setStaffCount(long staffCount) { this.staffCount = staffCount; }
+    public Long getStaffCount() { return staffCount; }
+    public void setStaffCount(Long staffCount) { this.staffCount = staffCount; }
 
-    public long getActiveTasks() { return activeTasks; }
-    public void setActiveTasks(long activeTasks) { this.activeTasks = activeTasks; }
+    public Long getActiveTasks() { return activeTasks; }
+    public void setActiveTasks(Long activeTasks) { this.activeTasks = activeTasks; }
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }

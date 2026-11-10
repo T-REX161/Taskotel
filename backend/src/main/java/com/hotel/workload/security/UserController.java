@@ -31,8 +31,8 @@ public class UserController {
     }
 
     @PatchMapping("/{id}/deactivate")
-    public ResponseEntity<UserDto> deactivate(@PathVariable UUID id, Authentication authentication) {
-        return ResponseEntity.ok(accountService.deactivate(id, authentication == null ? null : authentication.getName()));
+    public ResponseEntity<UserDto> deactivate(@PathVariable UUID id) {
+        return ResponseEntity.ok(accountService.deactivate(id));
     }
 
     @PatchMapping("/{id}/activate")
@@ -41,8 +41,8 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> remove(@PathVariable UUID id, Authentication authentication) {
-        accountService.remove(id, authentication == null ? null : authentication.getName());
+    public ResponseEntity<Void> remove(@PathVariable UUID id) {
+        accountService.remove(id);
         return ResponseEntity.noContent().build();
     }
 }

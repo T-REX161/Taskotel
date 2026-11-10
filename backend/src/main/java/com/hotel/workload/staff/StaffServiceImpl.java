@@ -48,6 +48,14 @@ public class StaffServiceImpl implements StaffService {
     private final DepartmentResolver departmentResolver;
     private final CurrentUserScopeResolver scopeResolver;
 
+    // Set by Spring (setter injection keeps the hand-built constructors used by unit tests unchanged). Null in those tests.
+    private ManagerDepartmentAuditRecorder managerAuditRecorder;
+
+    @Autowired(required = false)
+    void setManagerAuditRecorder(ManagerDepartmentAuditRecorder managerAuditRecorder) {
+        this.managerAuditRecorder = managerAuditRecorder;
+    }
+
     @Autowired
     public StaffServiceImpl(StaffRepository staffRepository,
                             UserRepository userRepository,
@@ -194,17 +202,11 @@ public class StaffServiceImpl implements StaffService {
         // Unchanged department: kept even if it is now inactive. Changed department: must be an active one.
         Department targetDepartment = departmentResolver.forUpdate(staff.getDepartment(), request.getDepartment(), true);
 
-        if (!Objects.equals(targetDepartment, staff.getDepartment())) {
-            List<Task> conflictingTasks = activeTasksOutsideDepartment(staff.getId(), targetDepartment);
-            if (!conflictingTasks.isEmpty()) {
-                String taskList = conflictingTasks.stream()
-                        .map(t -> t.getTitle() + " (" + t.getDepartment().getName() + ")")
-                        .collect(Collectors.joining(", "));
-                throw new ResponseStatusException(HttpStatus.CONFLICT, String.format(
-                        "Cannot move %s to %s because they have active tasks in another department: %s. "
-                                + "Reassign or complete those tasks first.",
-                        staff.getName(), targetDepartment.getName(), taskList));
-            }
+        Department previousDepartment = staff.getDepartment();
+        boolean departmentChanged = !Objects.equals(targetDepartment, previousDepartment);
+        if (departmentChanged) {
+            // The same rule the dedicated Manager department assignment uses (StaffTransferRules)
+            StaffTransferRules.requireNoConflictingTasks(assignmentRepository, staff, targetDepartment);
         }
 
         if (!staff.getEmail().equals(request.getEmail())) {
@@ -227,6 +229,12 @@ public class StaffServiceImpl implements StaffService {
         }
 
         staff = staffRepository.save(staff);
+        // A Manager department change must always leave an audit record (Decision 17.6), also when an Admin makes it through this edit.
+        // Same transaction: if the record cannot be written, the change is rolled back.
+        if (departmentChanged && managerAuditRecorder != null && ManagerDepartmentAuditRecorder.isManagerRecord(staff)) {
+            staffRepository.flush();
+            managerAuditRecorder.record(staff, previousDepartment, targetDepartment, ManagerDepartmentChange.SOURCE_STAFF_EDIT);
+        }
         return StaffDto.fromEntity(staff);
     }
 
@@ -294,9 +302,7 @@ public class StaffServiceImpl implements StaffService {
     public void removeStaff(UUID id) {
         // Permanent removal is for administrators alone. It is decided by the same scope resolver as every other staff operation, not by
         // a separate authority check: a Manager (valid or not) and a Staff caller are refused with 403, and no sign-in is 401.
-        if (!scopeResolver.resolve().isAll()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators are authorized to remove staff members");
-        }
+        scopeResolver.requireAdmin("Only administrators are authorized to remove staff members");
 
         Staff staff = staffRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff member not found"));
@@ -341,21 +347,6 @@ public class StaffServiceImpl implements StaffService {
     private boolean hasActiveAssignments(UUID staffId) {
         return assignmentRepository != null
                 && assignmentRepository.existsByStaffIdAndTaskStatusIn(staffId, ACTIVE_TASK_STATUSES);
-    }
-
-    /**
-     * Active (PENDING, ASSIGNED, IN_PROGRESS) tasks held by the staff member whose department
-     * differs from the given one. Tasks without a department never conflict.
-     */
-    private List<Task> activeTasksOutsideDepartment(UUID staffId, Department department) {
-        if (assignmentRepository == null) {
-            return List.of();
-        }
-        return assignmentRepository.findByStaffIdOrderByAssignedAtDesc(staffId).stream()
-                .map(Assignment::getTask)
-                .filter(task -> task != null && ACTIVE_TASK_STATUSES.contains(task.getStatus()))
-                .filter(task -> task.getDepartment() != null && !task.getDepartment().equals(department))
-                .collect(Collectors.toList());
     }
 
     /**

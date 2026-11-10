@@ -86,6 +86,39 @@ public class CurrentUserScopeResolver {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, ROLE_NOT_PERMITTED_MESSAGE);
     }
 
+    /** The message a refused non-Admin sees from {@link #requireAdmin()}. */
+    static final String ADMIN_ONLY_MESSAGE = "Only administrators can perform this action.";
+
+    /**
+     * Refuses everyone but an administrator: no sign-in is 401; a Manager (valid or not) or a Staff member is 403. The one place where
+     * "Admin only" is decided inside a service, so every Admin-only operation answers the same way whatever route reaches it.
+     */
+    public DepartmentScope requireAdmin() {
+        return requireAdmin(ADMIN_ONLY_MESSAGE);
+    }
+
+    /** As {@link #requireAdmin()}, with an operation-specific 403 message. */
+    public DepartmentScope requireAdmin(String forbiddenMessage) {
+        DepartmentScope scope = resolve();
+        if (!scope.isAll()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, forbiddenMessage);
+        }
+        return scope;
+    }
+
+    /**
+     * The user name of the signed-in caller, taken from the security context and never from a caller-supplied value.
+     * No sign-in: 401.
+     */
+    public String currentUsername() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || authentication instanceof AnonymousAuthenticationToken || !authentication.isAuthenticated()
+                || authentication.getName() == null || authentication.getName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, SIGN_IN_MESSAGE);
+        }
+        return authentication.getName();
+    }
+
     private DepartmentScope managerScope(String username) {
         Optional<User> account = userRepository.findByUsername(username);
         if (account.isEmpty()) {

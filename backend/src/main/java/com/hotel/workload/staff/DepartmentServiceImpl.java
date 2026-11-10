@@ -5,6 +5,8 @@ import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import com.hotel.workload.security.CurrentUserScopeResolver;
+import com.hotel.workload.security.DepartmentScope;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -17,6 +19,8 @@ import java.util.stream.Collectors;
 @Service
 public class DepartmentServiceImpl implements DepartmentService {
 
+    static final String ADMIN_ONLY_MESSAGE = "Only administrators can create, edit or remove departments.";
+
     private static final List<TaskStatus> ACTIVE_STATUSES =
             Arrays.asList(TaskStatus.PENDING, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS);
 
@@ -24,11 +28,14 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final StaffRepository staffRepository;
     private final TaskRepository taskRepository;
     private final AssignmentRepository assignmentRepository;
+    private final CurrentUserScopeResolver scopeResolver;
 
     public DepartmentServiceImpl(DepartmentRepository departmentRepository,
                                  StaffRepository staffRepository,
                                  TaskRepository taskRepository,
-                                 AssignmentRepository assignmentRepository) {
+                                 AssignmentRepository assignmentRepository,
+                                 CurrentUserScopeResolver scopeResolver) {
+        this.scopeResolver = scopeResolver;
         this.departmentRepository = departmentRepository;
         this.staffRepository = staffRepository;
         this.taskRepository = taskRepository;
@@ -38,14 +45,20 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public List<DepartmentDto> getAllDepartments() {
+        // Who is asking decides how much of each department is returned (no sign-in is 401, an invalid Manager 403):
+        // an Admin gets everything; a Manager gets the full details of their own department only; everyone else, and every
+        // other department, gets the basic identity a selector needs. The figures for a department that is not shown in full
+        // are never computed, so they cannot leak.
+        DepartmentScope scope = scopeResolver.resolve();
         return departmentRepository.findAllByOrderByCreatedAtAscNameAsc().stream()
-                .map(this::toDto)
+                .map(department -> scope.isAll() || (scope.isDepartment() && scope.includes(department)) ? toDto(department) : toBasicDto(department))
                 .collect(Collectors.toList());
     }
 
     @Override
     @Transactional
     public DepartmentDto createDepartment(CreateDepartmentRequest request) {
+        scopeResolver.requireAdmin(ADMIN_ONLY_MESSAGE);
         String name = normalizeName(request.getName());
         if (departmentRepository.existsByNameIgnoreCase(name)) {
             throw duplicateName(name);
@@ -71,6 +84,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public DepartmentDto updateDepartment(String code, UpdateDepartmentRequest request) {
+        scopeResolver.requireAdmin(ADMIN_ONLY_MESSAGE);
         Department department = departmentRepository.findByCode(code)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Department not found"));
 
@@ -96,6 +110,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public void deleteDepartment(String code) {
+        scopeResolver.requireAdmin(ADMIN_ONLY_MESSAGE);
         Department department = departmentRepository.findByCode(code)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Department not found"));
         String name = department.getName();
@@ -137,6 +152,18 @@ public class DepartmentServiceImpl implements DepartmentService {
     private static String joinParts(List<String> parts) {
         if (parts.size() <= 1) return String.join("", parts);
         return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.get(parts.size() - 1);
+    }
+
+    /** The identity a selector or a label needs, and nothing else: no head, no description, no staff or task figures. */
+    private DepartmentDto toBasicDto(Department department) {
+        DepartmentDto dto = new DepartmentDto();
+        dto.setId(department.getId());
+        dto.setCode(department.getCode());
+        dto.setName(department.getName());
+        dto.setIconKey(department.getIconKey());
+        dto.setColorKey(department.getColorKey());
+        dto.setActive(department.isActive());
+        return dto;
     }
 
     private DepartmentDto toDto(Department department) {

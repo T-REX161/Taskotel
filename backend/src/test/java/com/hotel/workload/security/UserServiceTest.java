@@ -25,11 +25,16 @@ public class UserServiceTest {
     @Mock
     private StaffRepository staffRepository;
 
+    // Step 2I: the service now asks the resolver for Admin itself; a mock resolver lets every call through, so these tests keep
+    // exercising the listing logic. The Admin-only behaviour is covered by DirectServiceAuthorizationTest.
+    @Mock
+    private CurrentUserScopeResolver scopeResolver;
+
     private UserService userService;
 
     @BeforeEach
     public void setUp() {
-        userService = new UserServiceImpl(userRepository, staffRepository);
+        userService = new UserServiceImpl(userRepository, staffRepository, scopeResolver);
     }
 
     @Test

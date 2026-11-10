@@ -21,8 +21,9 @@ describe('DepartmentsPage', () => {
       assert.ok(pageSource.includes(title), title);
     }
     assert.ok(pageSource.includes("departments.filter((dept) => dept.active !== false).length"), 'Total counts active departments');
-    assert.ok(pageSource.includes('sum + (Number(dept.staffCount) || 0)'));
-    assert.ok(pageSource.includes('sum + (Number(dept.activeTasks) || 0)'));
+    // Step 2I: the totals are the real sums when every department's figure is known (an Admin), and unavailable otherwise
+    assert.ok(pageSource.includes("departmentCount(totalOfKnownCounts(departments, 'staffCount'))"));
+    assert.ok(pageSource.includes("departmentCount(totalOfKnownCounts(departments, 'activeTasks'))"));
     assert.ok(pageSource.indexOf('{/* Summary Cards */}') < pageSource.indexOf('{/* Departments Grid or Empty State */}'), 'Summary cards stay above the grid');
   });
 
@@ -39,8 +40,8 @@ describe('DepartmentsPage', () => {
     assert.ok(!/\bidx\b|\bindex\b/.test(cards), 'Nothing is chosen by position');
     assert.ok(cards.includes('{dept.name}') && cards.includes('break-words'), 'Long names wrap');
     assert.ok(cards.includes('border-t border-gray-100'), 'Divider under the heading');
-    assert.ok(cards.includes('<StaffIcon') && cards.includes('>Staff</dt>') && cards.includes('{Number(dept.staffCount) || 0}'));
-    assert.ok(cards.includes('<TasksIcon') && cards.includes('>Active Tasks</dt>') && cards.includes('{Number(dept.activeTasks) || 0}'));
+    assert.ok(cards.includes('<StaffIcon') && cards.includes('>Staff</dt>') && cards.includes('{departmentCount(dept.staffCount)}'));
+    assert.ok(cards.includes('<TasksIcon') && cards.includes('>Active Tasks</dt>') && cards.includes('{departmentCount(dept.activeTasks)}'));
     assert.ok(cards.includes('Inactive'), 'Inactive departments are marked');
   });
 
