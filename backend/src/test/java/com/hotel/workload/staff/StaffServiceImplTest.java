@@ -507,8 +507,7 @@ public class StaffServiceImplTest {
     }
 
     private UpdateStaffRequest departmentChangeRequest(Staff staff, Department department) {
-        UpdateStaffRequest request = updateRequestFor(staff, true);
-        request.setEmail("changed@hotel.com");
+        UpdateStaffRequest request = updateRequestFor(staff, true); // the email stays the staff member's own: it is not changed by an update
         request.setDepartment(department.getCode());
         return request;
     }

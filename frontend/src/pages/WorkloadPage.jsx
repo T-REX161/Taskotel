@@ -7,6 +7,7 @@ import {
   EyeIcon,
 } from '../components/icons/Icons';
 import { getWorkload, getDepartments, getStaff, getUserRole } from '../services/api';
+import { canListStaff } from '../utils/accessPolicy';
 import {
   calculateWorkloadSummary,
   calculateDepartmentWorkloads,
@@ -64,10 +65,13 @@ export default function WorkloadPage() {
         console.warn('Failed to load departments for workload distribution:', err);
         return null;
       });
-      const staffPromise = getStaff().catch((err) => {
-        console.warn('Failed to load staff list for workload view modal:', err);
-        return null;
-      });
+      // The staff list is for Admin and Manager only (the backend answers Staff with 403), so Staff never request it
+      const staffPromise = canListStaff(getUserRole())
+        ? getStaff().catch((err) => {
+            console.warn('Failed to load staff list for workload view modal:', err);
+            return null;
+          })
+        : Promise.resolve(null);
 
       const [workloadData, departmentsData, staffData] = await Promise.all([
         workloadPromise,

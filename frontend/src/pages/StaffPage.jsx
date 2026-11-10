@@ -564,6 +564,7 @@ export default function StaffPage() {
         staff={editingStaff}
         onClose={handleCloseEditModal}
         onSuccess={handleEditSuccess}
+        onEmailChangeRequested={() => fetchStaffData(false)}
       />
 
       <DeactivateStaffModal

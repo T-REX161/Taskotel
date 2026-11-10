@@ -35,6 +35,9 @@ public class StaffServiceImpl implements StaffService {
 
     private static final String OWN_DEPARTMENT_ONLY_MESSAGE = "Managers can only manage staff in their own department.";
     private static final String TRANSFER_ADMIN_ONLY_MESSAGE = "Only administrators can transfer staff between departments.";
+    /** Shown whenever a staff update names a different login email: the change belongs to the account holder, with verification. */
+    public static final String LOGIN_EMAIL_MESSAGE = "A login email address cannot be changed here. The account holder must change it themselves from their own account settings, "
+            + "where the new address is verified with a code and the current password is required.";
 
     private static final String DEACTIVATE_WITH_ACTIVE_ASSIGNMENTS_MESSAGE =
             "Cannot deactivate staff member with active task assignments. Please reassign or complete their active tasks first.";
@@ -50,6 +53,13 @@ public class StaffServiceImpl implements StaffService {
 
     // Set by Spring (setter injection keeps the hand-built constructors used by unit tests unchanged). Null in those tests.
     private ManagerDepartmentAuditRecorder managerAuditRecorder;
+
+    private com.hotel.workload.profile.EmailChangeService emailChangeService;
+
+    @Autowired(required = false)
+    void setEmailChangeService(com.hotel.workload.profile.EmailChangeService emailChangeService) {
+        this.emailChangeService = emailChangeService;
+    }
 
     @Autowired(required = false)
     void setManagerAuditRecorder(ManagerDepartmentAuditRecorder managerAuditRecorder) {
@@ -193,6 +203,9 @@ public class StaffServiceImpl implements StaffService {
         if (!scope.isAll() && !isDepartmentCode(request.getDepartment(), staff.getDepartment().getCode())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, TRANSFER_ADMIN_ONLY_MESSAGE);
         }
+        // The login email is never changed through this endpoint, by anyone (Admin included): it can only be changed by the account
+        // holder through the verified self-service flow (EmailChangeService). A different address is refused, not silently ignored.
+        requireLoginEmailUnchanged(staff, request.getEmail());
 
         // Reject before any field changes so a refused deactivation leaves the record untouched
         if (staff.isActive() && !request.isActive() && hasActiveAssignments(staff.getId())) {
@@ -209,14 +222,7 @@ public class StaffServiceImpl implements StaffService {
             StaffTransferRules.requireNoConflictingTasks(assignmentRepository, staff, targetDepartment);
         }
 
-        if (!staff.getEmail().equals(request.getEmail())) {
-            if (staffRepository.existsByEmail(request.getEmail()) || userRepository.existsByEmail(request.getEmail())) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already exists");
-            }
-        }
-
         staff.setName(request.getFullName());
-        staff.setEmail(request.getEmail());
         staff.setPhone(request.getPhone());
         staff.setDepartment(targetDepartment);
         staff.setAvailability(request.getAvailability());
@@ -224,7 +230,6 @@ public class StaffServiceImpl implements StaffService {
 
         User user = staff.getUser();
         if (user != null) {
-            user.setEmail(request.getEmail());
             user.setActive(request.isActive());
         }
 
@@ -352,6 +357,46 @@ public class StaffServiceImpl implements StaffService {
     private boolean hasActiveAssignments(UUID staffId) {
         return assignmentRepository != null
                 && assignmentRepository.existsByStaffIdAndTaskStatusIn(staffId, ACTIVE_TASK_STATUSES);
+    }
+
+    @Override
+    @Transactional
+    public com.hotel.workload.profile.EmailChangeService.CodeSent requestLoginEmailChange(UUID id, String newEmail, String client) {
+        // The same checks, in the same order, as every other staff change: scope, then the row (locked), then department, then role
+        DepartmentScope scope = requireStaffManagementScope();
+        staffRepository.lockByIds(java.util.Set.of(id));
+        Staff staff = staffRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
+        requireInScope(scope, staff); // 404 outside a Manager's department
+        requireMayManage(scope, staff); // a Manager may not touch manager or admin accounts
+
+        User account = staff.getUser();
+        if (account == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This staff member has no login account.");
+        }
+        if (account.getRole() != Role.STAFF) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "A login email change can be requested for Staff accounts only.");
+        }
+        if (emailChangeService == null) {
+            throw new IllegalStateException("Email change service is not available");
+        }
+        return emailChangeService.requestForAccount(account.getUsername(), client, newEmail);
+    }
+
+    /**
+     * The email in an update must be the one the account already has (the screens send it back unchanged), ignoring case and surrounding
+     * spaces. A missing email means "unchanged". Anything else is a request to change the login email, which this operation never does.
+     */
+    private static void requireLoginEmailUnchanged(Staff staff, String requestedEmail) {
+        if (requestedEmail == null || requestedEmail.isBlank()) {
+            return;
+        }
+        String requested = requestedEmail.trim();
+        boolean sameAsStaffRecord = requested.equalsIgnoreCase(staff.getEmail());
+        boolean sameAsLogin = staff.getUser() != null && requested.equalsIgnoreCase(staff.getUser().getEmail());
+        if (!sameAsStaffRecord && !sameAsLogin) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, LOGIN_EMAIL_MESSAGE);
+        }
     }
 
     /**

@@ -81,6 +81,7 @@ public class SecurityConfigEndpointCoverageTest {
         allow(AM, "GET", "/api/staff", "/api/staff/username-availability");
         allow(AM, "POST", "/api/staff");
         allow(AM, "PUT", "/api/staff/{}");
+        allow(AM, "POST", "/api/staff/{}/email-change");
         allow(AM, "PATCH", "/api/staff/{}/deactivate", "/api/staff/{}/activate");
         allow(A, "DELETE", "/api/staff/{}");
         // Tasks and assignments

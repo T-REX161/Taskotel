@@ -44,7 +44,7 @@ describe('profile view helpers (everything comes from the backend profile)', () 
 describe('profile page: header', () => {
   it('shows the (clickable) picture, display name, username, role badge and status badge', () => {
     const header = page.slice(page.indexOf('aria-label="Profile summary"'), page.indexOf('title="Personal Information"'));
-    for (const part of ['<UserAvatar', 'Edit profile picture', '{displayName}</h2>', '@{username}', '{role}', '<StatusBadge state={status.state} label={status.label} />']) {
+    for (const part of ['<UserAvatar', 'Edit profile picture', '{displayName}</h2>', '@{username}', '{roleText}', '<StatusBadge state={status.state} label={status.label} />']) {
       assert.ok(header.includes(part), part);
     }
     assert.ok(header.includes('rounded-full'), 'circular picture');

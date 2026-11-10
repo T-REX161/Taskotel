@@ -171,12 +171,12 @@ public class StaffDepartmentIsolationTest {
     @Test
     @DisplayName("Admin updates, deactivates, reactivates and transfers staff in any department; creates staff anywhere")
     public void adminManagesEveryDepartment() throws Exception {
-        assertEquals(200, status("iso_admin", "ADMIN", put("/api/staff/" + sb1.getId()).content(updateBody(sb1, BETA, "iso_sb1_new@scope.test", true))));
+        assertEquals(200, status("iso_admin", "ADMIN", put("/api/staff/" + sb1.getId()).content(updateBody(sb1, BETA, sb1.getEmail(), true))));
         assertEquals(200, status("iso_admin", "ADMIN", patch("/api/staff/" + sa1.getId() + "/deactivate")));
         assertEquals(200, status("iso_admin", "ADMIN", patch("/api/staff/" + sa1.getId() + "/activate")));
 
         // Only an administrator transfers staff between departments
-        assertEquals(200, status("iso_admin", "ADMIN", put("/api/staff/" + sb1.getId()).content(updateBody(sb1, ALPHA, "iso_sb1_new@scope.test", true))));
+        assertEquals(200, status("iso_admin", "ADMIN", put("/api/staff/" + sb1.getId()).content(updateBody(sb1, ALPHA, sb1.getEmail(), true))));
         assertEquals(ALPHA, reload(sb1).getDepartment().getCode());
 
         assertEquals(201, status("iso_admin", "ADMIN", post("/api/staff").content(createBody("iso_new_in_beta", BETA, null))));
@@ -293,9 +293,9 @@ public class StaffDepartmentIsolationTest {
         assertEquals(ALPHA, reload(sa1).getDepartment().getCode());
 
         // Updating the same member without a transfer still works, for both Managers of the department
-        assertEquals(200, status("iso_m1", "MANAGER", put("/api/staff/" + sa1.getId()).content(updateBody(sa1, ALPHA, "iso_sa1_b@scope.test", true))));
-        assertEquals(200, status("iso_m2", "MANAGER", put("/api/staff/" + sa1.getId()).content(updateBody(sa1, ALPHA, "iso_sa1_c@scope.test", true))));
-        assertEquals("iso_sa1_c@scope.test", reload(sa1).getEmail());
+        assertEquals(200, status("iso_m1", "MANAGER", put("/api/staff/" + sa1.getId()).content(updateBody(sa1, ALPHA, sa1.getEmail(), true))));
+        assertEquals(200, status("iso_m2", "MANAGER", put("/api/staff/" + sa1.getId()).content(updateBody(sa1, ALPHA, sa1.getEmail(), true))));
+        assertEquals("iso_sa1@scope.test", reload(sa1).getEmail(), "the login email is not changed by a staff update");
     }
 
     // ── 6. Manager and Admin accounts are not manageable by a Manager ────────

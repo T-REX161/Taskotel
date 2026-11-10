@@ -2,7 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CloseIcon } from '../icons/Icons';
-import { updateStaff } from '../../services/api';
+import { updateStaff, requestStaffEmailChange } from '../../services/api';
+import {
+  SENT_MESSAGE,
+  canRequestEmailChange,
+  emailChangeErrorMessage,
+  minutesLeft,
+  pendingChange,
+  pendingFromResponse,
+  validateNewEmail,
+} from '../../utils/loginEmailChange';
 import DepartmentOptions from '../common/DepartmentOptions';
 import useDepartments from '../../hooks/useDepartments';
 
@@ -14,8 +23,9 @@ import useDepartments from '../../hooks/useDepartments';
  *   staff     – staff member object being edited (or null)
  *   onClose   – callback to close the modal
  *   onSuccess – callback(payload) after successful update
+ *   onEmailChangeRequested – optional callback after a verification code was sent (the list can refresh its pending status)
  */
-export default function EditStaffModal({ isOpen, staff, onClose, onSuccess }) {
+export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEmailChangeRequested }) {
   const { departments } = useDepartments();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -29,6 +39,12 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess }) {
   });
   const [formError, setFormError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Login email change: the address being proposed, what is pending, and the outcome of the last request
+  const [newEmail, setNewEmail] = useState('');
+  const [pending, setPending] = useState(null);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [emailNotice, setEmailNotice] = useState('');
 
   useEffect(() => {
     if (staff) {
@@ -42,6 +58,10 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess }) {
         username: staff.username || '',
       });
       setFormError('');
+      setNewEmail('');
+      setPending(pendingChange(staff));
+      setEmailError('');
+      setEmailNotice('');
     }
   }, [staff]);
 
@@ -51,6 +71,34 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess }) {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (formError) setFormError('');
+  };
+
+  // Starts (or restarts) a verified change. The active login email is not touched: the staff member must confirm it themselves.
+  const handleRequestEmailChange = async () => {
+    if (emailBusy) return;
+    setEmailNotice('');
+    const problem = validateNewEmail(newEmail, staff.email);
+    if (problem) {
+      setEmailError(problem);
+      return;
+    }
+    setEmailBusy(true);
+    setEmailError('');
+    try {
+      const response = await requestStaffEmailChange(staff.id, newEmail.trim());
+      setPending(pendingFromResponse(response));
+      setNewEmail('');
+      setEmailNotice(SENT_MESSAGE);
+      if (onEmailChangeRequested) onEmailChangeRequested();
+    } catch (err) {
+      if (err.message && err.message.includes('Redirecting to login')) {
+        navigate('/login');
+        return;
+      }
+      setEmailError(emailChangeErrorMessage(err));
+    } finally {
+      setEmailBusy(false);
+    }
   };
 
   const handleClose = () => {
@@ -69,22 +117,15 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess }) {
       setFormError('Full name is required.');
       return;
     }
-    if (!formData.email.trim()) {
-      setFormError('Email is required.');
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email.trim())) {
-      setFormError('Please enter a valid email address.');
-      return;
-    }
 
     setIsSubmitting(true);
 
     try {
       const payload = {
         fullName: formData.fullName.trim(),
-        email: formData.email.trim(),
+        // The login email is shown but never edited here: the request carries the address the account already has, and the server refuses
+        // any other. The staff member changes it themselves, with verification, from their own account settings.
+        email: staff.email,
         phone: formData.phone.trim() || null,
         department: formData.department,
         availability: formData.availability,
@@ -189,17 +230,64 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess }) {
 
               {/* Email */}
               <div className="space-y-1">
-                <label className="text-sm font-medium text-gray-700">Email *</label>
+                <label className="text-sm font-medium text-gray-700">Login Email</label>
                 <input
                   type="email"
                   name="email"
-                  required
-                  value={formData.email}
-                  onChange={handleInputChange}
-                  disabled={isSubmitting}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-800"
-                  placeholder="john@example.com"
+                  value={staff.email || ''}
+                  readOnly
+                  disabled
+                  aria-describedby="login-email-note"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-gray-50 text-sm text-gray-500 cursor-not-allowed"
                 />
+                <p id="login-email-note" className="text-xs text-gray-500">
+                  This is the verified login email. It is not changed by saving this form: a change must be verified with a code, and only the
+                  staff member can confirm it.
+                </p>
+              </div>
+
+              {/* Login email change */}
+              <div className="space-y-2 md:col-span-2" data-section="login-email-change">
+                {pending && (
+                  <div role="status" className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-sm space-y-0.5">
+                    <p className="font-semibold">Pending verification: {pending.masked}</p>
+                    <p>
+                      Not active yet. The login email is still {staff.email}. The staff member must sign in and enter the code sent to the new
+                      address (expires in about {minutesLeft(pending.expiresAt)} min).
+                    </p>
+                  </div>
+                )}
+                {canRequestEmailChange(staff) ? (
+                  <div className="space-y-1">
+                    <label htmlFor="new-login-email" className="text-sm font-medium text-gray-700">
+                      {pending ? 'Use a different address, or send a new code' : 'Change login email'}
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        id="new-login-email"
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => { setNewEmail(e.target.value); if (emailError) setEmailError(''); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRequestEmailChange(); } }}
+                        disabled={emailBusy || isSubmitting}
+                        className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-800"
+                        placeholder="new.address@example.com"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleRequestEmailChange}
+                        disabled={emailBusy || isSubmitting}
+                        className="px-4 py-2 rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 text-sm font-medium disabled:opacity-60 cursor-pointer"
+                      >
+                        {emailBusy ? 'Sending...' : pending ? 'Send new code' : 'Send verification code'}
+                      </button>
+                    </div>
+                    {emailError && <p role="alert" className="text-xs text-red-700">{emailError}</p>}
+                    {emailNotice && <p role="status" className="text-xs text-emerald-700">{emailNotice}</p>}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500">A login email change can be requested for active Staff accounts only.</p>
+                )}
               </div>
 
               {/* Phone */}

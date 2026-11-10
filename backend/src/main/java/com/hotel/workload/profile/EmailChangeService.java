@@ -72,6 +72,8 @@ public class EmailChangeService {
     private final PasswordEncoder passwordEncoder;
     private final EmailChangeLimiters.Request requestLimiter;
     private final EmailChangeLimiters.Confirm confirmLimiter;
+    private EmailChangeLimiters.Initiate initiateLimiter;
+    private EmailChangeLimiters.Recipient recipientLimiter;
     private final EntityManager entityManager;
 
     public EmailChangeService(UserRepository userRepository, StaffRepository staffRepository, EmailService emailService,
@@ -88,6 +90,89 @@ public class EmailChangeService {
         this.entityManager = entityManager;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    void setInitiateLimiter(EmailChangeLimiters.Initiate initiateLimiter) {
+        this.initiateLimiter = initiateLimiter;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRecipientLimiter(EmailChangeLimiters.Recipient recipientLimiter) {
+        this.recipientLimiter = recipientLimiter;
+    }
+
+    static final String ACCOUNT_SAME_EMAIL = "That is already this account's login email address.";
+    static final String ACCOUNT_DEACTIVATED = "This account is deactivated.";
+    static final String ACCOUNT_SETUP_PENDING = "This account has not finished first-time setup yet.";
+
+    /**
+     * Starts an email change for ANOTHER account, on behalf of an Admin or Manager whose authority the caller has already checked
+     * (department scope, role, Staff-only). The account holder alone completes it: {@link #confirm} is only ever called for the signed-in
+     * account, so nobody can verify it for them. What is the same as {@link #request}: a code to the NEW address, a notice to the CURRENT
+     * address (fails closed), the pending columns (one per account: this replaces any earlier pending change, including the holder's own,
+     * so the earlier code stops working at once), the resend cooldown, and nothing about the active login email changes.
+     *
+     * <p>The answer does not depend on whether the new address already belongs to another account (so a Manager outside that account's
+     * department cannot use it to probe addresses). If it does, a harmless "cannot be used" notice goes to that address in place of the code
+     * and the current address is told as usual, so both cases make exactly two sends; but nothing at all is stored, so an existing pending
+     * request (and its code) is left exactly as it was. Message counts per proposed address are limited across all clients and accounts.
+     */
+    @Transactional
+    public CodeSent requestForAccount(String targetUsername, String client, String newEmail) {
+        User user = lockedUser(targetUsername);
+        if (!user.isActive()) throw new ResponseStatusException(HttpStatus.CONFLICT, ACCOUNT_DEACTIVATED);
+        if (user.isCredentialsSetupRequired() || !user.isEmailVerified()) throw new ResponseStatusException(HttpStatus.CONFLICT, ACCOUNT_SETUP_PENDING);
+
+        String email = normalise(newEmail);
+        if (email == null) throw bad(INVALID_EMAIL);
+        if (email.equalsIgnoreCase(user.getEmail())) throw bad(ACCOUNT_SAME_EMAIL);
+
+        // Two limits, both charged before anything is sent or stored: this client against this target account, and every message to this
+        // proposed address (whoever asks, whichever account it is for). A refusal changes nothing, so it cannot disturb a pending request.
+        AttemptLimiter.Decision decision = initiateLimiter.begin(client, targetUsername);
+        if (!decision.allowed()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, TOO_MANY);
+        if (!recipientLimiter.beginFor(email).allowed()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, TOO_MANY);
+
+        boolean taken = inUseByAnother(user, email);
+        LocalDateTime now = LocalDateTime.now();
+        if (email.equals(user.getPendingEmail()) && user.getPendingEmailLastSentAt() != null) {
+            long waited = Duration.between(user.getPendingEmailLastSentAt(), now).getSeconds();
+            if (waited < RESEND_COOLDOWN_SECONDS) {
+                throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS,
+                        "Please wait " + (RESEND_COOLDOWN_SECONDS - waited) + " seconds before requesting another code.");
+            }
+        }
+        // The same work on both paths (a code is made and hashed either way), and exactly two messages are sent on both: one to the proposed
+        // address (the code, or the "cannot be used" notice) and one to the current address. Any failure aborts, so nothing is stored.
+        String code = codes.generateCode();
+        String hash = codes.hashCode(code);
+        if (taken) {
+            emailService.sendEmailAddressInUseNotice(email);
+        } else {
+            emailService.sendAdministratorEmailChangeVerificationEmail(email, code); // throws if it cannot be sent: nothing is stored then
+        }
+        try {
+            emailService.sendAdministratorEmailChangeNotice(user.getEmail(), mask(email));
+        } catch (EmailSendingException e) {
+            log.warn("Could not send the email change notice; the change was not started");
+            throw e;
+        } catch (RuntimeException e) {
+            log.warn("Could not send the email change notice ({}); the change was not started", e.getClass().getSimpleName());
+            throw new EmailSendingException("Could not send the email change notice", e);
+        }
+
+        // An address another account uses is answered exactly like a free one, but NOTHING is stored: a pending request that could never be
+        // completed must not replace (and so kill the code of) one the account holder can still complete.
+        if (!taken) {
+            user.setPendingEmail(email);
+            user.setPendingEmailCodeHash(hash);
+            user.setPendingEmailExpiresAt(now.plusMinutes(CODE_LIFETIME_MINUTES));
+            user.setPendingEmailAttemptCount(0);
+            user.setPendingEmailLastSentAt(now);
+            userRepository.saveAndFlush(user);
+        }
+        return new CodeSent(mask(email), CODE_LIFETIME_MINUTES * 60, RESEND_COOLDOWN_SECONDS);
+    }
+
     /**
      * Sends a code to {@code newEmail} and remembers it as the pending address. Also used to resend (same address again): a new code
      * replaces the old one, but not more often than the cooldown allows. The email is sent before anything is stored, so a failed send
@@ -96,6 +181,7 @@ public class EmailChangeService {
     @Transactional
     public CodeSent request(String username, String client, String newEmail, String currentPassword) {
         User user = lockedUser(username);
+        requireActive(user);
         requireOnboarded(user);
 
         // Checks that say nothing beyond what the caller typed come first and are not charged to the limiter (as before)
@@ -149,6 +235,7 @@ public class EmailChangeService {
     public void confirm(String username, String client, String code) {
         if (code == null || !code.matches("^\\d{6}$")) throw bad(CODE_FORMAT);
         User user = lockedUser(username);
+        requireActive(user);
         requireOnboarded(user);
 
         // Every well-formed attempt counts, whether or not a change is pending, so guessing cannot be spread out or probed
@@ -204,6 +291,11 @@ public class EmailChangeService {
         noticeOldAddress(oldEmail, newEmail, true);
         confirmLimiter.succeeded(client, username);
         log.info("Email address changed for user: {}", user.getUsername());
+    }
+
+    /** A deactivated account can neither start nor complete an email change. */
+    private void requireActive(User user) {
+        if (!user.isActive()) throw new ResponseStatusException(HttpStatus.FORBIDDEN, ACCOUNT_DEACTIVATED);
     }
 
     private void requireOnboarded(User user) {
@@ -266,7 +358,7 @@ public class EmailChangeService {
     }
 
     /** "ma***@example.com": the first two characters of the local part and the whole domain. */
-    static String mask(String email) {
+    public static String mask(String email) {
         int at = email.indexOf('@');
         if (at <= 0) return "***";
         String local = email.substring(0, at);

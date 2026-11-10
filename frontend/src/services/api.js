@@ -377,6 +377,17 @@ export const updateStaff = (id, request) => {
 };
 
 /**
+ * Start a verified login email change for a staff member (Admin, or a Manager for their own department). A code goes to the new
+ * address; the active login email is unchanged until the staff member confirms it themselves, signed in.
+ */
+export const requestStaffEmailChange = (id, newEmail) => {
+  return apiFetch(`/api/staff/${id}/email-change`, {
+    method: 'POST',
+    body: JSON.stringify({ newEmail }),
+  });
+};
+
+/**
  * Deactivate a staff member.
  */
 export const deactivateStaff = (id) => {

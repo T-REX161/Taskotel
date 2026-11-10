@@ -74,6 +74,28 @@ export async function sendEmailChangeCode(newEmail, currentEmail, currentPasswor
   };
 }
 
+/**
+ * A pending email change the profile reports (the server sends it only while its code is valid, and only masked): the masked address and
+ * when the code expires (milliseconds, or null when the time cannot be read). Null when there is none. The server decides whether it is
+ * still valid; this does not second-guess it with the browser's clock.
+ */
+export function pendingEmailChange(profile) {
+  const maskedEmail = typeof profile?.pendingEmailMasked === 'string' ? profile.pendingEmailMasked.trim() : '';
+  if (!maskedEmail) return null;
+  const at = Date.parse(profile.pendingEmailExpiresAt);
+  return { maskedEmail, expiresAt: Number.isFinite(at) ? at : null };
+}
+
+/**
+ * Where the email dialog starts. With a pending change (one an administrator or manager started, or one begun earlier) it opens directly
+ * on the code step, showing only the masked address: it asks for no new address and no password and sends nothing. Without one it is the
+ * ordinary first step.
+ */
+export function startingStep(pending, nowMs) {
+  if (!pending) return { step: 'enter', continuing: false, info: null };
+  return { step: 'verify', continuing: true, info: { maskedEmail: pending.maskedEmail, expiresAt: pending.expiresAt, resendAt: nowMs } };
+}
+
 /** Verifies the code. Resolves with the updated profile only after the server confirmed the change; rejects otherwise. */
 export async function verifyEmailChangeCode(code, { confirm = confirmEmailChange } = {}) {
   if (!isCompleteCode(code)) throw Object.assign(new Error(EMAIL_CHANGE_MESSAGES.codeRequired), { status: 0 });

@@ -13,7 +13,7 @@ import WorkloadPage from './pages/WorkloadPage';
 import DepartmentsPage from './pages/DepartmentsPage';
 import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
-import SettingsPage from './pages/SettingsPage';
+import { RequireSession, RequireRouteAccess } from './components/auth/RouteGuards';
 
 function App() {
   return (
@@ -22,19 +22,23 @@ function App() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/email-verification" element={<EmailVerificationPage />} />
       <Route path="/set-credentials" element={<SetCredentialsPage />} />
-      <Route element={<AppShell />}>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/staff" element={<StaffPage />} />
-        <Route path="/tasks" element={<TasksPage />} />
-        <Route path="/tasks/create" element={<CreateTaskPage />} />
-        <Route path="/assignments" element={<AssignmentsPage />} />
-        <Route path="/workload" element={<WorkloadPage />} />
-        <Route path="/departments" element={<DepartmentsPage />} />
-        <Route path="/users" element={<UsersPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Dashboard />} />
+      {/* Everything below needs a sign-in; each screen is then opened only for the roles in utils/accessPolicy (the backend still decides every request) */}
+      <Route element={<RequireSession />}>
+        <Route element={<AppShell />}>
+          <Route element={<RequireRouteAccess />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/staff" element={<StaffPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/tasks/create" element={<CreateTaskPage />} />
+            <Route path="/assignments" element={<AssignmentsPage />} />
+            <Route path="/workload" element={<WorkloadPage />} />
+            <Route path="/departments" element={<DepartmentsPage />} />
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="*" element={<Dashboard />} />
+          </Route>
+        </Route>
       </Route>
     </Routes>
   );

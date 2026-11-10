@@ -39,6 +39,22 @@ public class StaffController {
         return ResponseEntity.ok(staffService.updateStaff(id, request));
     }
 
+    /** The new login email for a Staff account. The account is named by the path, never by the body. */
+    public record LoginEmailChangeBody(String newEmail) {}
+
+    /**
+     * Starts a verified login email change: a code goes to the NEW address, a notice to the current one, and the active email stays as it
+     * is until the Staff member confirms it themselves (the profile email-change confirmation, signed in). Admin, or a Manager for staff
+     * of their own department.
+     */
+    @org.springframework.web.bind.annotation.PostMapping("/{id}/email-change")
+    public ResponseEntity<com.hotel.workload.profile.EmailChangeService.CodeSent> requestLoginEmailChange(
+            @org.springframework.web.bind.annotation.PathVariable java.util.UUID id,
+            @org.springframework.web.bind.annotation.RequestBody LoginEmailChangeBody body,
+            jakarta.servlet.http.HttpServletRequest http) {
+        return ResponseEntity.ok(staffService.requestLoginEmailChange(id, body == null ? null : body.newEmail(), http.getRemoteAddr()));
+    }
+
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/deactivate")
     public ResponseEntity<StaffDto> deactivateStaff(@org.springframework.web.bind.annotation.PathVariable java.util.UUID id) {
         return ResponseEntity.ok(staffService.deactivateStaff(id));

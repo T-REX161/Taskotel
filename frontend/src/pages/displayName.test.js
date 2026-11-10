@@ -87,7 +87,7 @@ describe('display name API', () => {
 
 describe('profile page: display name', () => {
   it('shows the display name in the banner with the role badge, and the username separately as @username', () => {
-    assert.ok(page.includes('{displayName}</h2>') && page.includes('{role}') && page.includes('@{username}'));
+    assert.ok(page.includes('{displayName}</h2>') && page.includes('{roleText}') && page.includes('@{username}'));
   });
 
   it('Personal Information has Display Name (editable) then Username (read-only)', () => {
@@ -99,7 +99,7 @@ describe('profile page: display name', () => {
   it('the header shows Account Status, System Role and Access Scope under the username, in that order, from the backend profile and the existing role logic; the Account Information card is gone', () => {
     assert.ok(!page.includes('Account Information') && !page.includes('label="Account Status"'));
     const header = page.slice(page.indexOf('aria-label="Profile summary"'), page.indexOf('title="Personal Information"'));
-    const order = ['@{username}', '<StatusBadge state={status.state} label={status.label} />', '{role}', '{accessScope}'].map((l) => header.indexOf(l));
+    const order = ['@{username}', '<StatusBadge state={status.state} label={status.label} />', '{roleText}', '{accessScope}'].map((l) => header.indexOf(l));
     assert.ok(order.every((x) => x > 0) && [...order].sort((x, y) => x - y).join() === order.join(), 'order');
     assert.ok(!header.includes('<input') || header.includes('type="file"'));
     assert.ok(page.includes('accountStatus(profile)') && page.includes('accessScopeFor(role)') && page.includes('getUserRole()'));

@@ -120,6 +120,7 @@ public class SecurityConfig {
         allowGet(authz, new String[]{"/api/staff", "/api/staff/username-availability"}, ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.POST, "/api/staff").hasAnyRole(ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.PUT, "/api/staff/*").hasAnyRole(ADMIN, MANAGER);
+        authz.requestMatchers(HttpMethod.POST, "/api/staff/*/email-change").hasAnyRole(ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.PATCH, "/api/staff/*/activate", "/api/staff/*/deactivate").hasAnyRole(ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.DELETE, "/api/staff/*").hasRole(ADMIN);
 

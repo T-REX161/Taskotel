@@ -37,6 +37,26 @@ public interface EmailService {
     void sendEmailChangeNotice(String toOldEmail, String maskedNewEmail, boolean completed);
 
     /**
+     * Like {@link #sendEmailChangeVerificationEmail}, for a change an Admin or Manager started for someone else (Stage 3): the code goes to
+     * the NEW address and must be entered by the account holder, signed in, in their own profile. Defaults to the ordinary message.
+     */
+    default void sendAdministratorEmailChangeVerificationEmail(String toNewEmail, String code) {
+        sendEmailChangeVerificationEmail(toNewEmail, code);
+    }
+
+    /**
+     * Sent to a PROPOSED address that another account already uses, in place of a verification code (so an address that can and one that
+     * cannot be used cost the same number of sends). It says only that the address was submitted and cannot be used; it never contains a
+     * code, and names no account or person.
+     */
+    void sendEmailAddressInUseNotice(String toProposedEmail);
+
+    /** Like {@link #sendEmailChangeNotice} (requested, not completed), saying an administrator or manager started the change. */
+    default void sendAdministratorEmailChangeNotice(String toOldEmail, String maskedNewEmail) {
+        sendEmailChangeNotice(toOldEmail, maskedNewEmail, false);
+    }
+
+    /**
      * Checks if the email service is properly configured to send emails.
      *
      * @return true if configured, false otherwise

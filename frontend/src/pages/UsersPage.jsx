@@ -470,6 +470,7 @@ export default function UsersPage() {
         staff={editing?.staff || null}
         onClose={() => setEditing(null)}
         onSuccess={handleEditSuccess}
+        onEmailChangeRequested={() => fetchUsers(false)}
       />
 
       <ManagerDepartmentModal

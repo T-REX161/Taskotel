@@ -14,27 +14,13 @@ import {
   CloseIcon,
 } from '../icons/Icons';
 import { getUserRole } from '../../services/api';
+import { navigationFor } from '../../utils/accessPolicy';
+
+const ICONS = { Dashboard: DashboardIcon, Staff: StaffIcon, Tasks: TasksIcon, Assignments: AssignmentsIcon, Workload: WorkloadIcon, Departments: DepartmentsIcon, Users: UsersIcon, Profile: ProfileIcon, Settings: SettingsIcon };
 
 export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNavClick }) {
-  const userRole = getUserRole();
-
-  const generalLinks = [
-    { name: 'Dashboard', icon: DashboardIcon, path: '/dashboard' },
-    { name: 'Staff', icon: StaffIcon, path: '/staff' },
-    { name: 'Tasks', icon: TasksIcon, path: '/tasks' },
-    { name: 'Assignments', icon: AssignmentsIcon, path: '/assignments' },
-    { name: 'Workload', icon: WorkloadIcon, path: '/workload' },
-  ];
-
-  const managementLinks = [
-    { name: 'Departments', icon: DepartmentsIcon, path: '/departments' },
-    ...(userRole === 'ADMIN' ? [{ name: 'Users', icon: UsersIcon, path: '/users' }] : []),
-  ];
-
-  const systemLinks = [
-    { name: 'Profile', icon: ProfileIcon, path: '/profile' },
-    { name: 'Settings', icon: SettingsIcon, path: '/settings' },
-  ];
+  // Only the links this role may open (utils/accessPolicy; the same table protects the routes). Presentation only: the backend decides.
+  const groups = navigationFor(getUserRole());
 
   const renderNavGroup = (title, items) => (
     <div>
@@ -43,7 +29,7 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
       </div>
       <nav className="space-y-1">
         {items.map((item) => {
-          const Icon = item.icon;
+          const Icon = ICONS[item.name];
           const isActive = activeNav.toLowerCase() === item.name.toLowerCase();
 
           return (
@@ -65,7 +51,7 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
                   isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-gray-600'
                 }`}
               />
-              <span className="truncate">{item.name}</span>
+              <span className="truncate">{item.label || item.name}</span>
             </button>
           );
         })}
@@ -112,9 +98,9 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
 
           {/* Nav groups — balanced spacing between sections */}
           <div className="space-y-6">
-            {renderNavGroup('GENERAL', generalLinks)}
-            {renderNavGroup('MANAGEMENT', managementLinks)}
-            {renderNavGroup('SYSTEM', systemLinks)}
+            {groups.map((group) => (
+              <React.Fragment key={group.title}>{renderNavGroup(group.title, group.items)}</React.Fragment>
+            ))}
           </div>
         </div>
 

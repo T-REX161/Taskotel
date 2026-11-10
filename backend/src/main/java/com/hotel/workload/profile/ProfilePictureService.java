@@ -197,9 +197,13 @@ public class ProfilePictureService {
         String phone = staffRecord.map(Staff::getPhone).map(String::trim).filter(number -> !number.isEmpty())
                 .or(() -> java.util.Optional.ofNullable(user.getPhone()).map(String::trim).filter(number -> !number.isEmpty()))
                 .orElse(null);
+        // A pending email change is reported (masked) only while its code is still valid; an expired one is not shown as active
+        boolean pending = user.getPendingEmail() != null && user.getPendingEmailCodeHash() != null && user.getPendingEmailExpiresAt() != null
+                && user.getPendingEmailExpiresAt().isAfter(java.time.LocalDateTime.now());
         return new ProfileDto(user.getUsername(), user.getRole() == null ? null : user.getRole().name(), fullName, user.getProfileImageUrl(),
                 DisplayNames.effective(user), user.isActive(), user.isEmailVerified(),
-                user.getCreatedAt(), user.getLastLoginAt(), user.getPasswordChangedAt(), UserPreferences.of(user), user.getEmail(), phone);
+                user.getCreatedAt(), user.getLastLoginAt(), user.getPasswordChangedAt(), UserPreferences.of(user), user.getEmail(), phone,
+                pending ? EmailChangeService.mask(user.getPendingEmail()) : null, pending ? user.getPendingEmailExpiresAt() : null);
     }
 
     /** A new name for every upload, so a replacement never overwrites the picture that is still in use. */

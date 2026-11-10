@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getUsername, getUserRole, updateDisplayName } from '../services/api';
+import { normalizeRole } from '../utils/accessPolicy';
 import { DISPLAY_NAME_MAX, DISPLAY_NAME_MESSAGES, shownName, validateDisplayName } from '../utils/displayName';
 import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
 import useTransientNotice from '../hooks/useTransientNotice';
@@ -10,7 +11,7 @@ import EmailChangeDialog from '../components/profile/EmailChangeDialog';
 import PhoneChangeDialog from '../components/profile/PhoneChangeDialog';
 import ChangePasswordDialog from '../components/profile/ChangePasswordDialog';
 import { PHONE_MESSAGES } from '../utils/phoneNumber';
-import { EMAIL_CHANGE_MESSAGES } from '../utils/emailChange';
+import { EMAIL_CHANGE_MESSAGES, pendingEmailChange } from '../utils/emailChange';
 import { describeActivity } from '../utils/accountActivity';
 import { accessScopeFor, accountStatus, emailAddress, emailVerification, phoneNumber } from '../utils/profileView';
 import ProfilePictureEditor from '../components/profile/ProfilePictureEditor';
@@ -125,8 +126,9 @@ function FieldRow({ label, htmlFor, action = null, children }) {
 }
 
 export default function ProfilePage() {
-  const username = getUsername() || 'admin';
-  const role = getUserRole() || 'ADMIN';
+  const username = getUsername() || '';
+  // A missing or unknown stored role is shown as unavailable, never as a default such as ADMIN (presentation only: the backend decides access)
+  const role = normalizeRole(getUserRole());
   const { profile } = useCurrentUserProfile();
   const savedImageUrl = profile?.profileImageUrl || null;
 
@@ -134,6 +136,7 @@ export default function ProfilePage() {
   const { notice: noticeMessage, show: showNotice, clear: clearNotice } = useTransientNotice(); // a success message that dismisses itself
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [continuePending, setContinuePending] = useState(null); // the pending change the dialog was opened to finish (null: the ordinary first step)
   const emailNotice = useTransientNotice(); // each success message below dismisses itself after 3 seconds; errors never use these timers
   const [phoneDialogOpen, setPhoneDialogOpen] = useState(false);
   const phoneNotice = useTransientNotice();
@@ -150,6 +153,11 @@ export default function ProfilePage() {
   useEffect(() => {
     if (editingName) nameInputRef.current?.focus();
   }, [editingName]);
+
+  // An administrator or manager may have started an email change since the profile was last loaded: read it afresh when the page opens
+  useEffect(() => {
+    loadCurrentProfile({ force: true });
+  }, []);
 
   const startEditingName = () => {
     setNameDraft(displayName);
@@ -206,8 +214,10 @@ export default function ProfilePage() {
   const status = accountStatus(profile);
   const verification = emailVerification(profile);
   const email = emailAddress(profile);
+  const pendingChange = pendingEmailChange(profile);
   const phone = phoneNumber(profile);
-  const accessScope = accessScopeFor(role);
+  const roleText = role || 'Unavailable';
+  const accessScope = role ? accessScopeFor(role) : 'Access level unavailable';
 
   return (
     <div className="w-full max-w-6xl space-y-6">
@@ -256,14 +266,14 @@ export default function ProfilePage() {
           <div className="flex-1 min-w-0 flex flex-col lg:flex-row lg:items-center gap-4 lg:gap-8">
             <div className="flex-1 min-w-0 space-y-1 text-center md:text-left">
               <h2 className="text-2xl font-bold leading-tight text-gray-900 break-words">{displayName}</h2>
-              <p className="text-sm text-gray-500 font-medium">@{username}</p>
+              {username && <p className="text-sm text-gray-500 font-medium">@{username}</p>}
               <p className="text-xs text-gray-400">Taskotel — Hotel Operations, Simplified</p>
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-1">
                 <span className="sr-only">Account status:</span>
                 <StatusBadge state={status.state} label={status.label} />
                 <span className="sr-only">System role:</span>
                 <span className={`${BADGE_BASE} uppercase tracking-wide ${ROLE_BADGE_TONE}`}>
-                  {role}
+                  {roleText}
                 </span>
                 <span className="sr-only">Access scope:</span>
                 <span className={`${BADGE_BASE} ${SCOPE_BADGE_TONE}`}>
@@ -404,7 +414,7 @@ export default function ProfilePage() {
             <FieldRow label="Email Address" action={(
               <button
                 type="button"
-                onClick={() => { emailNotice.clear(); setEmailDialogOpen(true); }}
+                onClick={() => { emailNotice.clear(); setContinuePending(null); setEmailDialogOpen(true); }}
                 disabled={!email}
                 className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed"
               >
@@ -419,6 +429,21 @@ export default function ProfilePage() {
                 <span className="sr-only">Email verification:</span>
                 <StatusBadge state={verification.state} label={verification.label} offTone="warning" />
               </div>
+              {pendingChange && (
+                <div role="status" data-testid="pending-email-change" className="mt-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 space-y-1.5">
+                  <p>
+                    An email change to <span className="font-semibold">{pendingChange.maskedEmail}</span> is waiting for your verification code.
+                    Your email stays {email} until you confirm it.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { emailNotice.clear(); setContinuePending(pendingChange); setEmailDialogOpen(true); }}
+                    className="text-sm font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+                  >
+                    Enter verification code
+                  </button>
+                </div>
+              )}
               {emailNotice.notice && (
                 <p role="status" aria-live="polite" className="mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
                   {emailNotice.notice}
@@ -452,6 +477,7 @@ export default function ProfilePage() {
       <EmailChangeDialog
         isOpen={emailDialogOpen}
         currentEmail={email}
+        pending={continuePending}
         onClose={() => setEmailDialogOpen(false)}
         onChanged={(updated) => {
           setCurrentProfile(updated); // the page (and anything else reading the shared profile) shows the new address and status at once

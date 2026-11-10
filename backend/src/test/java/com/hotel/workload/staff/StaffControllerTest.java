@@ -270,7 +270,7 @@ public class StaffControllerTest {
                 String updateJson = """
                                 {
                                     "fullName": "Updated Staff",
-                                    "email": "updated_admin@staff.com",
+                                    "email": "adminupdate@staff.com",
                                     "phone": "987654321",
                                     "department": "HOUSEKEEPING",
                                     "availability": "UNAVAILABLE",
@@ -283,7 +283,7 @@ public class StaffControllerTest {
                                 .content(updateJson))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.name").value("Updated Staff"))
-                                .andExpect(jsonPath("$.email").value("updated_admin@staff.com"))
+                                .andExpect(jsonPath("$.email").value("adminupdate@staff.com")) // unchanged: the login email is not editable here
                                 .andExpect(jsonPath("$.username").value("adminupdate"))
                                 .andExpect(jsonPath("$.active").value(false));
         }
@@ -297,7 +297,7 @@ public class StaffControllerTest {
                 String updateJson = """
                                 {
                                     "fullName": "Updated By Manager",
-                                    "email": "updated_manager@staff.com",
+                                    "email": "managerupdate@staff.com",
                                     "phone": "987654321",
                                     "department": "FRONT_DESK",
                                     "availability": "UNAVAILABLE",
@@ -310,7 +310,7 @@ public class StaffControllerTest {
                                 .content(updateJson))
                                 .andExpect(status().isOk())
                                 .andExpect(jsonPath("$.name").value("Updated By Manager"))
-                                .andExpect(jsonPath("$.email").value("updated_manager@staff.com"));
+                                .andExpect(jsonPath("$.email").value("managerupdate@staff.com")); // unchanged: the login email is not editable here
         }
 
         @Test
@@ -1156,7 +1156,7 @@ public class StaffControllerTest {
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, "changed_" + username + "@hotel.com", TestDepartments.HOUSEKEEPING, true)))
+                                .content(departmentChangeJson(staff, staff.getEmail(), TestDepartments.HOUSEKEEPING, true)))
                                 .andExpect(status().isConflict())
                                 .andExpect(jsonPath("$.message").value(
                                                 "Cannot move " + username + " Full to Housekeeping because they have active tasks in another department: "
@@ -1222,7 +1222,7 @@ public class StaffControllerTest {
 
                 mockMvc.perform(put("/api/staff/" + staff.getId())
                                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                                .content(departmentChangeJson(staff, "changed_third@hotel.com", TestDepartments.SECURITY, true)))
+                                .content(departmentChangeJson(staff, staff.getEmail(), TestDepartments.SECURITY, true)))
                                 .andExpect(status().isConflict())
                                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("p2 legacy task (Housekeeping)")));
 

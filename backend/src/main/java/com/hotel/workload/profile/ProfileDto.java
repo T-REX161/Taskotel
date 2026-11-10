@@ -11,9 +11,11 @@ import java.time.LocalDateTime;
  * are null when not recorded (never guessed). {@code preferences} are this user's own appearance, date and time format choices
  * (defaults filled in). {@code email} is the account's registered address; {@code phone} is the staff record's phone number and is
  * null when there is none (an account without a staff record, or no number entered): it is never invented. No hashes, codes or
- * tokens are ever part of this response.
+ * tokens are ever part of this response. {@code pendingEmailMasked} and {@code pendingEmailExpiresAt} describe an email change that is waiting
+ * for this user's verification code (the address masked, never in full); both are null when there is none or its code has expired.
  */
 public record ProfileDto(String username, String role, String fullName, String profileImageUrl, String displayName,
                          boolean active, boolean emailVerified,
                          LocalDateTime createdAt, LocalDateTime lastLoginAt, LocalDateTime passwordChangedAt,
-                         UserPreferences.Values preferences, String email, String phone) {}
+                         UserPreferences.Values preferences, String email, String phone,
+                         String pendingEmailMasked, LocalDateTime pendingEmailExpiresAt) {}

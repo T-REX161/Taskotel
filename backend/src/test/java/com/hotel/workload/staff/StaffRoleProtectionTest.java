@@ -142,8 +142,9 @@ public class StaffRoleProtectionTest {
 
     @Test
     public void managerStillManagesOrdinaryStaff() throws Exception {
-        assertEquals(200, send("MANAGER", update(ordinaryStaff, PREFIX + "staff2@hotel.test", true)));
-        assertEquals(PREFIX + "staff2@hotel.test", userRepository.findById(ordinaryStaff.getUser().getId()).orElseThrow().getEmail());
+        String ordinaryEmail = ordinaryStaff.getUser().getEmail();
+        assertEquals(200, send("MANAGER", update(ordinaryStaff, ordinaryEmail, true)));
+        assertEquals(ordinaryEmail, userRepository.findById(ordinaryStaff.getUser().getId()).orElseThrow().getEmail(), "the login email is not changed by a staff update");
         assertEquals(200, send("MANAGER", patch("/api/staff/" + ordinaryStaff.getId() + "/deactivate")));
         assertEquals(false, userRepository.findById(ordinaryStaff.getUser().getId()).orElseThrow().isActive());
         assertEquals(200, send("MANAGER", patch("/api/staff/" + ordinaryStaff.getId() + "/activate")));
@@ -152,8 +153,9 @@ public class StaffRoleProtectionTest {
 
     @Test
     public void adminStillManagesEveryAccount() throws Exception {
-        assertEquals(200, send("ADMIN", update(managerStaff, PREFIX + "manager2@hotel.test", true)));
-        assertEquals(PREFIX + "manager2@hotel.test", userRepository.findById(managerStaff.getUser().getId()).orElseThrow().getEmail());
+        String managerEmail = managerStaff.getUser().getEmail();
+        assertEquals(200, send("ADMIN", update(managerStaff, managerEmail, true)));
+        assertEquals(managerEmail, userRepository.findById(managerStaff.getUser().getId()).orElseThrow().getEmail(), "the login email is not changed by a staff update");
         assertEquals(200, send("ADMIN", patch("/api/staff/" + adminStaff.getId() + "/deactivate")));
         assertEquals(false, userRepository.findById(adminStaff.getUser().getId()).orElseThrow().isActive());
         assertEquals(200, send("ADMIN", patch("/api/staff/" + adminStaff.getId() + "/activate")));

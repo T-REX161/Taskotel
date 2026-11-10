@@ -218,6 +218,7 @@ public class SendGridEmailService implements EmailService {
     public static final String EMAIL_CHANGE_SUBJECT = "Taskotel - Confirm Your New Email Address";
     public static final String EMAIL_CHANGE_REQUESTED_SUBJECT = "Taskotel - Email Address Change Requested";
     public static final String EMAIL_CHANGE_COMPLETED_SUBJECT = "Taskotel - Your Email Address Was Changed";
+    public static final String EMAIL_ADDRESS_IN_USE_SUBJECT = "Taskotel - Email Address Cannot Be Used";
 
     @Override
     public void sendEmailChangeVerificationEmail(String toNewEmail, String code) {
@@ -246,6 +247,48 @@ public class SendGridEmailService implements EmailService {
         String text = "Hello,\n\n" + what + "\n\n" + advice + "\n\nRegards,\nTaskotel Team";
         String html = "<p>Hello,</p><p>" + escape(what) + "</p><p>" + advice + "</p><p>Regards,<br>Taskotel Team</p>";
         dispatch(toOldEmail, completed ? EMAIL_CHANGE_COMPLETED_SUBJECT : EMAIL_CHANGE_REQUESTED_SUBJECT, text, html, "email change notice");
+    }
+
+    @Override
+    public void sendAdministratorEmailChangeVerificationEmail(String toNewEmail, String code) {
+        String text = "Hello,\n\n"
+                + "An administrator or manager asked to set this as the new email address for your Taskotel account. To accept, sign in to Taskotel and enter this 6-digit code under Profile:\n\n"
+                + "Verification Code: " + code + "\n\n"
+                + "Expiration: 10 minutes\n\n"
+                + "For your security, do not share this code with anyone, including the person who asked for the change. If you did not expect this, ignore this message: nothing will change.\n\n"
+                + "Regards,\n"
+                + "Taskotel Team";
+        String html = "<p>Hello,</p>"
+                + "<p>An administrator or manager asked to set this as the new email address for your Taskotel account. To accept, sign in to Taskotel and enter this 6-digit code under Profile:</p>"
+                + "<p>Verification Code: " + styledCode(code) + "</p>"
+                + "<p>Expiration: 10 minutes</p>"
+                + "<p>For your security, do not share this code with anyone, including the person who asked for the change. If you did not expect this, ignore this message: nothing will change.</p>"
+                + "<p>Regards,<br>Taskotel Team</p>";
+        dispatch(toNewEmail, EMAIL_CHANGE_SUBJECT, text, html, "email change verification");
+    }
+
+    @Override
+    public void sendEmailAddressInUseNotice(String toProposedEmail) {
+        String text = "Hello,\n\n"
+                + "This email address was submitted as a proposed login address for a Taskotel account, but it cannot be used because it is already registered.\n\n"
+                + "No action is needed and nothing has changed. If you did not expect this message, you can ignore it.\n\n"
+                + "Regards,\n"
+                + "Taskotel Team";
+        String html = "<p>Hello,</p>"
+                + "<p>This email address was submitted as a proposed login address for a Taskotel account, but it cannot be used because it is already registered.</p>"
+                + "<p>No action is needed and nothing has changed. If you did not expect this message, you can ignore it.</p>"
+                + "<p>Regards,<br>Taskotel Team</p>";
+        dispatch(toProposedEmail, EMAIL_ADDRESS_IN_USE_SUBJECT, text, html, "email address in use notice");
+    }
+
+    @Override
+    public void sendAdministratorEmailChangeNotice(String toOldEmail, String maskedNewEmail) {
+        String what = "An administrator or manager asked to change the email address on your Taskotel account to " + maskedNewEmail
+                + ". Nothing has changed yet: the change only happens if you confirm it yourself with a code sent to the new address.";
+        String advice = "If you do not recognise this, change your password and contact your administrator.";
+        String text = "Hello,\n\n" + what + "\n\n" + advice + "\n\nRegards,\nTaskotel Team";
+        String html = "<p>Hello,</p><p>" + escape(what) + "</p><p>" + advice + "</p><p>Regards,<br>Taskotel Team</p>";
+        dispatch(toOldEmail, EMAIL_CHANGE_REQUESTED_SUBJECT, text, html, "email change notice");
     }
 
     private static String escape(String value) {

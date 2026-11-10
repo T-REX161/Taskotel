@@ -16,6 +16,9 @@ public class StaffDto {
     private String username;
     private String role;
     private String profileImageUrl;
+    /** A login email change waiting for the Staff member to confirm it: the address (masked) and when the code expires. Null when none. */
+    private String pendingEmailMasked;
+    private java.time.LocalDateTime pendingEmailExpiresAt;
 
     public StaffDto() {}
 
@@ -38,10 +41,20 @@ public class StaffDto {
                 dto.setRole(staff.getUser().getRole().name());
             }
             dto.setProfileImageUrl(staff.getUser().getProfileImageUrl());
+            com.hotel.workload.security.User account = staff.getUser();
+            if (account.getPendingEmail() != null && account.getPendingEmailExpiresAt() != null
+                    && account.getPendingEmailExpiresAt().isAfter(java.time.LocalDateTime.now())) {
+                dto.setPendingEmailMasked(com.hotel.workload.profile.EmailChangeService.mask(account.getPendingEmail()));
+                dto.setPendingEmailExpiresAt(account.getPendingEmailExpiresAt());
+            }
         }
         return dto;
     }
 
+    public String getPendingEmailMasked() { return pendingEmailMasked; }
+    public void setPendingEmailMasked(String pendingEmailMasked) { this.pendingEmailMasked = pendingEmailMasked; }
+    public java.time.LocalDateTime getPendingEmailExpiresAt() { return pendingEmailExpiresAt; }
+    public void setPendingEmailExpiresAt(java.time.LocalDateTime pendingEmailExpiresAt) { this.pendingEmailExpiresAt = pendingEmailExpiresAt; }
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
     public String getName() { return name; }
