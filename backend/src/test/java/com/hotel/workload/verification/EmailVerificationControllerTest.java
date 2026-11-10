@@ -73,7 +73,7 @@ public class EmailVerificationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("Verification code sent successfully to email"))
+                .andExpect(jsonPath("$.message").value(EmailVerificationController.SEND_MESSAGE))
                 .andExpect(jsonPath("$.code").doesNotExist())
                 .andExpect(jsonPath("$.verificationCode").doesNotExist())
                 .andExpect(jsonPath("$.verificationCodeHash").doesNotExist())
@@ -94,7 +94,7 @@ public class EmailVerificationControllerTest {
 
     @Test
     @Transactional
-    @DisplayName("POST /api/auth/email-verification/send returns 500 and does not retain active OTP on email failure")
+    @DisplayName("POST /api/auth/email-verification/send gives the same generic answer when delivery fails (no account existence leak) and does not retain an active OTP")
     public void testSendVerificationCode_EmailServiceFails_Returns500AndDoesNotStoreOtp() throws Exception {
         User user = new User();
         user.setUsername("teststaff_sendfail");
@@ -112,9 +112,9 @@ public class EmailVerificationControllerTest {
         MvcResult result = mockMvc.perform(post("/api/auth/email-verification/send")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Failed to send verification email"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value(EmailVerificationController.SEND_MESSAGE))
                 .andExpect(jsonPath("$.code").doesNotExist())
                 .andExpect(jsonPath("$.verificationCode").doesNotExist())
                 .andExpect(jsonPath("$.verificationCodeHash").doesNotExist())
@@ -155,9 +155,9 @@ public class EmailVerificationControllerTest {
         mockMvc.perform(post("/api/auth/email-verification/send")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isInternalServerError())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message").value("Failed to send verification email"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value(EmailVerificationController.SEND_MESSAGE));
 
         User reloadedUser = userRepository.findByUsername("teststaff_resendfail").orElseThrow();
         assertEquals(originalHash, reloadedUser.getVerificationCodeHash(), "Previously valid OTP hash must be preserved");
@@ -200,16 +200,18 @@ public class EmailVerificationControllerTest {
     }
 
     @Test
-    @DisplayName("POST /api/auth/email-verification/send returns 404 when user is not found")
+    @DisplayName("POST /api/auth/email-verification/send answers an unknown user exactly like a known one (Step 2J): 200, same message, nothing sent")
     public void testSendVerificationCode_UserNotFound_ReturnsNotFound() throws Exception {
         SendVerificationRequest request = new SendVerificationRequest("unknown_user");
 
         mockMvc.perform(post("/api/auth/email-verification/send")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value(EmailVerificationController.SEND_MESSAGE))
                 .andExpect(jsonPath("$.code").doesNotExist());
+        org.mockito.Mockito.verify(emailService, org.mockito.Mockito.never()).sendVerificationEmail(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
     }
 
     @Test
@@ -275,7 +277,7 @@ public class EmailVerificationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message", containsString("Invalid verification code")))
+                .andExpect(jsonPath("$.message", containsString("Invalid or expired verification code")))
                 .andExpect(jsonPath("$.code").doesNotExist());
 
         User updatedUser = userRepository.findByUsername("teststaff_wrong").orElseThrow();
@@ -334,7 +336,7 @@ public class EmailVerificationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message", containsString("No active verification code found")))
+                .andExpect(jsonPath("$.message", containsString("Invalid or expired verification code")))
                 .andExpect(jsonPath("$.code").doesNotExist());
     }
 
@@ -364,7 +366,7 @@ public class EmailVerificationControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.message", containsString("Maximum verification attempts exceeded")))
+                .andExpect(jsonPath("$.message", containsString("Invalid or expired verification code")))
                 .andExpect(jsonPath("$.code").doesNotExist());
 
         User updatedUser = userRepository.findByUsername("teststaff_maxattempts").orElseThrow();

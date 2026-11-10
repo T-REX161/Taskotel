@@ -8,9 +8,19 @@ import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
 
+/**
+ * Public onboarding endpoints. They must not reveal whether an account exists, so every accepted send gets the same answer and every
+ * failed verification the same one (see {@link VerificationCodeServiceImpl}). Known limitation of this stage: dispatch is synchronous, so a
+ * send to a real account still takes longer than one to an unknown account.
+ */
 @RestController
 @RequestMapping("/api/auth/email-verification")
 public class EmailVerificationController {
+
+    /** The one reply to every send request that was accepted. */
+    public static final String SEND_MESSAGE = "If this account can be verified, a verification code has been sent to its email address.";
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(EmailVerificationController.class);
 
     private final VerificationCodeService verificationCodeService;
 
@@ -39,8 +49,18 @@ public class EmailVerificationController {
                     .body(new VerificationResponse(false, "User identifier is required"));
         }
 
-        verificationCodeService.sendVerificationCode(identifier);
-        return ResponseEntity.ok(new VerificationResponse(true, "Verification code sent successfully to email"));
+        try {
+            verificationCodeService.sendVerificationCode(identifier);
+        } catch (EmailSendingException e) {
+            // Chosen behaviour (Step 2J): a failed delivery is NOT reported to the public caller. Reporting it for a real account would tell an
+            // outsider which accounts exist (an unknown account never reaches the email service). The failure is logged here without the
+            // identifier; no new code was stored, so any earlier valid code is untouched, and the person simply asks again (signing in
+            // sends a fresh code). Login handling of the same failure is a later stage.
+            log.warn("A verification email could not be delivered: {}", e.getMessage());
+        }
+        // The same answer whether or not an account matches, is active, or was sent anything (Step 2J): the reply must not tell
+        // an outsider which usernames and emails exist
+        return ResponseEntity.ok(new VerificationResponse(true, SEND_MESSAGE));
     }
 
     /**
@@ -71,12 +91,6 @@ public class EmailVerificationController {
     @ExceptionHandler(VerificationException.class)
     public ResponseEntity<VerificationResponse> handleVerificationException(VerificationException ex) {
         return ResponseEntity.badRequest()
-                .body(new VerificationResponse(false, ex.getMessage()));
-    }
-
-    @ExceptionHandler(UserNotFoundException.class)
-    public ResponseEntity<VerificationResponse> handleUserNotFoundException(UserNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(new VerificationResponse(false, ex.getMessage()));
     }
 

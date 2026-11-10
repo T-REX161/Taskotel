@@ -109,7 +109,7 @@ public class VerificationCodeServiceTest {
                 verificationCodeService.verifyCode("staff1", wrongCode)
         );
 
-        assertTrue(ex.getMessage().contains("Invalid verification code"));
+        assertEquals(VerificationCodeServiceImpl.GENERIC_FAILURE, ex.getMessage());
         assertEquals(1, user.getVerificationAttemptCount(), "Attempt count should be incremented to 1");
         assertFalse(user.isEmailVerified(), "emailVerified must remain false");
         assertNotNull(user.getVerificationCodeHash(), "Code hash should still exist after 1 failed attempt");
@@ -159,7 +159,7 @@ public class VerificationCodeServiceTest {
                 verificationCodeService.verifyCode("staff1", "123456")
         );
 
-        assertTrue(ex.getMessage().contains("No active verification code found"));
+        assertEquals(VerificationCodeServiceImpl.GENERIC_FAILURE, ex.getMessage());
     }
 
     @Test
@@ -184,7 +184,7 @@ public class VerificationCodeServiceTest {
                 verificationCodeService.verifyCode("staff1", wrongCode)
         );
 
-        assertTrue(ex.getMessage().contains("Maximum verification attempts exceeded"));
+        assertEquals(VerificationCodeServiceImpl.GENERIC_FAILURE, ex.getMessage());
         assertEquals(5, user.getVerificationAttemptCount());
         assertNull(user.getVerificationCodeHash(), "Code hash must be invalidated upon 5th failure");
         assertNull(user.getVerificationCodeExpiresAt(), "Code expiration must be cleared upon 5th failure");
