@@ -64,7 +64,8 @@ describe('End Support confirmation dialog', () => {
   });
 
   it('explains what happens in short points and blocks the action when the task is in progress', () => {
-    assert.ok(dialog.includes('describeEndEffect(row, departmentName)') && dialog.includes('effect.points.map') && dialog.includes('{effect.text}'));
+    // Step 2G-4: the effect is described for the record projection the viewer received (see recordView)
+    assert.ok(dialog.includes('describeEndEffect(row, departmentName, view)') && dialog.includes('effect.points.map') && dialog.includes('{effect.text}'));
     assert.ok(dialog.includes('What ending support does') && dialog.includes('This support cannot be ended yet'));
     assert.ok(dialog.includes('const cannotEnd = effect.blocked || stale;') && dialog.includes('{!cannotEnd && ('), 'no confirm button when it cannot be ended');
   });
@@ -98,7 +99,7 @@ describe('wiring in the panel', () => {
   });
 
   it('reports success and keeps the error in the dialog', () => {
-    assert.ok(panel.includes("endState.status === 'done'") && panel.includes('describeEndOutcome(endState.result, departmentNames)'));
+    assert.ok(panel.includes("endState.status === 'done'") && panel.includes('describeEndOutcome(endState.result, departmentNames, recordView(endState.result, role))'));
     assert.ok(panel.includes("['reviewing', 'submitting', 'error'].includes(endState.status)"));
   });
 

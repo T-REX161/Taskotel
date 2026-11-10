@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { formatDate, formatTime } from '../../../utils/dateTimeFormat';
 import { getPreferences } from '../../../utils/preferences';
-import { describeEndReason } from '../../../utils/supportPlan';
+import { supportRecordDisplay } from '../../../utils/supportPlan';
 
 const FOCUSABLE = 'button:not([disabled])';
 
@@ -25,7 +25,7 @@ const Detail = ({ label, children }) => (
  * "Remove" is pressed; Escape and Cancel close it without changes (but not while the request is running). A failure keeps
  * it open and says why.
  */
-export default function SupportArchiveDialog({ row, departmentName, status, error, stale, onConfirm, onCancel }) {
+export default function SupportArchiveDialog({ row, departmentName, status, error, stale, onConfirm, onCancel, view = 'full' }) {
   const dialogRef = useRef(null);
   const cancelRef = useRef(null);
   const previousFocus = useRef(null);
@@ -56,7 +56,9 @@ export default function SupportArchiveDialog({ row, departmentName, status, erro
     return () => document.removeEventListener('keydown', onKey);
   }, [onCancel, submitting]);
 
-  const reason = describeEndReason(row.endReason);
+  // Only what the server sent for this viewer: a lending department's Manager gets no receiving department, task or end reason
+  const shown = supportRecordDisplay(row, view, departmentName);
+  const reason = shown.endReason;
   const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1';
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" onClick={() => !submitting && onCancel()}>
@@ -76,10 +78,12 @@ export default function SupportArchiveDialog({ row, departmentName, status, erro
 
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-gray-50 border border-gray-200 p-3">
           <Detail label="Staff member">{row.staffName}</Detail>
-          <Detail label="Department">{departmentName(row.homeDepartmentCode)} → {departmentName(row.receivingDepartmentCode)}</Detail>
+          <Detail label="Department">
+            {view === 'donor' ? <>{shown.home} <span className="block text-xs text-gray-500">{shown.loanNote}</span></> : `${shown.home} → ${shown.receiving}`}
+          </Detail>
           <div className="sm:col-span-2 min-w-0">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Task</dt>
-            <dd className="mt-0.5 text-sm text-gray-900 break-words">{row.taskTitle}</dd>
+            <dd className="mt-0.5 text-sm text-gray-900 break-words">{shown.taskRestricted ? <span className="text-gray-500 italic">{shown.task}</span> : row.taskTitle}</dd>
           </div>
           <Detail label="Started">{formatWhen(row.createdAt) || '–'}</Detail>
           <Detail label="Ended">{formatWhen(row.completedAt) || '–'}{reason ? <span className="block text-xs text-gray-500">{reason}</span> : null}</Detail>

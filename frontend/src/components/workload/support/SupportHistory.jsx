@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { formatDate, formatTime } from '../../../utils/dateTimeFormat';
 import { getPreferences } from '../../../utils/preferences';
 import SupportStageBadge from './SupportStageBadge';
-import { canArchiveSupport, canEndSupport, describeEndReason, recordStage, stageOf } from '../../../utils/supportPlan';
+import { canArchiveSupport, canEndSupport, recordStage, recordView, stageOf, supportRecordDisplay } from '../../../utils/supportPlan';
 
 const formatWhen = (value) => {
   if (!value) return '';
@@ -31,8 +31,11 @@ const Cell = ({ label, children, className = '' }) => (
 /**
  * Confirmed support: active first, and what has ended. Names are snapshots, so they stay correct later.
  * Active records get an End Support action (Admin and Manager only, via `canEnd`); ended ones never do.
+ * `role` decides how each record is read (see recordView): an Admin's records are complete; a Manager receives the receiving
+ * projection (no approver) or, where their department only lent the person, the donor projection (name, own department,
+ * status and dates). Only what the server sent is shown; withheld details are labelled, never filled in.
  */
-export default function SupportHistory({ history, departmentName, canEnd = false, onEnd, endingId = null, historyOnly = false, onArchive, archivingId = null }) {
+export default function SupportHistory({ history, departmentName, canEnd = false, onEnd, endingId = null, historyOnly = false, onArchive, archivingId = null, role = 'ADMIN' }) {
   // historyOnly: just the completed and ended records, with no heading, tabs or "no one is on support" message. The panel
   // uses it inside a collapsed "Support history" area when nobody is on active support.
   const [tab, setTab] = useState(historyOnly ? 'ended' : 'active');
@@ -77,7 +80,9 @@ export default function SupportHistory({ history, departmentName, canEnd = false
           <ul className="divide-y divide-gray-200">
             {rows.map((row) => {
               const stage = recordStage(row);
-              const reason = describeEndReason(row.endReason);
+              const view = recordView(row, role);
+              const shown = supportRecordDisplay(row, view, departmentName);
+              const reason = shown.endReason;
               return (
                 <li key={row.id} data-stage={stage} className={`px-4 py-3 space-y-2.5 lg:space-y-0 ${COLUMNS}`}>
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -92,13 +97,21 @@ export default function SupportHistory({ history, departmentName, canEnd = false
                     <p className="min-w-0 text-sm font-semibold text-gray-900 leading-5 break-words">{row.staffName}</p>
                   </div>
                   <Cell label="Department">
-                    <p className="text-sm text-gray-700">{departmentName(row.homeDepartmentCode)} <span aria-label="to" className="text-gray-400">→</span> {departmentName(row.receivingDepartmentCode)}</p>
+                    {view === 'donor' ? (
+                      // A lending department sees only its own department: the receiving one is not sent to it
+                      <p className="text-sm text-gray-700">{shown.home} <span className="block text-xs text-gray-500">{shown.loanNote}</span></p>
+                    ) : (
+                      <p className="text-sm text-gray-700">{departmentName(row.homeDepartmentCode)} <span aria-label="to" className="text-gray-400">→</span> {departmentName(row.receivingDepartmentCode)}</p>
+                    )}
                   </Cell>
                   <Cell label="Task">
-                    <p className="text-sm text-gray-900 break-words">{row.taskTitle}</p>
+                    {shown.taskRestricted
+                      ? <p className="text-sm text-gray-500 italic">{shown.task}</p>
+                      : <p className="text-sm text-gray-900 break-words">{row.taskTitle}</p>}
                   </Cell>
                   <Cell label={tab === 'active' ? 'Started' : 'Started / ended'}>
-                    <p className="text-xs text-gray-600">{formatWhen(row.createdAt)} · {row.approvedBy}</p>
+                    {/* The approver is shown only when the server sent it (an Admin's records) */}
+                    <p className="text-xs text-gray-600">{formatWhen(row.createdAt)}{row.approvedBy ? ` · ${row.approvedBy}` : ''}</p>
                     {row.completedAt && <p className="text-xs text-gray-500">Ended {formatWhen(row.completedAt)}{reason ? ` · ${reason.replace(/^Ended /, '')}` : ''}</p>}
                   </Cell>
                   <div className="flex items-center gap-2 lg:justify-end">

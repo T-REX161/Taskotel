@@ -154,7 +154,8 @@ describe('wiring', () => {
   });
 
   it('the confirmation names the staff member, task and dates, says nothing is deleted, and has Cancel and Remove', () => {
-    for (const text of ['Remove from history?', '{row.staffName}', '{row.taskTitle}', 'Started', 'Ended', 'formatWhen(row.createdAt)', 'formatWhen(row.completedAt)',
+    // Step 2G-4: the task title is shown only when the viewer's projection carries it (supportRecordDisplay)
+    for (const text of ['Remove from history?', '{row.staffName}', ': row.taskTitle}', 'supportRecordDisplay(row, view, departmentName)', 'Started', 'Ended', 'formatWhen(row.createdAt)', 'formatWhen(row.completedAt)',
       'The record is archived, not deleted.', 'Cancel', 'Remove']) {
       assert.ok(dialog.includes(text), text);
     }
@@ -163,7 +164,7 @@ describe('wiring', () => {
 
   it('shows loading, success and error feedback', () => {
     assert.ok(dialog.includes("submitting ? 'Removing…' : status === 'error' ? 'Try again' : 'Remove'") && dialog.includes('role="alert"') && dialog.includes('The record was not removed.'));
-    assert.ok(panel.includes("archiveState.status === 'done'") && panel.includes('describeArchiveOutcome(archiveState.row)'));
+    assert.ok(panel.includes("archiveState.status === 'done'") && panel.includes('describeArchiveOutcome(archiveState.row, recordView(archiveState.row, role))'));
     assert.ok(history.includes("archivingId === row.id") && history.includes('disabled={archivingId === row.id}'));
   });
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import SupportStageBadge from './SupportStageBadge';
-import { donorCapacityLeft, formatMinutes, needsReserveOverride, whyCannotAdd } from '../../../utils/supportPlan';
+import { donorCapacityLeft, donorSummaryText, needsReserveOverride, personWorkloadText, suggestedStaffIds, whyCannotAdd } from '../../../utils/supportPlan';
 
 const PRIORITY_LABELS = { URGENT: 'Urgent', HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low' };
 
@@ -35,7 +35,8 @@ const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-em
  */
 export default function SupportPlanBuilder({ options, plan, suggestions, notice, disabled, knownStaff, planFooter, onAdd, onRequestOverride, onRemove, onSetTask, onUseSuggestions, onClear }) {
   const capacityLeft = donorCapacityLeft(options, plan);
-  const suggestedIds = new Set(suggestions.map((s) => s.staffId));
+  // A Manager's suggestions carry no staff id, so each is matched to one person by name and home department (or to nobody)
+  const suggestedIds = suggestedStaffIds(options, suggestions);
   const staffById = new Map();
   options.donors.forEach((donor) => donor.staff.forEach((s) => staffById.set(s.staffId, { ...s, homeCode: donor.code, homeName: donor.name })));
 
@@ -54,14 +55,17 @@ export default function SupportPlanBuilder({ options, plan, suggestions, notice,
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
               <h5 className="text-sm font-semibold text-gray-900">{donor.name}</h5>
               <p className="text-xs text-gray-500">
-                {donor.freeStaff} free of {donor.availableStaff} available · {donor.waitingTasks} waiting
-                {donor.canLend && <span className="font-medium text-gray-700"> · can lend {capacityLeft[donor.code] ?? donor.maxLendable} more</span>}
+                {donorSummaryText(donor)}
+                {donor.canLend === true && Number.isFinite(capacityLeft[donor.code] ?? donor.maxLendable) && (
+                  <span className="font-medium text-gray-700"> · can lend {capacityLeft[donor.code] ?? donor.maxLendable} more</span>
+                )}
               </p>
             </div>
-            {!donor.canLend && (
+            {/* Only when the server says the department cannot lend; a withheld figure (null) is not a "no" */}
+            {donor.canLend === false && (
               <p className="flex items-start gap-1.5 text-xs text-amber-800 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1.5">
                 <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 mt-px shrink-0"><path fillRule="evenodd" d="M8.26 3.1c.75-1.34 2.73-1.34 3.48 0l6.1 10.9c.74 1.33-.22 2.99-1.74 2.99H3.9c-1.52 0-2.48-1.66-1.74-2.99l6.1-10.9zM10 7a1 1 0 00-1 1v3a1 1 0 102 0V8a1 1 0 00-1-1zm0 7.5a1.1 1.1 0 100-2.2 1.1 1.1 0 000 2.2z" clipRule="evenodd" /></svg>
-                <span>{donor.note}{donor.overrideLendable > 0 ? ' You can still add them after acknowledging the staffing risk.' : ''}</span>
+                <span>{donor.note || 'This department cannot lend anyone right now.'}{donor.overrideLendable > 0 ? ' You can still add them after acknowledging the staffing risk.' : ''}</span>
               </p>
             )}
             <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,13.5rem),1fr))] gap-2.5">
@@ -91,7 +95,7 @@ export default function SupportPlanBuilder({ options, plan, suggestions, notice,
                           </p>
                           {inPlan ? <SupportStageBadge stage="selected" title="In your plan, not confirmed" /> : suggested ? <SupportStageBadge stage="recommended" title="Recommended by Taskotel" /> : null}
                         </div>
-                        <p className="text-xs text-gray-500 leading-4">{person.activeTaskCount === 0 ? 'No active task' : `${person.activeTaskCount} active`} · {formatMinutes(person.totalEstimatedDuration)}</p>
+                        <p className="text-xs text-gray-500 leading-4">{personWorkloadText(person)}</p>
                       </div>
                     </div>
                     {blocked && <p className="text-[11px] leading-4 text-amber-800">{blocked}</p>}

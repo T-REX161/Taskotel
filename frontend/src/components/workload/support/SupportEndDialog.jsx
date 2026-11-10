@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { describeEndEffect } from '../../../utils/supportPlan';
+import { RESTRICTED_LABEL, describeEndEffect } from '../../../utils/supportPlan';
 import SupportStageBadge from './SupportStageBadge';
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -20,8 +20,10 @@ const Detail = ({ label, children }) => (
 /**
  * Confirms ending one active support. Nothing changes until "End support" is pressed; Escape and Cancel close it without
  * changes (but not while the request is running). On a failure it stays open and says why.
+ * `view` is the record projection (see recordView): a lending department's Manager sees the person and their own department,
+ * never the receiving department or the task.
  */
-export default function SupportEndDialog({ row, departmentName, status, error, stale, onConfirm, onCancel }) {
+export default function SupportEndDialog({ row, departmentName, status, error, stale, onConfirm, onCancel, view = 'full' }) {
   const dialogRef = useRef(null);
   const cancelRef = useRef(null);
   const previousFocus = useRef(null);
@@ -53,7 +55,8 @@ export default function SupportEndDialog({ row, departmentName, status, error, s
     return () => document.removeEventListener('keydown', onKey);
   }, [onCancel, submitting]);
 
-  const effect = describeEndEffect(row, departmentName);
+  const effect = describeEndEffect(row, departmentName, view);
+  const donorView = view === 'donor';
   const cannotEnd = effect.blocked || stale;
   const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1';
 
@@ -90,10 +93,10 @@ export default function SupportEndDialog({ row, departmentName, status, error, s
           <Detail label="Permanent department">
             {departmentName(row.homeDepartmentCode)} <span className="text-xs text-gray-500">(unchanged)</span>
           </Detail>
-          <Detail label="Helping">{departmentName(row.receivingDepartmentCode)}</Detail>
+          <Detail label="Helping">{donorView ? <span className="text-gray-500">Another department · {RESTRICTED_LABEL.toLowerCase()}</span> : departmentName(row.receivingDepartmentCode)}</Detail>
           <div className="sm:col-span-2 min-w-0">
             <dt className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Assigned task</dt>
-            <dd className="mt-0.5 text-sm text-gray-900 break-words">{row.taskTitle}</dd>
+            <dd className="mt-0.5 text-sm text-gray-900 break-words">{donorView || !row.taskTitle ? <span className="text-gray-500 italic">{RESTRICTED_LABEL}</span> : row.taskTitle}</dd>
           </div>
         </dl>
 

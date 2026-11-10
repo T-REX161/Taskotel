@@ -25,8 +25,10 @@ import {
   initialEndState,
   initialSupportState,
   planSignature,
+  recordView,
   reserveRiskRows,
   supportHistoryView,
+  supportPermissions,
   supportReducer,
 } from '../../utils/supportPlan';
 import SupportStageBadge from './support/SupportStageBadge';
@@ -56,10 +58,23 @@ const Stat = ({ label, value }) => (
  *   1. choose an overloaded department   2. choose staff from other departments   3. choose a task for each person
  *   4. see the workload impact           5. review and explicitly confirm          6. refresh and track until done
  *
- * Nothing changes until the manager confirms; the server re-checks everything at that moment. Skills and shifts are not
+ * Nothing changes until an Admin confirms; the server re-checks everything at that moment. Skills and shifts are not
  * recorded in Taskotel, so suitability is the manager's call. `onChanged` lets the page refresh its own workload data.
+ *
+ * Who sees what (Step 2G-4; the backend is the authority, this only decides what is offered):
+ *   Admin    every department, full figures, confirm, end and archive;
+ *   Manager  their own department as receiver, plan and preview without the lending departments' figures, no confirm,
+ *            end and archive only on the records the server returns to them (those involving their department);
+ *   Staff    nothing: the panel renders nothing (the Workload page also never mounts it for Staff).
  */
-export default function CrossDepartmentSupportPanel({ onChanged }) {
+export default function CrossDepartmentSupportPanel(props) {
+  if (!supportPermissions(getUserRole()).canView) return null;
+  return <SupportPanelContent {...props} />;
+}
+
+function SupportPanelContent({ onChanged }) {
+  const role = getUserRole();
+  const permissions = supportPermissions(role);
   const [state, dispatch] = useReducer(supportReducer, initialSupportState);
   const [endState, endDispatch] = useReducer(endReducer, initialEndState);
   const endInFlight = useRef(false);
@@ -157,6 +172,8 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
   }, [loadNeeds, loadHistory, loadOptions, state.department]);
 
   const handleConfirm = async () => {
+    // Confirmation is Admin-only: a Manager never sends it (the server would refuse it with 403 anyway)
+    if (!permissions.canConfirm) return;
     dispatch({ type: 'CONFIRM_START' });
     try {
       const created = await confirmSupportPlan(buildPlanRequest(state, state.preview.data?.fingerprint));
@@ -232,6 +249,11 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
         <div className="min-w-0">
           <h2 className="text-base sm:text-lg font-bold text-gray-900">Cross-Department Support</h2>
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Lend available staff to an overloaded department until a task is completed.</p>
+          {!permissions.canConfirm && (
+            <p className="text-xs text-gray-500 mt-1">
+              You can plan and preview support for your own department and manage the support records that involve it. Only an Admin can confirm new support, and other departments&apos; staffing figures are not shown to your role.
+            </p>
+          )}
         </div>
         <button
           type="button"
@@ -286,13 +308,13 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
       )}
       {endState.status === 'done' && (
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 flex flex-wrap items-start justify-between gap-2">
-          <p>{describeEndOutcome(endState.result, departmentNames)}</p>
+          <p>{describeEndOutcome(endState.result, departmentNames, recordView(endState.result, role))}</p>
           <button type="button" onClick={() => endDispatch({ type: 'END_DISMISS' })} className="text-xs underline cursor-pointer">Dismiss</button>
         </div>
       )}
       {archiveState.status === 'done' && (
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 flex flex-wrap items-start justify-between gap-2">
-          <p>{describeArchiveOutcome(archiveState.row)}</p>
+          <p>{describeArchiveOutcome(archiveState.row, recordView(archiveState.row, role))}</p>
           <button type="button" onClick={() => archiveDispatch({ type: 'ARCHIVE_DISMISS' })} className="text-xs underline cursor-pointer">Dismiss</button>
         </div>
       )}
@@ -394,7 +416,9 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
                         receivingName={receiving.name}
                         canReview={canReview(state)}
                         empty={state.plan.length === 0}
-                        onReview={() => dispatch({ type: 'OPEN_REVIEW' })}
+                        canConfirm={permissions.canConfirm}
+                        donorFiguresRestricted={role === 'MANAGER'}
+                        onReview={() => dispatch({ type: 'OPEN_REVIEW', canConfirm: permissions.canConfirm })}
                         onAcknowledge={() => dispatch({ type: 'OPEN_RESERVE_PROMPT', options: options.data, prompt: { kind: 'plan' } })}
                       />
                     )}
@@ -419,6 +443,7 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
           <SupportHistory
             history={history}
             departmentName={departmentNames}
+            role={role}
             canEnd={canEnd}
             onEnd={(row) => endDispatch({ type: 'END_OPEN', row })}
             endingId={endState.status === 'submitting' ? endState.row?.id : null}
@@ -437,6 +462,7 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
             <SupportHistory
               history={history}
               departmentName={departmentNames}
+              role={role}
               historyOnly
               canEnd={canEnd}
               onArchive={(row) => archiveDispatch({ type: 'ARCHIVE_OPEN', row })}
@@ -450,6 +476,7 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
         <SupportEndDialog
           row={endState.row}
           departmentName={departmentNames}
+          view={recordView(endState.row, role)}
           status={endState.status}
           error={endState.error}
           stale={endState.stale}
@@ -462,6 +489,7 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
         <SupportArchiveDialog
           row={archiveState.row}
           departmentName={departmentNames}
+          view={recordView(archiveState.row, role)}
           status={archiveState.status}
           error={archiveState.error}
           stale={archiveState.stale}
@@ -488,7 +516,7 @@ export default function CrossDepartmentSupportPanel({ onChanged }) {
         />
       )}
 
-      {confirming && state.preview.data && (
+      {confirming && state.preview.data && permissions.canConfirm && (
         <SupportConfirmDialog
           preview={state.preview.data}
           receivingName={receiving?.name || ''}

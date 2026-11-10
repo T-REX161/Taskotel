@@ -1,5 +1,9 @@
 import React from 'react';
-import { beforeAfter, describeProblems, formatMinutes } from '../../../utils/supportPlan';
+import { CONFIRM_ADMIN_ONLY, RESTRICTED_LABEL, beforeAfter, describeProblems, formatMinutes } from '../../../utils/supportPlan';
+
+/** Donor impact rows the server actually sent with figures (an Admin's preview); a Manager's preview sends none. */
+const donorsWithFigures = (donors) =>
+  (Array.isArray(donors) ? donors : []).filter((d) => Number.isFinite(d?.before?.freeStaff) && Number.isFinite(d?.after?.freeStaff));
 
 const Row = ({ label, before, after, format = String, emphasize = false }) => {
   const changed = before !== after;
@@ -42,10 +46,13 @@ const Headline = ({ label, value, hint }) => (
 /**
  * Step 4 and 5: the live preview of the plan from the server, and the one action that moves on to confirmation. It sits at
  * the foot of the plan panel. A preview is a calculation only: nothing has been assigned until the dialog is confirmed.
+ * `canConfirm` is false for a Manager: confirmation is Admin-only, so the action is replaced by an explanation (the server
+ * refuses a Manager's confirmation in any case). `donorFiguresRestricted` says the lending departments' figures are withheld
+ * from this viewer, so the preview says so instead of showing nothing or a made-up number.
  */
-export default function SupportImpactPreview({ preview, receivingName, canReview, empty = false, onReview, onAcknowledge }) {
+export default function SupportImpactPreview({ preview, receivingName, canReview, empty = false, onReview, onAcknowledge, canConfirm = true, donorFiguresRestricted = false }) {
   const { status, data, error } = preview;
-  const button = (
+  const button = canConfirm ? (
     <button
       type="button"
       disabled={!canReview}
@@ -54,7 +61,12 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
     >
       Review &amp; confirm
     </button>
+  ) : (
+    <p role="note" aria-label="Confirmation is Admin-only" className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-600">
+      {CONFIRM_ADMIN_ONLY}
+    </p>
   );
+  const donors = donorsWithFigures(data?.donors);
 
   if (empty) {
     return (
@@ -80,9 +92,10 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
               <ul className="list-disc pl-4 mt-1 space-y-0.5 marker:text-amber-600">
                 {describeProblems(data.problems).map((line) => (<li key={line}>{line}</li>))}
               </ul>
-              {data.canOverrideReserve === true && (
+              {/* Acknowledging only matters for a plan that can be confirmed, which is Admin-only (the server sends false to a Manager) */}
+              {data.canOverrideReserve === true && canConfirm && (
                 <div className="mt-2 pt-2 border-t border-amber-200 space-y-1.5">
-                  <p>Only the department&apos;s reserve blocks this plan. As a manager you can acknowledge the staffing risk and continue.</p>
+                  <p>Only the department&apos;s reserve blocks this plan. You can acknowledge the staffing risk and continue.</p>
                   <button
                     type="button"
                     onClick={onAcknowledge}
@@ -107,7 +120,7 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
               <dl className="space-y-1.5">
                 <Headline label={`${receivingName} waiting tasks`} value={beforeAfter(data.receiving.before.waitingTasks, data.receiving.after.waitingTasks)} />
                 <Headline label={`${receivingName} uncovered`} value={beforeAfter(data.receiving.before.uncoveredTasks, data.receiving.after.uncoveredTasks)} />
-                {data.donors.map((donor) => (
+                {donors.map((donor) => (
                   <Headline
                     key={donor.code}
                     label={`${donor.name} free staff`}
@@ -115,12 +128,15 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
                     value={beforeAfter(donor.before.freeStaff, donor.after.freeStaff)}
                   />
                 ))}
+                {donorFiguresRestricted && donors.length === 0 && (data.items?.length || 0) > 0 && (
+                  <Headline label="Lending departments' figures" value={RESTRICTED_LABEL} hint="The server checks their reserve when the plan is previewed and confirmed." />
+                )}
               </dl>
               <details className="text-xs">
                 <summary className="cursor-pointer font-medium text-gray-600 w-fit rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Full breakdown</summary>
                 <div className="mt-2 space-y-2">
                   <ImpactTable impact={data.receiving} title={`${receivingName} (receiving)`} note={`${data.receiving.lending} helper${data.receiving.lending === 1 ? '' : 's'}; their task minutes count here`} />
-                  {data.donors.map((donor) => (
+                  {donors.map((donor) => (
                     <ImpactTable
                       key={donor.code}
                       impact={donor}
