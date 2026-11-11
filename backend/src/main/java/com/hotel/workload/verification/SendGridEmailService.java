@@ -218,6 +218,7 @@ public class SendGridEmailService implements EmailService {
     public static final String EMAIL_CHANGE_SUBJECT = "Taskotel - Confirm Your New Email Address";
     public static final String EMAIL_CHANGE_REQUESTED_SUBJECT = "Taskotel - Email Address Change Requested";
     public static final String EMAIL_CHANGE_COMPLETED_SUBJECT = "Taskotel - Your Email Address Was Changed";
+    public static final String EMAIL_CHANGE_NOT_STARTED_SUBJECT = "Taskotel - Email Address Change Could Not Proceed";
     public static final String EMAIL_ADDRESS_IN_USE_SUBJECT = "Taskotel - Email Address Cannot Be Used";
 
     @Override
@@ -289,6 +290,21 @@ public class SendGridEmailService implements EmailService {
         String text = "Hello,\n\n" + what + "\n\n" + advice + "\n\nRegards,\nTaskotel Team";
         String html = "<p>Hello,</p><p>" + escape(what) + "</p><p>" + advice + "</p><p>Regards,<br>Taskotel Team</p>";
         dispatch(toOldEmail, EMAIL_CHANGE_REQUESTED_SUBJECT, text, html, "email change notice");
+    }
+
+    /** Text of the notice for a proposed address that cannot be used (public so tests can pin the exact wording). */
+    public static String unavailableNoticeText(String maskedProposedEmail) {
+        return "An administrator or manager asked to change the email address on your Taskotel account to " + maskedProposedEmail
+                + ", but the request could not proceed because that address cannot be used. Your email address has not changed, and no change is waiting for you to confirm.";
+    }
+
+    @Override
+    public void sendAdministratorEmailChangeUnavailableNotice(String toOldEmail, String maskedProposedEmail) {
+        String what = unavailableNoticeText(maskedProposedEmail);
+        String advice = "If you do not recognise this, change your password and contact your administrator.";
+        String text = "Hello,\n\n" + what + "\n\n" + advice + "\n\nRegards,\nTaskotel Team";
+        String html = "<p>Hello,</p><p>" + escape(what) + "</p><p>" + advice + "</p><p>Regards,<br>Taskotel Team</p>";
+        dispatch(toOldEmail, EMAIL_CHANGE_NOT_STARTED_SUBJECT, text, html, "email change not started notice");
     }
 
     private static String escape(String value) {

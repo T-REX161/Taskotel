@@ -24,16 +24,18 @@ public class EmailChangeController {
 
     private final EmailChangeService service;
     private final ProfilePictureService profiles;
+    private final com.hotel.workload.security.ClientAddressResolver clientAddress;
 
-    public EmailChangeController(EmailChangeService service, ProfilePictureService profiles) {
+    public EmailChangeController(EmailChangeService service, ProfilePictureService profiles, com.hotel.workload.security.ClientAddressResolver clientAddress) {
         this.service = service;
+        this.clientAddress = clientAddress;
         this.profiles = profiles;
     }
 
     /** Sends a code to the new address (and again for a resend). Answers with the masked address and the timings, never the code. */
     @PostMapping("/request")
     public EmailChangeService.CodeSent request(@RequestBody NewEmailBody body, Authentication authentication, HttpServletRequest http) {
-        return service.request(nameOf(authentication), http.getRemoteAddr(), body == null ? null : body.newEmail(),
+        return service.request(nameOf(authentication), clientAddress.resolve(http), body == null ? null : body.newEmail(),
                 body == null ? null : body.currentPassword());
     }
 
@@ -42,7 +44,7 @@ public class EmailChangeController {
     public ProfileDto confirm(@RequestBody ConfirmBody body, Authentication authentication, HttpServletRequest http) {
         String username = nameOf(authentication);
         try {
-            service.confirm(username, http.getRemoteAddr(), body == null ? null : body.code());
+            service.confirm(username, clientAddress.resolve(http), body == null ? null : body.code());
         } catch (DataIntegrityViolationException e) {
             // The database refused the switch (the address was taken at the last moment): it was rolled back, the old email stays
             throw new ResponseStatusException(HttpStatus.CONFLICT, EmailChangeService.IN_USE);

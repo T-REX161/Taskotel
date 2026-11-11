@@ -57,6 +57,12 @@ public interface EmailService {
     }
 
     /**
+     * Sent to the CURRENT address when an Admin or Manager proposed an address that cannot be used. Unlike {@link #sendAdministratorEmailChangeNotice}
+     * it must not say a change is waiting: nothing was started and the active address has not changed. It names no account or person.
+     */
+    void sendAdministratorEmailChangeUnavailableNotice(String toOldEmail, String maskedProposedEmail);
+
+    /**
      * Checks if the email service is properly configured to send emails.
      *
      * @return true if configured, false otherwise

@@ -16,16 +16,18 @@ import java.util.Map;
 public class PasswordChangeController {
 
     private final PasswordChangeService service;
+    private final ClientAddressResolver clientAddress;
 
-    public PasswordChangeController(PasswordChangeService service) {
+    public PasswordChangeController(PasswordChangeService service, ClientAddressResolver clientAddress) {
         this.service = service;
+        this.clientAddress = clientAddress;
     }
 
     @PutMapping("/password")
     public ResponseEntity<Map<String, String>> changePassword(@RequestBody ChangePasswordRequest request, Authentication authentication,
                                                               HttpServletRequest http) {
         // Whose password: only the authenticated account. The body has no user field, and nothing in it could name one.
-        service.change(authentication == null ? null : authentication.getName(), http.getRemoteAddr(), request);
+        service.change(authentication == null ? null : authentication.getName(), clientAddress.resolve(http), request);
         return ResponseEntity.ok(Map.of("message", "Your password has been changed."));
     }
 }

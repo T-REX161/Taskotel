@@ -26,6 +26,12 @@ import java.util.Map;
  *   <li>account (default 30): slows guessing against one account that is spread over many clients, at the cost that such an
  *       attack can also delay the real owner for up to one window.</li>
  * </ul>
+ * <p><b>Capacity.</b> A limiter tracks at most {@value #DEFAULT_MAX_KEYS} keys (a hard bound on its memory, per limiter instance; the
+ * limiters do not share a map). Keys that have aged out are removed first, so ordinary traffic never reaches the bound. When the bound is
+ * reached, an attempt that would need a NEW key is refused (429, retry after {@value #SATURATED_RETRY_SECONDS} seconds) and nothing is
+ * stored; an attempt whose keys are all already tracked is judged exactly as before, so counters that are active are never evicted or
+ * reset to make room. The price is that a flood of distinct clients or accounts can make a limiter turn away other NEW keys until the
+ * window passes: a bounded, temporary refusal chosen over letting memory grow without limit or letting an attacker push a real counter out.
  * A successful sign-in removes its own attempt and clears the client + account key. Nothing is locked permanently: attempts simply
  * age out of the window, which is also the recovery. The check and the count happen in one step under a lock, so simultaneous
  * attempts cannot all slip through before the first is counted.
@@ -35,6 +41,11 @@ public class AttemptLimiter {
     private static final Logger logger = LoggerFactory.getLogger(AttemptLimiter.class);
     private static final int MAX_ACCOUNT_KEY_LENGTH = 128;
     private static final long SWEEP_EVERY_MILLIS = 60_000;
+    /** Throttle for the extra clean-up done when the map is full (it scans every key, so it must not run on every refused request). */
+    private static final long SATURATED_SWEEP_MILLIS = 1_000;
+    /** Tracked keys per limiter instance (about 50,000 x a few hundred bytes: a few tens of megabytes at the very most). */
+    public static final int DEFAULT_MAX_KEYS = 50_000;
+    public static final long SATURATED_RETRY_SECONDS = 60;
 
     /** Outcome of {@link #begin}: whether the attempt may go on, and how long to wait if it may not. */
     public record Decision(boolean allowed, long retryAfterSeconds) {}
@@ -47,11 +58,18 @@ public class AttemptLimiter {
     private final int maxPerClientAndAccount;
     private final int maxPerClient;
     private final int maxPerAccount;
+    private final int maxKeys;
     private long lastSweep;
 
     private final String name;
 
     protected AttemptLimiter(String name, Clock clock, boolean enabled, long windowSeconds, int maxPerClientAndAccount, int maxPerClient, int maxPerAccount) {
+        this(name, clock, enabled, windowSeconds, maxPerClientAndAccount, maxPerClient, maxPerAccount, DEFAULT_MAX_KEYS);
+    }
+
+    protected AttemptLimiter(String name, Clock clock, boolean enabled, long windowSeconds, int maxPerClientAndAccount, int maxPerClient, int maxPerAccount, int maxKeys) {
+        if (maxKeys < 3) throw new IllegalArgumentException("A limiter needs room for at least the three keys of one attempt");
+        this.maxKeys = maxKeys;
         this.name = name;
         this.clock = clock;
         this.enabled = enabled;
@@ -80,6 +98,17 @@ public class AttemptLimiter {
             if (retryAfterMillis > 0) {
                 logger.warn("{} attempts from client {} are rate limited for {} more seconds", name, client, (retryAfterMillis + 999) / 1000);
                 return new Decision(false, Math.max(1, (retryAfterMillis + 999) / 1000));
+            }
+            // Capacity: only keys that are not tracked yet need room. Everything above (the limits of tracked keys) has already been applied.
+            if (attempts.size() + untracked(keys) > maxKeys) {
+                if (now - lastSweep >= SATURATED_SWEEP_MILLIS) {
+                    lastSweep = now;
+                    removeExpired(now);
+                }
+                if (attempts.size() + untracked(keys) > maxKeys) {
+                    logger.warn("{} limiter is at its capacity of {} tracked keys; a new client/account is refused for now", name, maxKeys);
+                    return new Decision(false, SATURATED_RETRY_SECONDS);
+                }
             }
             for (String key : keys) attempts.computeIfAbsent(key, k -> new ArrayDeque<>()).addLast(now);
             return new Decision(true, 0);
@@ -125,6 +154,19 @@ public class AttemptLimiter {
     private void sweep(long now) {
         if (now - lastSweep < SWEEP_EVERY_MILLIS) return;
         lastSweep = now;
+        removeExpired(now);
+    }
+
+    /** How many of these keys are not in the map yet (the three keys of one attempt are always distinct). */
+    private int untracked(String[] keys) {
+        int missing = 0;
+        for (String key : keys) {
+            if (!attempts.containsKey(key)) missing++;
+        }
+        return missing;
+    }
+
+    private void removeExpired(long now) {
         attempts.keySet().removeIf(key -> {
             Deque<Long> times = attempts.get(key);
             return times == null || times.isEmpty() || now - times.peekLast() >= windowMillis;

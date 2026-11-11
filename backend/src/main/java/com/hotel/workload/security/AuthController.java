@@ -15,10 +15,12 @@ public class AuthController {
     private final PasswordResetRequestLimiter resetRequestLimiter;
     private final PasswordResetConfirmLimiter resetConfirmLimiter;
     private final CredentialSetupLimiter credentialSetupLimiter;
+    private final ClientAddressResolver clientAddress;
 
     public AuthController(AuthService authService, PasswordResetService passwordResetService, LoginAttemptLimiter loginAttemptLimiter,
                           PasswordResetRequestLimiter resetRequestLimiter, PasswordResetConfirmLimiter resetConfirmLimiter,
-                          CredentialSetupLimiter credentialSetupLimiter) {
+                          CredentialSetupLimiter credentialSetupLimiter, ClientAddressResolver clientAddress) {
+        this.clientAddress = clientAddress;
         this.authService = authService;
         this.passwordResetService = passwordResetService;
         this.loginAttemptLimiter = loginAttemptLimiter;
@@ -27,9 +29,9 @@ public class AuthController {
         this.credentialSetupLimiter = credentialSetupLimiter;
     }
 
-    /** The client is the connection's own address; forwarded headers are not trusted here because any caller could set them. */
-    private static String client(jakarta.servlet.http.HttpServletRequest http) {
-        return http.getRemoteAddr();
+    /** The client identity for the limiters, from the one shared resolver (direct remote address unless a trusted proxy is configured). */
+    private String client(jakarta.servlet.http.HttpServletRequest http) {
+        return clientAddress.resolve(http);
     }
 
     /** A 429 with a generic message and Retry-After. It says nothing about the account, email, token or password. */

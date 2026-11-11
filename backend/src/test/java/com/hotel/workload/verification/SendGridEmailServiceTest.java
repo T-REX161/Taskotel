@@ -354,4 +354,42 @@ public class SendGridEmailServiceTest {
         assertTrue(SendGridEmailService.VERIFICATION_SUBJECT.startsWith("Taskotel"), "Verification subject must start with Taskotel");
         assertTrue(SendGridEmailService.PASSWORD_RESET_SUBJECT.startsWith("Taskotel"), "Password reset subject must start with Taskotel");
     }
+
+    private static String sentBody(java.util.function.Consumer<SendGridEmailService> send) throws IOException {
+        SendGrid mockSendGrid = mock(SendGrid.class);
+        Response ok = new Response();
+        ok.setStatusCode(202);
+        when(mockSendGrid.api(any(Request.class))).thenReturn(ok);
+        send.accept(new SendGridEmailService(new SendGridProperties("SG.fake-test-key", "noreply@hotelwb.com", "Taskotel"), mockSendGrid));
+        ArgumentCaptor<Request> captor = ArgumentCaptor.forClass(Request.class);
+        verify(mockSendGrid, times(1)).api(captor.capture());
+        return captor.getValue().getBody();
+    }
+
+    @Test
+    @DisplayName("Old-address notice, address in use: says the request could not proceed and the email is unchanged; never says a change is waiting or pending")
+    public void unavailableNoticeIsTruthful() throws IOException {
+        String body = sentBody(s -> s.sendAdministratorEmailChangeUnavailableNotice("holder@hotel.com", "ne***@new.test"));
+        String sentence = "An administrator or manager asked to change the email address on your Taskotel account to ne***@new.test, "
+                + "but the request could not proceed because that address cannot be used. "
+                + "Your email address has not changed, and no change is waiting for you to confirm.";
+        assertEquals(sentence, SendGridEmailService.unavailableNoticeText("ne***@new.test"));
+        assertTrue(body.contains(sentence), "the exact wording is in both the plain text and the HTML");
+        assertTrue(body.contains("Taskotel - Email Address Change Could Not Proceed"));
+        assertTrue(body.contains("holder@hotel.com"), "sent to the current address");
+        String lower = body.toLowerCase();
+        for (String misleading : new String[] {"nothing has changed yet", "only happens if you confirm", "code sent to the new address", "requested", "pending", "scheduled", "initiated", "already registered", "already in use"}) {
+            assertFalse(lower.contains(misleading), "must not contain: " + misleading);
+        }
+    }
+
+    @Test
+    @DisplayName("Old-address notice, address available: says nothing has changed yet and that the holder must confirm it themselves")
+    public void availableNoticeIsTruthful() throws IOException {
+        String body = sentBody(s -> s.sendAdministratorEmailChangeNotice("holder@hotel.com", "ne***@new.test"));
+        assertTrue(body.contains("An administrator or manager asked to change the email address on your Taskotel account to ne***@new.test. "
+                + "Nothing has changed yet: the change only happens if you confirm it yourself with a code sent to the new address."));
+        assertTrue(body.contains("Taskotel - Email Address Change Requested"));
+        assertFalse(body.contains("could not proceed"));
+    }
 }

@@ -37,6 +37,9 @@ export const ROUTE_ACCESS = Object.freeze([
   { path: '/departments', roles: MANAGEMENT_ROLES },
   { path: '/users', roles: ADMIN_ONLY },
   { path: '/profile', roles: ALL_ROLES },
+  // General settings (personal preferences, notification choices) are for every signed-in role; the site-wide System Settings are Admin only
+  { path: '/settings', roles: ALL_ROLES },
+  { path: '/settings/system', roles: ADMIN_ONLY },
 ]);
 
 export const ACCESS = Object.freeze({ all: ALL_ROLES, management: MANAGEMENT_ROLES, adminOnly: ADMIN_ONLY });
@@ -71,7 +74,7 @@ export function navigationFor(role) {
   const known = normalizeRole(role);
   if (known === null) return [];
   const link = (name, path, label = name) => ({ name, label, path });
-  const system = { title: 'SYSTEM', items: [link('Profile', '/profile')] };
+  const system = { title: 'SYSTEM', items: [link('Profile', '/profile'), link('Settings', '/settings')] };
 
   if (known === ROLES.STAFF) {
     return [

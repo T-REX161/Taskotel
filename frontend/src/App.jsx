@@ -13,6 +13,7 @@ import WorkloadPage from './pages/WorkloadPage';
 import DepartmentsPage from './pages/DepartmentsPage';
 import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
+import SettingsPage, { SystemSettingsPage } from './pages/SettingsPage';
 import { RequireSession, RequireRouteAccess } from './components/auth/RouteGuards';
 
 function App() {
@@ -36,6 +37,8 @@ function App() {
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/system" element={<SystemSettingsPage />} />
             <Route path="*" element={<Dashboard />} />
           </Route>
         </Route>

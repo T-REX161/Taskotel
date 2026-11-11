@@ -11,9 +11,11 @@ import java.util.List;
 public class StaffController {
 
     private final StaffService staffService;
+    private final com.hotel.workload.security.ClientAddressResolver clientAddress;
 
-    public StaffController(StaffService staffService) {
+    public StaffController(StaffService staffService, com.hotel.workload.security.ClientAddressResolver clientAddress) {
         this.staffService = staffService;
+        this.clientAddress = clientAddress;
     }
 
     @GetMapping
@@ -52,7 +54,7 @@ public class StaffController {
             @org.springframework.web.bind.annotation.PathVariable java.util.UUID id,
             @org.springframework.web.bind.annotation.RequestBody LoginEmailChangeBody body,
             jakarta.servlet.http.HttpServletRequest http) {
-        return ResponseEntity.ok(staffService.requestLoginEmailChange(id, body == null ? null : body.newEmail(), http.getRemoteAddr()));
+        return ResponseEntity.ok(staffService.requestLoginEmailChange(id, body == null ? null : body.newEmail(), clientAddress.resolve(http)));
     }
 
     @org.springframework.web.bind.annotation.PatchMapping("/{id}/deactivate")

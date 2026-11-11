@@ -31,21 +31,22 @@ public class EmailVerificationController {
     private final VerificationCodeService verificationCodeService;
     private final VerificationSendLimiter sendLimiter;
     private final VerificationAttemptLimiter attemptLimiter;
+    private final com.hotel.workload.security.ClientAddressResolver clientAddress;
 
     public EmailVerificationController(VerificationCodeService verificationCodeService, VerificationSendLimiter sendLimiter,
-                                       VerificationAttemptLimiter attemptLimiter) {
+                                       VerificationAttemptLimiter attemptLimiter, com.hotel.workload.security.ClientAddressResolver clientAddress) {
+        this.clientAddress = clientAddress;
         this.verificationCodeService = verificationCodeService;
         this.sendLimiter = sendLimiter;
         this.attemptLimiter = attemptLimiter;
     }
 
     /**
-     * The client is the connection's own address. Forwarded headers (X-Forwarded-For and the like) are deliberately NOT read: any caller can
-     * set them, so trusting them would let an attacker choose which client the limit applies to. Behind a reverse proxy this address is the
-     * proxy's, so every user would share one client allowance until a trusted-proxy configuration is explicitly set up.
+     * The client comes from the shared {@link com.hotel.workload.security.ClientAddressResolver}: the connection's own address, and forwarded
+     * headers only from a proxy that has been explicitly configured as trusted (none by default), because any caller can set them.
      */
-    private static String client(HttpServletRequest http) {
-        return http.getRemoteAddr();
+    private String client(HttpServletRequest http) {
+        return clientAddress.resolve(http);
     }
 
     /** A 429 with one fixed message and Retry-After; it says nothing about the account. */

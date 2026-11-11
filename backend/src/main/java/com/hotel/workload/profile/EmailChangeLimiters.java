@@ -55,7 +55,7 @@ public final class EmailChangeLimiters {
     }
 
     /**
-     * Messages sent to one PROPOSED address by the Admin/Manager-initiated email change: 3 per address per hour, counted over every
+     * Requests naming one PROPOSED address in the Admin/Manager-initiated email change: 3 requests per address per hour (each accepted request attempts two email sends, so up to 6 sends), counted over every
      * client and every target account (and for addresses that are in use as well as free ones). Nobody should need to send more than a
      * try and a resend or two to one mailbox in an hour, and this stops the endpoint from being used to mail-bomb an address from many
      * accounts or clients. It is keyed by a salted SHA-256 of the normalised address, never the address itself, so the address is not

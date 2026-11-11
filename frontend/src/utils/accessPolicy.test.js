@@ -7,16 +7,16 @@ const paths = (role) => navigationFor(role).flatMap((group) => group.items.map((
 
 describe('role-aware navigation', () => {
   it('ADMIN sees every screen, including Users', () => {
-    assert.deepEqual(labels('ADMIN'), ['Dashboard', 'Staff', 'Tasks', 'Assignments', 'Workload', 'Departments', 'Users', 'Profile']);
+    assert.deepEqual(labels('ADMIN'), ['Dashboard', 'Staff', 'Tasks', 'Assignments', 'Workload', 'Departments', 'Users', 'Profile', 'Settings']);
   });
 
   it('MANAGER sees the management screens but not Users', () => {
-    assert.deepEqual(labels('MANAGER'), ['Dashboard', 'Staff', 'Tasks', 'Assignments', 'Workload', 'Departments', 'Profile']);
+    assert.deepEqual(labels('MANAGER'), ['Dashboard', 'Staff', 'Tasks', 'Assignments', 'Workload', 'Departments', 'Profile', 'Settings']);
     assert.ok(!paths('MANAGER').includes('/users'));
   });
 
   it('STAFF sees only Dashboard, My Tasks, My Workload and Profile', () => {
-    assert.deepEqual(labels('STAFF'), ['Dashboard', 'My Tasks', 'My Workload', 'Profile']);
+    assert.deepEqual(labels('STAFF'), ['Dashboard', 'My Tasks', 'My Workload', 'Profile', 'Settings']);
     for (const hidden of ['/staff', '/assignments', '/departments', '/users', '/tasks/create']) {
       assert.ok(!paths('STAFF').includes(hidden), `${hidden} is not offered to Staff`);
     }
@@ -37,16 +37,29 @@ describe('role-aware navigation', () => {
   });
 });
 
-describe('Settings is out of the Stage 2 scope', () => {
-  it('no role is offered a Settings link', () => {
+describe('Settings access: general for everyone, system settings for Admin only', () => {
+  it('every role is offered the Settings link, to the general page, and never a link to the system settings', () => {
     for (const role of ['ADMIN', 'MANAGER', 'STAFF']) {
-      assert.ok(!labels(role).includes('Settings'), role);
-      assert.ok(!paths(role).includes('/settings'), role);
+      assert.ok(labels(role).includes('Settings'), role);
+      assert.ok(paths(role).includes('/settings'), role);
+      assert.ok(!paths(role).includes('/settings/system'), `${role}: the system settings are reached from inside the page, not the sidebar`);
     }
   });
 
-  it('the access table has no rule for /settings, so it is not a protected destination for any role', () => {
-    assert.ok(!ROUTE_ACCESS.some((rule) => rule.path.startsWith('/settings')));
+  it('the general Settings page is open to all three roles', () => {
+    for (const role of ['ADMIN', 'MANAGER', 'STAFF']) assert.ok(canAccess(role, '/settings'), role);
+  });
+
+  it('the system settings are open to ADMIN only, including paths below them and variant spellings', () => {
+    assert.ok(canAccess('ADMIN', '/settings/system'));
+    for (const role of ['MANAGER', 'STAFF']) {
+      for (const p of ['/settings/system', '/settings/system/', '/SETTINGS/SYSTEM', '/settings/system?x=1', '/settings/system/rules', '/settings/system#a']) assert.equal(canAccess(role, p), false, `${role} ${p}`);
+    }
+    for (const role of [null, undefined, '', 'admin', 'ROOT']) assert.equal(canAccess(role, '/settings'), false, String(role));
+  });
+
+  it('the table has exactly the two settings rules', () => {
+    assert.deepEqual(ROUTE_ACCESS.filter((rule) => rule.path.startsWith('/settings')).map((rule) => [rule.path, [...rule.roles]]), [['/settings', ['ADMIN', 'MANAGER', 'STAFF']], ['/settings/system', ['ADMIN']]]);
   });
 });
 

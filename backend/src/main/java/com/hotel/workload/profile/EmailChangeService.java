@@ -114,7 +114,7 @@ public class EmailChangeService {
      * <p>The answer does not depend on whether the new address already belongs to another account (so a Manager outside that account's
      * department cannot use it to probe addresses). If it does, a harmless "cannot be used" notice goes to that address in place of the code
      * and the current address is told as usual, so both cases make exactly two sends; but nothing at all is stored, so an existing pending
-     * request (and its code) is left exactly as it was. Message counts per proposed address are limited across all clients and accounts.
+     * request (and its code) is left exactly as it was. Requests per proposed address are limited across all clients and accounts.
      */
     @Transactional
     public CodeSent requestForAccount(String targetUsername, String client, String newEmail) {
@@ -126,7 +126,7 @@ public class EmailChangeService {
         if (email == null) throw bad(INVALID_EMAIL);
         if (email.equalsIgnoreCase(user.getEmail())) throw bad(ACCOUNT_SAME_EMAIL);
 
-        // Two limits, both charged before anything is sent or stored: this client against this target account, and every message to this
+        // Two limits, both charged before anything is sent or stored: this client against this target account, and every request for this
         // proposed address (whoever asks, whichever account it is for). A refusal changes nothing, so it cannot disturb a pending request.
         AttemptLimiter.Decision decision = initiateLimiter.begin(client, targetUsername);
         if (!decision.allowed()) throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, TOO_MANY);
@@ -151,7 +151,12 @@ public class EmailChangeService {
             emailService.sendAdministratorEmailChangeVerificationEmail(email, code); // throws if it cannot be sent: nothing is stored then
         }
         try {
-            emailService.sendAdministratorEmailChangeNotice(user.getEmail(), mask(email));
+            // The notice must be true for the path taken: a change is waiting (free address) or it could not proceed (in use)
+            if (taken) {
+                emailService.sendAdministratorEmailChangeUnavailableNotice(user.getEmail(), mask(email));
+            } else {
+                emailService.sendAdministratorEmailChangeNotice(user.getEmail(), mask(email));
+            }
         } catch (EmailSendingException e) {
             log.warn("Could not send the email change notice; the change was not started");
             throw e;

@@ -128,12 +128,31 @@ describe('role access to screens', () => {
     for (const p of ['/', '/dashboard', '/tasks', '/workload', '/profile']) assert.ok(renderApp(p).includes(`SCREEN ${p}`), p);
   });
 
-  it('/settings is not a destination for any role: it falls through to the existing catch-all (the dashboard), with no redirect and no Access Denied', () => {
+  it('the general Settings page opens for ADMIN, MANAGER and STAFF: no redirect and no Access Denied', () => {
     for (const role of ['ADMIN', 'MANAGER', 'STAFF']) {
       asRole(role);
       const html = renderApp('/settings');
-      assert.ok(html.includes('SCREEN *') && !html.includes('Access denied') && !html.includes('SCREEN /settings'), role);
+      assert.ok(html.includes('SCREEN /settings') && !html.includes('Access denied') && !html.includes('LOGIN PAGE'), role);
     }
+  });
+
+  it('the System Settings open for ADMIN; MANAGER and STAFF are shown Access Denied and the screen is not rendered', () => {
+    asRole('ADMIN');
+    assert.ok(renderApp('/settings/system').includes('SCREEN /settings/system'));
+    for (const role of ['MANAGER', 'STAFF']) {
+      asRole(role);
+      for (const p of ['/settings/system', '/settings/system/', '/SETTINGS/SYSTEM']) {
+        const html = renderApp(p);
+        assert.ok(html.includes('Access denied') && !html.includes('SCREEN /settings/system') && html.includes('data-shell'), `${role} ${p}`);
+      }
+    }
+  });
+
+  it('nobody signed out, or with a broken role, reaches either settings page', () => {
+    stubStorage({});
+    for (const p of ['/settings', '/settings/system']) assert.ok(!renderApp(p).includes('SCREEN'), p);
+    asRole('SUPERUSER');
+    for (const p of ['/settings', '/settings/system']) assert.ok(!renderApp(p).includes('SCREEN'), p);
   });
 
   it('the Access Denied page links back to the dashboard, which every role may open (no loop)', () => {
@@ -176,9 +195,19 @@ describe('the application actually uses the guards', () => {
     }
   });
 
-  it('App has no /settings route and does not import the Settings page (the page file itself is kept)', () => {
-    assert.ok(!app.includes('path="/settings"') && !app.includes('SettingsPage'));
+  it('App routes /settings (general) and /settings/system (Admin only) inside the guarded block, and keeps the dashboard fallback', () => {
+    assert.ok(app.includes('<Route path="/settings" element={<SettingsPage />} />') && app.includes('<Route path="/settings/system" element={<SystemSettingsPage />} />'));
+    const guarded = app.indexOf('<RequireRouteAccess />');
+    assert.ok(app.indexOf('path="/settings"') > guarded && app.indexOf('path="/settings/system"') > guarded);
     assert.ok(app.includes('<Route path="*" element={<Dashboard />} />'), 'the dashboard fallback is intact');
+  });
+
+  it('the Settings page shows the System Settings link only from the shared access table, and the system section lives only in SystemSettingsPage', () => {
+    const page = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'pages', 'SettingsPage.jsx'), 'utf8').replace(/\r\n/g, '\n');
+    const general = page.slice(0, page.indexOf('export function SystemSettingsPage'));
+    assert.ok(general.includes("canAccess(getUserRole(), '/settings/system')") && general.includes('{showSystemLink && ('));
+    assert.ok(!general.includes('Workload Balancing Rules') && !general.includes('Auto-Balancing Trigger'), 'no system setting is in the general page');
+    assert.ok(page.slice(page.indexOf('export function SystemSettingsPage')).includes('Workload Balancing Rules'));
   });
 
   it('every screen in the access table has a route in App, so none is left unguarded or unreachable', () => {

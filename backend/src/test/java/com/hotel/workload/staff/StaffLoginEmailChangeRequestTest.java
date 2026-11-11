@@ -453,7 +453,7 @@ public class StaffLoginEmailChangeRequestTest {
         reset(emailService);
         when(emailService.isConfigured()).thenReturn(true);
         MvcResult takenResult = initiate(manager, holderStaff, taken);
-        assertEquals(List.of("sendEmailAddressInUseNotice", "sendAdministratorEmailChangeNotice"), sends(), "in use: the harmless notice and the old-address notice, no code");
+        assertEquals(List.of("sendEmailAddressInUseNotice", "sendAdministratorEmailChangeUnavailableNotice"), sends(), "in use: the harmless notice and the old-address 'could not proceed' notice, no code");
 
         assertEquals(freeResult.getResponse().getStatus(), takenResult.getResponse().getStatus());
         assertEquals(200, takenResult.getResponse().getStatus());
@@ -468,7 +468,8 @@ public class StaffLoginEmailChangeRequestTest {
         withStaffRecord(other, TestDepartments.HOUSEKEEPING);
         initiate(admin, holderStaff, other.getEmail());
         verify(emailService).sendEmailAddressInUseNotice(eq(other.getEmail()));
-        verify(emailService).sendAdministratorEmailChangeNotice(eq(holder.getEmail()), anyString());
+        verify(emailService).sendAdministratorEmailChangeUnavailableNotice(eq(holder.getEmail()), anyString());
+        verify(emailService, never()).sendAdministratorEmailChangeNotice(anyString(), anyString());
         verify(emailService, never()).sendAdministratorEmailChangeVerificationEmail(anyString(), anyString());
         verify(emailService, never()).sendEmailChangeVerificationEmail(anyString(), anyString());
     }
@@ -545,7 +546,7 @@ public class StaffLoginEmailChangeRequestTest {
         assertEquals(before, pendingState(holder));
         reset(emailService);
         when(emailService.isConfigured()).thenReturn(true);
-        doThrow(new EmailSendingException("down")).when(emailService).sendAdministratorEmailChangeNotice(anyString(), anyString());
+        doThrow(new EmailSendingException("down")).when(emailService).sendAdministratorEmailChangeUnavailableNotice(anyString(), anyString());
         assertNotEquals(200, initiate(admin, holderStaff, other.getEmail()).getResponse().getStatus());
         assertEquals(before, pendingState(holder));
 
@@ -570,7 +571,7 @@ public class StaffLoginEmailChangeRequestTest {
     }
 
     @Test
-    @DisplayName("Recipient limit: 3 messages per proposed address per hour across different clients and different target accounts; the 4th is a 429")
+    @DisplayName("Recipient limit: 3 requests per proposed address per hour across different clients and different target accounts; the 4th is a 429")
     void recipientLimitAcrossClientsAndTargets() throws Exception {
         String shared = newAddress("rcp1");
         Staff t2 = extraStaff("rt2");
