@@ -60,6 +60,7 @@ public class AssignmentConcurrencyTest {
      */
     private final AssignmentService assignments = new AssignmentService() {
         @Override public AssignmentDto createAssignment(CreateAssignmentRequest request) { return asAdminCall(() -> assignmentService.createAssignment(request)); }
+        @Override public java.util.List<AssignmentDto> createAssignments(CreateAssignmentRequest request) { return asAdminCall(() -> assignmentService.createAssignments(request)); }
         @Override public java.util.List<AssignmentDto> getAllAssignments() { return asAdminCall(() -> assignmentService.getAllAssignments()); }
         @Override public AssignmentDto reassignTask(UUID id, UpdateAssignmentRequest request) { return asAdminCall(() -> assignmentService.reassignTask(id, request)); }
     };

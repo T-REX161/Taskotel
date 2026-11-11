@@ -884,7 +884,11 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     @Transactional
     public void onTaskReassigned(UUID taskId, UUID newStaffId) {
         supportRepository.findByTaskIdAndStatus(taskId, SupportStatus.ACTIVE).ifPresent(support -> {
-            if (!support.getStaffId().equals(newStaffId)) {
+            // A task can have several holders: the support applies for as long as the SUPPORTED person still holds it, whoever else was
+            // reassigned. With one holder this is exactly the earlier rule (the support ends unless the new holder is the supported person).
+            boolean supportedStaffStillHolds = support.getStaffId().equals(newStaffId)
+                    || assignmentRepository.findAllByTaskId(taskId).stream().anyMatch(a -> a.getStaff() != null && support.getStaffId().equals(a.getStaff().getId()));
+            if (!supportedStaffStillHolds) {
                 support.end(SupportStatus.CANCELLED, SupportEndReason.TASK_REASSIGNED, LocalDateTime.now());
                 supportRepository.save(support);
             }

@@ -24,8 +24,16 @@ import AssignTaskModal from '../components/tasks/AssignTaskModal';
 import DeleteTaskModal from '../components/tasks/DeleteTaskModal';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import { staffStatusSuccessMessage } from '../utils/taskStatus';
+import { assigneeMatchesSearch, groupAssignmentsByTask } from '../utils/assignmentUtils';
+import { assignmentSuccessMessage, buildAssignmentRequest, submittableStaffIds, toggleStaffSelection } from '../utils/staffSelection';
 
 const ITEMS_PER_PAGE = 10;
+
+/** The assignment a reassignment would move: only a task with exactly one assignee can be reassigned from this screen (with several, each
+ *  assignee is reassigned from the Assignments screen, row by row). */
+function soleAssignment(taskAssignments) {
+  return Array.isArray(taskAssignments) && taskAssignments.length === 1 ? taskAssignments[0] : null;
+}
 
 export default function TasksPage() {
   const navigate = useNavigate();
@@ -82,7 +90,7 @@ export default function TasksPage() {
   const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
 
   const [assignModalTask, setAssignModalTask] = useState(null);
-  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [selectedStaffIds, setSelectedStaffIds] = useState([]); // several for a new assignment, at most one when reassigning
   const [assignModalError, setAssignModalError] = useState('');
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
 
@@ -160,21 +168,15 @@ export default function TasksPage() {
     return () => clearTimeout(timer);
   }, [successBanner]);
 
-  // Map assignments by task ID
-  const assignmentsByTaskId = useMemo(() => {
-    const map = new Map();
-    assignments.forEach((assignment) => {
-      if (assignment.taskId) {
-        map.set(assignment.taskId, assignment);
-      }
-    });
-    return map;
-  }, [assignments]);
+  // Assignments grouped by task ID: Map<taskId, assignment[]> (a task can have several assigned staff members)
+  const assignmentsByTaskId = useMemo(() => groupAssignmentsByTask(assignments), [assignments]);
+
+
 
   // Dynamically filter eligible staff for the active assign modal task
   const eligibleStaff = useMemo(() => {
     if (!assignModalTask) return [];
-    const currentAssignment = assignmentsByTaskId.get(assignModalTask.id);
+    const currentAssignment = soleAssignment(assignmentsByTaskId.get(assignModalTask.id));
     return filterEligibleStaff({
       allStaff,
       tasks,
@@ -196,8 +198,7 @@ export default function TasksPage() {
         const titleMatch = (task.title || '').toLowerCase().includes(query);
         const categoryMatch = (task.category || '').toLowerCase().includes(query);
         const descriptionMatch = (task.description || '').toLowerCase().includes(query);
-        const assignment = assignmentsByTaskId.get(task.id);
-        const staffMatch = assignment?.staffName?.toLowerCase().includes(query);
+        const staffMatch = assigneeMatchesSearch(assignmentsByTaskId.get(task.id), query);
         if (!titleMatch && !categoryMatch && !descriptionMatch && !staffMatch) {
           return false;
         }
@@ -377,7 +378,7 @@ export default function TasksPage() {
   // Open Assign / Reassign Modal
   const handleOpenAssignModal = (task) => {
     setAssignModalTask(task);
-    setSelectedStaffId('');
+    setSelectedStaffIds([]);
     setAssignModalError('');
     // Refresh eligible staff and workload
     fetchEligibleStaff();
@@ -391,16 +392,23 @@ export default function TasksPage() {
 
     setAssignModalError('');
 
-    if (!selectedStaffId) {
-      setAssignModalError('Please select an eligible staff member.');
+    const taskAssignments = assignmentsByTaskId.get(assignModalTask.id) || [];
+    const currentAssignment = soleAssignment(assignmentsByTaskId.get(assignModalTask.id));
+    const isReassign = taskAssignments.length > 0;
+    const assignedIds = taskAssignments.map((a) => a.staffId);
+
+    // A new assignment sends everyone selected; a reassignment moves the one assignment to one person
+    const staffIds = submittableStaffIds(selectedStaffIds, eligibleStaff, assignedIds);
+    if (staffIds.length === 0) {
+      setAssignModalError('Please select at least one eligible staff member.');
       return;
     }
-
-    const currentAssignment = assignmentsByTaskId.get(assignModalTask.id);
-    const isReassign = Boolean(currentAssignment);
-
-    if (isReassign && currentAssignment.staffId === selectedStaffId) {
-      setAssignModalError('Target staff member already has an active assignment for this task. Please choose a different staff member.');
+    if (isReassign && !currentAssignment) {
+      setAssignModalError('This task has several assignees. Reassign each one from the Assignments page.');
+      return;
+    }
+    if (isReassign && staffIds.length > 1) {
+      setAssignModalError('A reassignment moves the task to one staff member. Please choose one.');
       return;
     }
 
@@ -408,15 +416,13 @@ export default function TasksPage() {
 
     try {
       if (isReassign) {
-        await reassignTask(currentAssignment.id, { staffId: selectedStaffId });
+        await reassignTask(currentAssignment.id, { staffId: staffIds[0] });
         setSuccessBanner(`Task "${assignModalTask.title}" was successfully reassigned.`);
       } else {
-        await createAssignment({
-          taskId: assignModalTask.id,
-          staffId: selectedStaffId,
-        });
-        setSuccessBanner(`Task "${assignModalTask.title}" was successfully assigned.`);
+        await createAssignment(buildAssignmentRequest(assignModalTask.id, staffIds));
+        setSuccessBanner(assignmentSuccessMessage(assignModalTask.title, staffIds.length));
       }
+      setSelectedStaffIds([]);
       setAssignModalTask(null);
       await fetchTasksData(false);
     } catch (err) {
@@ -650,16 +656,17 @@ export default function TasksPage() {
 
           <AssignTaskModal
             task={assignModalTask}
-            currentAssignment={assignModalTask ? assignmentsByTaskId.get(assignModalTask.id) : null}
+            currentAssignment={assignModalTask ? soleAssignment(assignmentsByTaskId.get(assignModalTask.id)) : null}
+            assignedStaffIds={assignModalTask ? (assignmentsByTaskId.get(assignModalTask.id) || []).map((a) => a.staffId) : []}
             eligibleStaff={eligibleStaff}
             isLoadingStaff={isLoadingStaff}
             workloadList={workloadList}
             isLoadingWorkload={isLoadingWorkload}
             workloadError={workloadError}
-            selectedStaffId={selectedStaffId}
-            onStaffChange={setSelectedStaffId}
+            selectedStaffIds={selectedStaffIds}
+            onStaffToggle={(staffId) => setSelectedStaffIds((current) => toggleStaffSelection(current, staffId, { single: Boolean(assignModalTask && (assignmentsByTaskId.get(assignModalTask.id) || []).length > 0) }))}
             onSubmit={handleAssignSubmit}
-            onClose={() => setAssignModalTask(null)}
+            onClose={() => { setAssignModalTask(null); setSelectedStaffIds([]); }}
             isSubmitting={isSubmittingAssign}
             error={assignModalError}
             asModal

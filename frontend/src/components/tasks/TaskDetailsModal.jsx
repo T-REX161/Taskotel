@@ -1,4 +1,5 @@
 import React from 'react';
+import { assigneeNames } from '../../utils/assignmentUtils';
 import { CloseIcon } from '../icons/Icons';
 import {
   getPriorityColor,
@@ -16,13 +17,13 @@ import {
  *
  * Props:
  *   task              – the task object to display
- *   assignmentsByTaskId – Map<taskId, assignment> from TasksPage
+ *   assignmentsByTaskId – Map<taskId, assignment[]> (every assignee of the task) from the page
  *   onClose           – callback to dismiss the modal
  */
 export default function TaskDetailsModal({ task, assignmentsByTaskId, onClose }) {
   if (!task) return null;
 
-  const assignedStaffName = assignmentsByTaskId.get(task.id)?.staffName;
+  const assigneeNameList = assigneeNames(assignmentsByTaskId.get(task.id));
 
   return (
     <div
@@ -94,12 +95,20 @@ export default function TaskDetailsModal({ task, assignmentsByTaskId, onClose })
           </div>
 
           <div className="sm:col-span-2 bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
-            <span className="text-xs font-medium text-emerald-800 uppercase">Assigned Staff Member</span>
-            <p className="font-bold text-gray-900 mt-1 text-base">
-              {assignedStaffName ?? (
+            <span className="text-xs font-medium text-emerald-800 uppercase">
+              {assigneeNameList.length > 1 ? `Assigned Staff Members (${assigneeNameList.length})` : 'Assigned Staff Member'}
+            </span>
+            {assigneeNameList.length === 0 ? (
+              <p className="font-bold text-gray-900 mt-1 text-base">
                 <span className="text-gray-400 font-normal italic">Unassigned</span>
-              )}
-            </p>
+              </p>
+            ) : (
+              <ul className="mt-1 space-y-0.5">
+                {assigneeNameList.map((name, index) => (
+                  <li key={`${name}-${index}`} className="font-bold text-gray-900 text-base">{name}</li>
+                ))}
+              </ul>
+            )}
           </div>
 
           <div className="sm:col-span-2 bg-gray-50/70 p-4 rounded-xl border border-gray-100 space-y-1">

@@ -24,8 +24,15 @@ public class AssignmentController {
         this.assignmentService = assignmentService;
     }
 
+    /**
+     * Assigns a task. {@code staffId} (one staff member) answers with the one assignment, as before. {@code staffIds} (several, all
+     * created together or none) answers with the list of the created assignments. Exactly one of the two must be sent.
+     */
     @PostMapping
-    public ResponseEntity<AssignmentDto> createAssignment(@Valid @RequestBody CreateAssignmentRequest request) {
+    public ResponseEntity<?> createAssignment(@Valid @RequestBody CreateAssignmentRequest request) {
+        if (request.getStaffIds() != null) {
+            return ResponseEntity.status(HttpStatus.CREATED).body(assignmentService.createAssignments(request));
+        }
         AssignmentDto created = assignmentService.createAssignment(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }

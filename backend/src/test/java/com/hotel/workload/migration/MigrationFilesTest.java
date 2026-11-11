@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V17 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V18 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -86,7 +86,8 @@ public class MigrationFilesTest {
                 "V14__user_phone.sql",
                 "V15__manager_department_changes.sql",
                 "V16__verification_lockout.sql",
-                "V17__system_settings.sql"), names);
+                "V17__system_settings.sql",
+                "V18__allow_multiple_staff_per_task.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -94,7 +95,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17), versions, "Versions must be 1 to 17 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18), versions, "Versions must be 1 to 18 with no gaps or duplicates");
     }
 
     @Test
@@ -123,6 +124,35 @@ public class MigrationFilesTest {
         assertEquals(5, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
         assertFalse(executable.toLowerCase().contains("email ") && executable.contains("ALTER COLUMN"), "the real email column is never altered");
         assertTrue(executable.contains("SET LOCAL lock_timeout"));
+    }
+
+    @Test
+    @DisplayName("V18 replaces the one-assignment-per-task rule with one-per-staff-per-task: it drops only the V3 constraint, adds one constraint, and changes no row")
+    public void testV18ReplacesTheV3Constraint() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V18__allow_multiple_staff_per_task.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|RENAME|CASCADE)\\b").matcher(code).find(),
+                "V18 must not change, add or remove any row, and must not cascade");
+        assertEquals(2, Pattern.compile("(?i)ALTER TABLE assignments").matcher(executable).results().count(), "one drop and one add, on assignments only");
+        assertEquals(1, Pattern.compile("(?i)DROP\\s+CONSTRAINT").matcher(executable).results().count(), "exactly one drop");
+        assertTrue(executable.contains("ALTER TABLE assignments DROP CONSTRAINT IF EXISTS uk_assignments_task_id;"), "the V3 rule is dropped");
+        assertTrue(executable.contains("ALTER TABLE assignments ADD CONSTRAINT uk_assignments_task_staff UNIQUE (task_id, staff_id);"), "replaced by the staff-per-task rule");
+        assertFalse(Pattern.compile("(?i)ADD CONSTRAINT uk_assignments_task_id").matcher(executable).find(), "the one-per-task rule is not re-added");
+        // The checks run before either change: wrong V3 definition, existing name, existing repeats
+        int firstChange = executable.indexOf("ALTER TABLE assignments DROP CONSTRAINT");
+        for (String check : List.of("pg_get_constraintdef", "conname = 'uk_assignments_task_staff'", "GROUP BY task_id, staff_id HAVING count(*) > 1")) {
+            int at = executable.indexOf(check);
+            assertTrue(at >= 0 && at < firstChange, "V18 must run this check before changing anything: " + check);
+        }
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertTrue(read(MIGRATIONS.resolve("V18__allow_multiple_staff_per_task.sql")).contains("Not applied automatically"));
+    }
+
+    @Test
+    @DisplayName("V3 is still the file that created the one-per-task rule (history is not rewritten); V18 is what replaces it")
+    public void testV3IsUntouchedAndV18ReplacesIt() throws IOException {
+        assertTrue(read(MIGRATIONS.resolve("V3__assignment_task_unique.sql")).contains("ADD CONSTRAINT uk_assignments_task_id UNIQUE (task_id)"));
+        assertTrue(read(MIGRATIONS.resolve("V18__allow_multiple_staff_per_task.sql")).contains("uk_assignments_task_id"));
     }
 
     @Test

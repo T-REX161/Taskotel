@@ -23,7 +23,9 @@ import {
   getNextMenuItemIndex,
   getPaginationState,
   getPageNumbers,
+  groupAssignmentsByTask,
 } from '../utils/assignmentUtils';
+import { assignmentSuccessMessage, buildAssignmentRequest, submittableStaffIds, toggleStaffSelection } from '../utils/staffSelection';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import AssignTaskModal from '../components/tasks/AssignTaskModal';
 import PageSizeToggle from '../components/common/PageSizeToggle';
@@ -58,7 +60,7 @@ export default function AssignmentsPage() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignModalTask, setAssignModalTask] = useState(null);
   const [currentAssignment, setCurrentAssignment] = useState(null);
-  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [selectedStaffIds, setSelectedStaffIds] = useState([]); // several for a new assignment, at most one when reassigning
   const [assignModalError, setAssignModalError] = useState('');
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
   const [isLoadingStaff] = useState(false);
@@ -188,16 +190,8 @@ export default function AssignmentsPage() {
     return getEligibleUnassignedTasks({ tasks, assignments });
   }, [tasks, assignments]);
 
-  // Map assignments by task ID for quick lookup and TaskDetailsModal
-  const assignmentsByTaskId = useMemo(() => {
-    const map = new Map();
-    assignments.forEach((assignment) => {
-      if (assignment.taskId) {
-        map.set(assignment.taskId, assignment);
-      }
-    });
-    return map;
-  }, [assignments]);
+  // Assignments grouped by task ID, Map<taskId, assignment[]> (a task can have several assigned staff members), for TaskDetailsModal
+  const assignmentsByTaskId = useMemo(() => groupAssignmentsByTask(assignments), [assignments]);
 
   // Dynamically filter eligible staff for the active assign modal task
   const eligibleStaff = useMemo(() => {
@@ -216,7 +210,7 @@ export default function AssignmentsPage() {
   const handleOpenAssignModal = () => {
     setCurrentAssignment(null);
     setAssignModalTask(null);
-    setSelectedStaffId('');
+    setSelectedStaffIds([]);
     setAssignModalError('');
     setIsAssignModalOpen(true);
   };
@@ -225,7 +219,7 @@ export default function AssignmentsPage() {
   const handleTaskSelect = (taskId) => {
     const selected = unassignedTasks.find((t) => String(t.id) === String(taskId)) || null;
     setAssignModalTask(selected);
-    setSelectedStaffId('');
+    setSelectedStaffIds([]);
     setAssignModalError('');
   };
 
@@ -239,7 +233,7 @@ export default function AssignmentsPage() {
       department: resolveAssignmentDepartment(assignment, tasks, workload),
     };
     setAssignModalTask(associatedTask);
-    setSelectedStaffId('');
+    setSelectedStaffIds([]);
     setAssignModalError('');
     setIsAssignModalOpen(true);
   };
@@ -370,7 +364,7 @@ export default function AssignmentsPage() {
     setIsAssignModalOpen(false);
     setAssignModalTask(null);
     setCurrentAssignment(null);
-    setSelectedStaffId('');
+    setSelectedStaffIds([]);
     setAssignModalError('');
     if (location.state) {
       navigate(location.pathname, { replace: true, state: null });
@@ -384,17 +378,17 @@ export default function AssignmentsPage() {
 
     setAssignModalError('');
 
-    if (!selectedStaffId) {
-      setAssignModalError('Please select an eligible staff member.');
+    const isReassign = Boolean(currentAssignment);
+    const assignedIds = isReassign ? (assignmentsByTaskId.get(assignModalTask.id) || []).map((a) => a.staffId) : [];
+
+    // A new assignment sends everyone selected; a reassignment moves the one assignment row to one person
+    const staffIds = submittableStaffIds(selectedStaffIds, eligibleStaff, assignedIds);
+    if (staffIds.length === 0) {
+      setAssignModalError('Please select at least one eligible staff member.');
       return;
     }
-
-    const isReassign = Boolean(currentAssignment);
-
-    if (isReassign && currentAssignment.staffId === selectedStaffId) {
-      setAssignModalError(
-        'Target staff member already has an active assignment for this task. Please choose a different staff member.'
-      );
+    if (isReassign && staffIds.length > 1) {
+      setAssignModalError('A reassignment moves the task to one staff member. Please choose one.');
       return;
     }
 
@@ -402,20 +396,17 @@ export default function AssignmentsPage() {
 
     try {
       if (isReassign) {
-        await reassignTask(currentAssignment.id, { staffId: selectedStaffId });
+        await reassignTask(currentAssignment.id, { staffId: staffIds[0] });
         setSuccessBanner(`Task "${assignModalTask.title}" was successfully reassigned.`);
       } else {
-        await createAssignment({
-          taskId: assignModalTask.id,
-          staffId: selectedStaffId,
-        });
-        setSuccessBanner(`Task "${assignModalTask.title}" was successfully assigned.`);
+        await createAssignment(buildAssignmentRequest(assignModalTask.id, staffIds));
+        setSuccessBanner(assignmentSuccessMessage(assignModalTask.title, staffIds.length));
       }
 
       setIsAssignModalOpen(false);
       setAssignModalTask(null);
       setCurrentAssignment(null);
-      setSelectedStaffId('');
+      setSelectedStaffIds([]);
       if (location.state) {
         navigate(location.pathname, { replace: true, state: null });
       }
@@ -574,8 +565,9 @@ export default function AssignmentsPage() {
           workloadList={workload}
           isLoadingWorkload={false}
           workloadError=""
-          selectedStaffId={selectedStaffId}
-          onStaffChange={setSelectedStaffId}
+          selectedStaffIds={selectedStaffIds}
+          onStaffToggle={(staffId) => setSelectedStaffIds((current) => toggleStaffSelection(current, staffId, { single: Boolean(currentAssignment) }))}
+          assignedStaffIds={currentAssignment && assignModalTask ? (assignmentsByTaskId.get(assignModalTask.id) || []).map((a) => a.staffId) : []}
           onSubmit={handleAssignSubmit}
           onClose={handleCloseAssignModal}
           isSubmitting={isSubmittingAssign}

@@ -406,3 +406,47 @@ export function getNextMenuItemIndex(currentIndex, itemCount, key) {
   return -1;
 }
 
+
+/**
+ * Groups assignments by task id: Map<taskId, assignment[]>. A task can have several assignments (one per assigned staff member), so
+ * nothing here assumes one per task. The order received is kept inside each list.
+ *
+ * @param {Array<Object>} [assignments=[]]
+ * @returns {Map<string, Array<Object>>}
+ */
+export function groupAssignmentsByTask(assignments = []) {
+  const map = new Map();
+  (Array.isArray(assignments) ? assignments : []).forEach((assignment) => {
+    if (!assignment || !assignment.taskId) return;
+    const list = map.get(assignment.taskId);
+    if (list) list.push(assignment);
+    else map.set(assignment.taskId, [assignment]);
+  });
+  return map;
+}
+
+/** The names of the staff on a task's assignments, in order, without blanks. */
+export function assigneeNames(taskAssignments = []) {
+  return (Array.isArray(taskAssignments) ? taskAssignments : [])
+    .map((assignment) => (assignment && typeof assignment.staffName === 'string' ? assignment.staffName.trim() : ''))
+    .filter(Boolean);
+}
+
+/**
+ * How a task's assignees are shown in a compact cell: the first name, plus "+N" for the others ("Rahul +2"). `title` always lists every
+ * name (for the tooltip), so nobody is hidden. label is '' when there is no assignee.
+ *
+ * @returns {{label: string, title: string, count: number}}
+ */
+export function formatAssignees(taskAssignments = []) {
+  const names = assigneeNames(taskAssignments);
+  if (names.length === 0) return { label: '', title: '', count: 0 };
+  return { label: names.length === 1 ? names[0] : `${names[0]} +${names.length - 1}`, title: names.join(', '), count: names.length };
+}
+
+/** Whether any assignee's name contains the search text (case-insensitive). */
+export function assigneeMatchesSearch(taskAssignments = [], query = '') {
+  const text = String(query || '').toLowerCase();
+  if (!text) return false;
+  return assigneeNames(taskAssignments).some((name) => name.toLowerCase().includes(text));
+}

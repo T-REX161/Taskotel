@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TasksIcon, DotsVerticalIcon, EyeIcon } from '../icons/Icons';
 import { staffStatusAction } from '../../utils/taskStatus';
+import { formatAssignees } from '../../utils/assignmentUtils';
 import {
   getPriorityColor,
   formatPriority,
@@ -127,8 +128,7 @@ export default function TasksTable({
           <tbody className="divide-y divide-gray-100 text-sm">
             {filteredTasks.length > 0 ? (
               filteredTasks.map((task) => {
-                const assignment = assignmentsByTaskId.get(task.id);
-                const assignedStaffName = assignment?.staffName;
+                const assignees = formatAssignees(assignmentsByTaskId.get(task.id));
                 const isMenuOpen = activeMenu?.task?.id === task.id;
 
                 return (
@@ -187,12 +187,12 @@ export default function TasksTable({
 
                     {/* 5. Assigned To */}
                     <td className="py-4 px-3 align-middle whitespace-nowrap text-sm">
-                      {assignedStaffName ? (
+                      {assignees.label ? (
                         <span
                           className="font-medium text-gray-900 truncate block"
-                          title={assignedStaffName}
+                          title={assignees.title}
                         >
-                          {assignedStaffName}
+                          {assignees.label}
                         </span>
                       ) : (
                         <span className="text-gray-400 italic">Unassigned</span>
@@ -364,9 +364,24 @@ export default function TasksTable({
           {canManageTasks && (
             (() => {
               const task = activeMenu.task;
-              const assignment = assignmentsByTaskId.get(task.id);
-              const isTaskAssigned = Boolean(assignment);
+              const taskAssignments = assignmentsByTaskId.get(task.id) || [];
+              const isTaskAssigned = taskAssignments.length > 0;
+              // With several assignees a reassignment is made one assignee at a time, from the Assignments page
+              const hasSeveralAssignees = taskAssignments.length > 1;
               const isTerminalStatus = task.status === 'COMPLETED' || task.status === 'CANCELLED';
+
+              if (hasSeveralAssignees && !isTerminalStatus) {
+                return (
+                  <button
+                    type="button"
+                    disabled
+                    title="This task has several assignees. Reassign each one from the Assignments page."
+                    className="w-full text-left px-3 py-2 text-xs text-gray-400 flex items-center gap-2 cursor-not-allowed opacity-60"
+                  >
+                    <span>Reassign (several assignees)</span>
+                  </button>
+                );
+              }
 
               if (isTerminalStatus) {
                 return (

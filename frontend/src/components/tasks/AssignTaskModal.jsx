@@ -14,6 +14,7 @@ import {
   calculateProjectedWorkload,
 } from '../../utils/workloadUtils';
 import { getWorkload } from '../../services/api';
+import { formatSelectedStaffCount } from '../../utils/staffSelection';
 
 /**
  * Inline spinner SVG.
@@ -66,8 +67,9 @@ function getStaffInitials(name) {
  *   workload            – alias for workloadList
  *   isLoadingWorkload   – boolean
  *   workloadError       – string | ''
- *   selectedStaffId     – controlled selected staff UUID string
- *   onStaffChange       – (staffId: string) => void
+ *   selectedStaffIds    – controlled array of selected staff UUID strings (several for a new assignment, at most one when reassigning)
+ *   onStaffToggle       – (staffId: string) => void; adds the person when absent, removes only that person when present
+ *   assignedStaffIds    – staff already on this task: shown on their cards but not selectable
  *   onSubmit            – (e) => void
  *   onClose             – () => void
  *   isSubmitting        – boolean
@@ -86,8 +88,9 @@ export default function AssignTaskModal({
   workload,
   isLoadingWorkload = false,
   workloadError = '',
-  selectedStaffId,
-  onStaffChange,
+  selectedStaffIds = [],
+  onStaffToggle,
+  assignedStaffIds = [],
   onSubmit,
   onClose,
   isSubmitting = false,
@@ -134,16 +137,22 @@ export default function AssignTaskModal({
     };
   }, [workloadList, workload]);
 
-  // Calculate projected workload dynamically whenever selected staff or task changes
-  const projectedWorkload = useMemo(() => {
-    if (!selectedStaffId || !task) return null;
-    return calculateProjectedWorkload({
-      staffId: selectedStaffId,
-      task,
-      currentAssignment,
-      workloadList: activeWorkloadList,
-    });
-  }, [selectedStaffId, task, currentAssignment, activeWorkloadList]);
+  // Projected workload for EVERY selected staff member (each one receives the task's full estimated duration), recalculated whenever the
+  // selection, the task or the workload data changes
+  const projections = useMemo(() => {
+    if (!task) return [];
+    return selectedStaffIds
+      .map((staffId) => ({
+        staffId,
+        projectedWorkload: calculateProjectedWorkload({
+          staffId,
+          task,
+          currentAssignment,
+          workloadList: activeWorkloadList,
+        }),
+      }))
+      .filter((item) => item.projectedWorkload);
+  }, [selectedStaffIds, task, currentAssignment, activeWorkloadList]);
 
   // Fast map of workloads by staffId for card display
   const workloadByStaffId = useMemo(() => {
@@ -167,8 +176,14 @@ export default function AssignTaskModal({
   // Early return must come after all hooks so they run in the same order on every render
   if (!task && !unassignedTasks) return null;
 
-  // The current assignee's card is shown but disabled, so it is not counted as selectable
-  const selectableStaffCount = eligibleStaff.filter((staff) => currentAssignment?.staffId !== staff.id).length;
+  // Someone already on this task (the current assignee, or any other assignee of a task with several) is shown but not selectable
+  const isOnThisTask = (staffId) => currentAssignment?.staffId === staffId || assignedStaffIds.includes(staffId);
+  const selectableStaffCount = eligibleStaff.filter((staff) => !isOnThisTask(staff.id)).length;
+  const selectedCount = selectedStaffIds.length;
+  const staffNameById = (staffId) => {
+    const match = eligibleStaff.find((staff) => staff.id === staffId);
+    return match ? match.name || match.fullName || 'Unnamed Staff' : 'Selected staff member';
+  };
 
   const content = (
     <div className="w-full space-y-6">
@@ -226,7 +241,8 @@ export default function AssignTaskModal({
 
       <form onSubmit={onSubmit} className="space-y-6">
         {/* ── 2. TWO-COLUMN TOP SECTION: Task Info & Current Assignment ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* items-start: each card keeps its own height, so the Task Information card is not stretched to match the workload panel */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 items-start gap-6">
           {/* LEFT CARD: Task Information */}
           <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex flex-col justify-between space-y-4">
             <div className="space-y-4">
@@ -385,9 +401,10 @@ export default function AssignTaskModal({
                 </div>
               </div>
 
-              {/* Workload Impact Analysis */}
-              <div className="space-y-3 pt-1">
-                <div className="flex items-center justify-between">
+              {/* Workload Impact Analysis: the heading stays in place and only the comparisons below it scroll, so the card (and the modal) does
+                  not grow with every person selected */}
+              <div className="pt-1">
+                <div className="flex items-center justify-between pb-3 bg-white">
                   <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -395,6 +412,14 @@ export default function AssignTaskModal({
                     <span>Workload Impact Comparison</span>
                   </span>
                 </div>
+
+                <div
+                  data-testid="workload-scroll-area"
+                  role="region"
+                  aria-label="Workload impact for the selected staff"
+                  tabIndex={0}
+                  className="space-y-3 min-w-0 max-h-[26rem] lg:max-h-[14rem] overflow-y-auto overflow-x-hidden overscroll-contain pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(16,185,129,0.45)_transparent] focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 rounded-lg"
+                >
 
                 {/* Loading State */}
                 {isWorkloadLoading && (
@@ -415,7 +440,7 @@ export default function AssignTaskModal({
                 )}
 
                 {/* Prompt when no staff selected */}
-                {!isWorkloadLoading && !activeWorkloadError && !selectedStaffId && (
+                {!isWorkloadLoading && !activeWorkloadError && selectedCount === 0 && (
                   <div className="p-6 bg-gray-50/60 rounded-xl border border-dashed border-gray-200 text-center text-xs text-gray-500">
                     {task
                       ? 'Select an eligible staff member below to view current workload and projected assignment impact.'
@@ -423,8 +448,275 @@ export default function AssignTaskModal({
                   </div>
                 )}
 
+                {/* One comparison for each selected staff member */}
+                {!isWorkloadLoading && !activeWorkloadError && projections.map(({ staffId, projectedWorkload }) => (
+                  <WorkloadImpact
+                    key={staffId}
+                    projectedWorkload={projectedWorkload}
+                    staffName={staffNameById(staffId)}
+                    showName={projections.length > 1}
+                  />
+                ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── 3. ASSIGN TO STAFF SECTION WITH SELECTABLE STAFF CARDS ── */}
+        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-gray-100 pb-3">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Assign to Staff</h2>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {isReassign ? 'Select an active, eligible staff member from' : 'Select one or more active, eligible staff members from'}{' '}
+                <span className="font-semibold text-gray-700">
+                  {task ? formatDepartment(task.department) : 'the department'}
+                </span>
+                .
+              </p>
+            </div>
+            {task && (
+              <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+                <span
+                  role="status"
+                  aria-live="polite"
+                  data-testid="selected-staff-count"
+                  className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                    selectedCount > 0 ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-gray-50 text-gray-500 border-gray-200'
+                  }`}
+                >
+                  {formatSelectedStaffCount(selectedCount)}
+                </span>
+                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                  {selectableStaffCount} {selectableStaffCount === 1 ? 'Eligible Staff Member' : 'Eligible Staff Members'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Loading state for staff */}
+          {isLoadingStaff && (
+            <div className="p-6 text-center text-sm text-gray-400 flex items-center justify-center gap-2">
+              <Spinner className="h-4 w-4 text-emerald-600" />
+              <span>Loading eligible staff members...</span>
+            </div>
+          )}
+
+          {/* Empty state when no eligible staff found */}
+          {!isLoadingStaff && task && selectableStaffCount === 0 && (
+            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
+              <p className="font-semibold">No eligible staff members available</p>
+              <p>
+                No {isReassign ? 'other ' : ''}eligible staff members in {formatDepartment(task.department)} are available for {isReassign ? 'reassignment' : 'assignment'}. Eligible staff must belong to the task department, be active, have AVAILABLE status, and have no other active assignment.
+              </p>
+              {eligibleStaff.length > selectableStaffCount && (
+                <p>The current assignee is shown below for reference and cannot be selected again.</p>
+              )}
+            </div>
+          )}
+
+          {/* Prompt to select a task first */}
+          {!isLoadingStaff && !task && (
+            <div className="p-6 text-center text-xs text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
+              Please select a task above to load eligible department staff members.
+            </div>
+          )}
+
+          {/* Responsive Selectable Staff Cards Grid */}
+          {!isLoadingStaff && eligibleStaff.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {eligibleStaff.map((staff) => {
+                const isCurrent = isOnThisTask(staff.id);
+                const isSelected = selectedStaffIds.includes(staff.id);
+                const displayName = staff.name || staff.fullName || 'Unnamed Staff';
+                const staffWorkload = workloadByStaffId.get(String(staff.id));
+                const currentMins = staffWorkload?.totalEstimatedDuration ?? 0;
+                const activeTasks = staffWorkload?.activeTaskCount ?? 0;
+                const workloadStatus = staffWorkload?.workloadStatus || 'LOW';
+
+                return (
+                  <div
+                    key={staff.id}
+                    onClick={() => {
+                      if (!isCurrent && !isSubmitting) {
+                        onStaffToggle(staff.id);
+                      }
+                    }}
+                    className={`relative rounded-xl p-4 transition-all border flex flex-col justify-between space-y-3 ${
+                      isCurrent
+                        ? 'opacity-60 cursor-not-allowed bg-gray-50/80 border-gray-200'
+                        : isSelected
+                        ? 'border-emerald-600 bg-emerald-50/20 ring-2 ring-emerald-600/20 shadow-xs cursor-pointer'
+                        : 'border-gray-200 hover:border-emerald-300 hover:bg-gray-50/50 bg-white cursor-pointer shadow-2xs'
+                    }`}
+                  >
+                    {/* Hidden accessible checkbox (keyboard and screen readers). The card's click handler does the toggling: a keyboard
+                        Space on this input fires a click that reaches the card, so toggling here as well would cancel itself out. */}
+                    <input
+                      type="checkbox"
+                      name="staffMember"
+                      value={staff.id}
+                      disabled={isCurrent}
+                      checked={isSelected}
+                      onChange={() => {}}
+                      aria-label={`Select ${displayName}`}
+                      className="sr-only"
+                    />
+
+                    {/* Top Row: Avatar + Name + Checkbox/Indicator */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {staff.profileImage || staff.avatarUrl ? (
+                          <img
+                            src={staff.profileImage || staff.avatarUrl}
+                            alt={displayName}
+                            className="w-9 h-9 rounded-full object-cover flex-shrink-0"
+                          />
+                        ) : (
+                          <div
+                            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                              isSelected
+                                ? 'bg-emerald-600 text-white shadow-xs'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {getStaffInitials(displayName)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <span className="font-bold text-gray-900 text-sm block truncate" title={displayName}>
+                            {displayName}
+                          </span>
+                          <span className="text-xs text-gray-500 block truncate">
+                            {formatDepartment(staff.department)}
+                            {isCurrent ? ' - Currently Assigned' : ''}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Selection checkmark: stays on every selected card */}
+                      <div
+                        className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white'
+                            : isCurrent
+                            ? 'border border-gray-300 bg-gray-200'
+                            : 'border border-gray-300 bg-white'
+                        }`}
+                      >
+                        {isSelected && (
+                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Status Badges */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100 text-[11px]">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        {staff.availability || 'AVAILABLE'}
+                      </span>
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold ${getWorkloadStatusBadge(
+                          workloadStatus
+                        )}`}
+                      >
+                        {workloadStatus}
+                      </span>
+                      {isCurrent && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600">
+                          Currently Assigned
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Bottom Row: Workload Metrics + Progress Bar */}
+                    <div className="space-y-1.5 pt-1 border-t border-gray-100 text-xs">
+                      <div className="flex items-center justify-between text-gray-600">
+                        <span className="font-medium">Current Workload:</span>
+                        <span className="font-bold text-gray-900">{currentMins} min</span>
+                      </div>
+                      <div className="text-[11px] text-gray-400">
+                        {activeTasks} active {activeTasks === 1 ? 'task' : 'tasks'}
+                      </div>
+                      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${getWorkloadProgressBarColor(workloadStatus)}`}
+                          style={{ width: `${calculateWorkloadPercentage(currentMins)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ── 4. ACTION BAR ── */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 pt-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={isSubmitting}
+            className="w-full sm:w-auto px-5 py-2.5 text-gray-700 font-medium hover:bg-gray-50 border border-gray-200 rounded-xl text-sm transition-colors cursor-pointer disabled:opacity-50 text-center"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting || selectedCount === 0 || !task}
+            className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-medium rounded-xl text-sm transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? (
+              <>
+                <Spinner />
+                <span>Processing...</span>
+              </>
+            ) : isReassign ? (
+              'Confirm Reassignment'
+            ) : selectedCount > 1 ? (
+              `Assign Task to ${selectedCount} Staff`
+            ) : (
+              'Assign Task'
+            )}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+
+  if (asModal) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn overflow-y-auto"
+        onClick={() => !isSubmitting && onClose()}
+      >
+        <div
+          className="bg-white rounded-2xl max-w-5xl w-full p-6 sm:p-8 shadow-xl border border-gray-100 max-h-[92vh] overflow-y-auto my-6"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {content}
+        </div>
+      </div>
+    );
+  }
+
+  return content;
+}
+
+/**
+ * The workload comparison for ONE selected staff member: current against projected (the task's full estimated duration is added to each
+ * person). With several people selected each gets their own comparison, headed by their name.
+ */
+function WorkloadImpact({ projectedWorkload, staffName, showName }) {
+  return (
+    <div className="space-y-2">
+      {showName && <p className="text-xs font-bold text-gray-800">{staffName}</p>}
                 {/* Missing workload data for selected staff */}
-                {!isWorkloadLoading && !activeWorkloadError && selectedStaffId && projectedWorkload?.hasData === false && (
+                {projectedWorkload?.hasData === false && (
                   <div className="p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs text-gray-500 text-center">
                     {projectedWorkload.reason === 'STAFF_NOT_FOUND'
                       ? 'Workload data unavailable for selected staff member.'
@@ -433,7 +725,7 @@ export default function AssignTaskModal({
                 )}
 
                 {/* Active Comparison Display */}
-                {!isWorkloadLoading && !activeWorkloadError && projectedWorkload?.hasData && (
+                {projectedWorkload?.hasData && (
                   <div className="space-y-3">
                     {/* Already assigned notice */}
                     {projectedWorkload.isAlreadyAssigned && (
@@ -530,235 +822,6 @@ export default function AssignTaskModal({
                     )}
                   </div>
                 )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── 3. ASSIGN TO STAFF SECTION WITH SELECTABLE STAFF CARDS ── */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 border-b border-gray-100 pb-3">
-            <div>
-              <h2 className="text-base font-bold text-gray-900">Assign to Staff</h2>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Select an active, eligible staff member from{' '}
-                <span className="font-semibold text-gray-700">
-                  {task ? formatDepartment(task.department) : 'the department'}
-                </span>
-                .
-              </p>
-            </div>
-            {task && (
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 self-start sm:self-auto">
-                {selectableStaffCount} {selectableStaffCount === 1 ? 'Eligible Staff Member' : 'Eligible Staff Members'}
-              </span>
-            )}
-          </div>
-
-          {/* Loading state for staff */}
-          {isLoadingStaff && (
-            <div className="p-6 text-center text-sm text-gray-400 flex items-center justify-center gap-2">
-              <Spinner className="h-4 w-4 text-emerald-600" />
-              <span>Loading eligible staff members...</span>
-            </div>
-          )}
-
-          {/* Empty state when no eligible staff found */}
-          {!isLoadingStaff && task && selectableStaffCount === 0 && (
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
-              <p className="font-semibold">No eligible staff members available</p>
-              <p>
-                No {isReassign ? 'other ' : ''}eligible staff members in {formatDepartment(task.department)} are available for {isReassign ? 'reassignment' : 'assignment'}. Eligible staff must belong to the task department, be active, have AVAILABLE status, and have no other active assignment.
-              </p>
-              {eligibleStaff.length > selectableStaffCount && (
-                <p>The current assignee is shown below for reference and cannot be selected again.</p>
-              )}
-            </div>
-          )}
-
-          {/* Prompt to select a task first */}
-          {!isLoadingStaff && !task && (
-            <div className="p-6 text-center text-xs text-gray-400 bg-gray-50/50 rounded-xl border border-dashed border-gray-200">
-              Please select a task above to load eligible department staff members.
-            </div>
-          )}
-
-          {/* Responsive Selectable Staff Cards Grid */}
-          {!isLoadingStaff && eligibleStaff.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {eligibleStaff.map((staff) => {
-                const isCurrent = currentAssignment?.staffId === staff.id;
-                const isSelected = selectedStaffId === staff.id;
-                const displayName = staff.name || staff.fullName || 'Unnamed Staff';
-                const staffWorkload = workloadByStaffId.get(String(staff.id));
-                const currentMins = staffWorkload?.totalEstimatedDuration ?? 0;
-                const activeTasks = staffWorkload?.activeTaskCount ?? 0;
-                const workloadStatus = staffWorkload?.workloadStatus || 'LOW';
-
-                return (
-                  <div
-                    key={staff.id}
-                    onClick={() => {
-                      if (!isCurrent && !isSubmitting) {
-                        onStaffChange(staff.id);
-                      }
-                    }}
-                    className={`relative rounded-xl p-4 transition-all border flex flex-col justify-between space-y-3 ${
-                      isCurrent
-                        ? 'opacity-60 cursor-not-allowed bg-gray-50/80 border-gray-200'
-                        : isSelected
-                        ? 'border-emerald-600 bg-emerald-50/20 ring-2 ring-emerald-600/20 shadow-xs cursor-pointer'
-                        : 'border-gray-200 hover:border-emerald-300 hover:bg-gray-50/50 bg-white cursor-pointer shadow-2xs'
-                    }`}
-                  >
-                    {/* Hidden accessible radio for form / test query compatibility */}
-                    <input
-                      type="radio"
-                      name="staffMember"
-                      value={staff.id}
-                      disabled={isCurrent}
-                      checked={isSelected}
-                      onChange={() => onStaffChange(staff.id)}
-                      className="sr-only"
-                    />
-
-                    {/* Top Row: Avatar + Name + Checkbox/Indicator */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        {staff.profileImage || staff.avatarUrl ? (
-                          <img
-                            src={staff.profileImage || staff.avatarUrl}
-                            alt={displayName}
-                            className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div
-                            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
-                              isSelected
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
-                          >
-                            {getStaffInitials(displayName)}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <span className="font-bold text-gray-900 text-sm block truncate" title={displayName}>
-                            {displayName}
-                          </span>
-                          <span className="text-xs text-gray-500 block truncate">
-                            {formatDepartment(staff.department)}
-                            {isCurrent ? ' - Currently Assigned' : ''}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Selection Radio Icon */}
-                      <div
-                        className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
-                          isSelected
-                            ? 'bg-emerald-600 text-white'
-                            : isCurrent
-                            ? 'border border-gray-300 bg-gray-200'
-                            : 'border border-gray-300 bg-white'
-                        }`}
-                      >
-                        {isSelected && (
-                          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Middle Row: Status Badges */}
-                    <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-gray-100 text-[11px]">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700 border border-emerald-100">
-                        {staff.availability || 'AVAILABLE'}
-                      </span>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full font-semibold ${getWorkloadStatusBadge(
-                          workloadStatus
-                        )}`}
-                      >
-                        {workloadStatus}
-                      </span>
-                      {isCurrent && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full font-semibold bg-gray-100 text-gray-600">
-                          Currently Assigned
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Bottom Row: Workload Metrics + Progress Bar */}
-                    <div className="space-y-1.5 pt-1 border-t border-gray-100 text-xs">
-                      <div className="flex items-center justify-between text-gray-600">
-                        <span className="font-medium">Current Workload:</span>
-                        <span className="font-bold text-gray-900">{currentMins} min</span>
-                      </div>
-                      <div className="text-[11px] text-gray-400">
-                        {activeTasks} active {activeTasks === 1 ? 'task' : 'tasks'}
-                      </div>
-                      <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${getWorkloadProgressBarColor(workloadStatus)}`}
-                          style={{ width: `${calculateWorkloadPercentage(currentMins)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── 4. ACTION BAR ── */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 pt-4 border-t border-gray-100">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="w-full sm:w-auto px-5 py-2.5 text-gray-700 font-medium hover:bg-gray-50 border border-gray-200 rounded-xl text-sm transition-colors cursor-pointer disabled:opacity-50 text-center"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting || !selectedStaffId || !task}
-            className="w-full sm:w-auto px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-medium rounded-xl text-sm transition-colors cursor-pointer flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSubmitting ? (
-              <>
-                <Spinner />
-                <span>Processing...</span>
-              </>
-            ) : isReassign ? (
-              'Confirm Reassignment'
-            ) : (
-              'Assign Task'
-            )}
-          </button>
-        </div>
-      </form>
     </div>
   );
-
-  if (asModal) {
-    return (
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn overflow-y-auto"
-        onClick={() => !isSubmitting && onClose()}
-      >
-        <div
-          className="bg-white rounded-2xl max-w-5xl w-full p-6 sm:p-8 shadow-xl border border-gray-100 max-h-[92vh] overflow-y-auto my-6"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {content}
-        </div>
-      </div>
-    );
-  }
-
-  return content;
 }

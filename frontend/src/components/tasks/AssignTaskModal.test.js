@@ -390,10 +390,10 @@ describe('AssignTaskModal component and task details rendering', () => {
       );
     });
 
-    it('disables submit button until both task and selectedStaffId are present', () => {
+    it('disables submit button until a task and at least one staff member are selected', () => {
       assert.ok(
-        source.includes('disabled={isSubmitting || !selectedStaffId || !task}'),
-        'Submit button must be disabled when either task or selectedStaffId is missing'
+        source.includes('disabled={isSubmitting || selectedCount === 0 || !task}'),
+        'Submit button must be disabled when no task or no staff member is selected'
       );
     });
   });
@@ -430,8 +430,8 @@ describe('AssignTaskModal component and task details rendering', () => {
     it('renders an "Assign to Staff" section with selectable staff cards', () => {
       assert.ok(source.includes('Assign to Staff'), 'Must render "Assign to Staff" section heading');
       assert.ok(
-        source.includes('onStaffChange(staff.id)'),
-        'Clicking or selecting a staff card must call onStaffChange with staff.id'
+        source.includes('onStaffToggle(staff.id)'),
+        'Clicking or selecting a staff card must call onStaffToggle with staff.id'
       );
     });
 
@@ -534,8 +534,8 @@ describe('AssignTaskModal component and task details rendering', () => {
 
     it('excludes the disabled current assignee from the eligible staff count', () => {
       assert.ok(
-        source.includes('eligibleStaff.filter((staff) => currentAssignment?.staffId !== staff.id).length'),
-        'Selectable count must exclude the current assignee using the same comparison as isCurrent'
+        source.includes('eligibleStaff.filter((staff) => !isOnThisTask(staff.id)).length') && source.includes('currentAssignment?.staffId === staffId || assignedStaffIds.includes(staffId)'),
+        'Selectable count must exclude everyone already on the task using the same comparison as isCurrent'
       );
       assert.ok(
         source.includes("{selectableStaffCount} {selectableStaffCount === 1 ? 'Eligible Staff Member' : 'Eligible Staff Members'}"),

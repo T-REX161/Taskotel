@@ -7,7 +7,11 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "assignments")
+/**
+ * One staff member on one task. A task may have several assignments (several staff members), but the same staff member only once: the
+ * unique key on (task_id, staff_id) is the database rule (migration V18; before it, V3 allowed one row per task).
+ */
+@Table(name = "assignments", uniqueConstraints = @UniqueConstraint(name = "uk_assignments_task_staff", columnNames = {"task_id", "staff_id"}))
 public class Assignment {
 
     @Id
