@@ -41,6 +41,12 @@ public class TaskController {
         return ResponseEntity.ok(updated);
     }
 
+    /** Staff only: the status of a task assigned to the signed-in Staff member. Admin and Manager change status through the full update. */
+    @org.springframework.web.bind.annotation.PatchMapping("/{id}/status")
+    public ResponseEntity<TaskDto> updateOwnTaskStatus(@PathVariable UUID id, @Valid @RequestBody UpdateTaskStatusRequest request) {
+        return ResponseEntity.ok(taskService.updateOwnTaskStatus(id, request.getStatus()));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteTask(@PathVariable UUID id) {
         taskService.deleteTask(id);

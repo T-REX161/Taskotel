@@ -226,13 +226,14 @@ public class VerificationEnumerationResistanceTest {
     }
 
     @Test
-    @DisplayName("verify: an already-set-up account that verifies again succeeds without a setup token")
+    @DisplayName("verify: an already-set-up account (Stage 4A-2, K04) gets the generic failure, never a setup token, even with a matching code on file")
     public void verifiedAccountGetsNoSetupToken() throws Exception {
         withCode(account("plain", Role.STAFF, true, true, false), 0, LocalDateTime.now().plusMinutes(10));
         Answer answer = postVerify(P + "plain", CODE);
-        assertEquals(200, answer.status());
-        assertTrue(answer.body().contains("\"success\":true"));
-        assertTrue(answer.body().contains("\"setupToken\":null"));
+        assertEquals(400, answer.status(), "before Stage 4A-2 this verified again and succeeded without a token");
+        assertTrue(answer.body().contains("\"success\":false"));
+        assertTrue(answer.body().contains(VerificationCodeServiceImpl.GENERIC_FAILURE));
+        assertFalse(answer.body().contains("setupToken\":\""));
     }
 
     // ── equal hashing work ───────────────────────────────────────────────────

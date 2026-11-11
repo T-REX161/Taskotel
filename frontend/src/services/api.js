@@ -182,6 +182,16 @@ export const updateTask = (id, request) => {
 };
 
 /**
+ * A Staff member moves one of their own tasks forward (Assigned to In Progress, In Progress to Completed). Only the status is sent.
+ */
+export const updateMyTaskStatus = (id, status) => {
+  return apiFetch(`/api/tasks/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+};
+
+/**
  * Delete a task.
  */
 export const deleteTask = (id) => {
@@ -290,6 +300,24 @@ export const changePassword = (request) => {
  */
 export const getNotificationPreferences = () => {
   return apiFetch('/api/notification-preferences');
+};
+
+/**
+ * The system-wide settings (Admin only): { autoBalancingEnabled, capacityAlertEnabled, crossDepartmentAssistanceEnabled,
+ * capacityThresholdPercent, updatedAt, updatedBy }. The server returns the defaults until something has been saved.
+ */
+export const getSystemSettings = () => {
+  return apiFetch('/api/system-settings');
+};
+
+/**
+ * Save the system settings (Admin only). All four values are required; the answer is the saved settings.
+ */
+export const updateSystemSettings = (request) => {
+  return apiFetch('/api/system-settings', {
+    method: 'PUT',
+    body: JSON.stringify(request),
+  });
 };
 
 /**

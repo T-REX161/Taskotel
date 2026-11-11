@@ -106,6 +106,7 @@ public class AssignmentConcurrencyTest {
         @Override public com.hotel.workload.task.TaskDto createTask(com.hotel.workload.task.CreateTaskRequest request) { return asAdmin(() -> taskService.createTask(request)); }
         @Override public com.hotel.workload.task.TaskDto updateTask(java.util.UUID id, UpdateTaskRequest request) { return asAdmin(() -> taskService.updateTask(id, request)); }
         @Override public void deleteTask(java.util.UUID id) { asAdmin(() -> { taskService.deleteTask(id); return null; }); }
+        @Override public com.hotel.workload.task.TaskDto updateOwnTaskStatus(java.util.UUID id, com.hotel.workload.task.TaskStatus status) { return asAdmin(() -> taskService.updateOwnTaskStatus(id, status)); }
     };
     @Autowired private PlatformTransactionManager transactionManager;
     @Autowired private AssignmentRepository assignmentRepository;

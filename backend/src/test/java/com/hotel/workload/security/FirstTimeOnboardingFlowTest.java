@@ -220,7 +220,7 @@ public class FirstTimeOnboardingFlowTest {
     }
 
     @Test
-    @DisplayName("The verify response has the same shape for every role: a setupToken while setup is pending, none for onboarded accounts")
+    @DisplayName("A setupToken is issued while setup is pending; once onboarded, the first-time flow is closed: no email and no setup token (Stage 4A-2, K04)")
     void setupTokenIsReturnedOnlyWhileSetupIsPending() throws Exception {
         int n = 0;
         for (Role role : ROLES) {
@@ -231,13 +231,14 @@ public class FirstTimeOnboardingFlowTest {
             assertTrue(body(pending).contains("\"success\":true"), body(pending));
             assertNotNull(field(pending, "setupToken"), role + " pending setup: " + body(pending));
 
-            // finish onboarding, then verify again: no setup token is offered any more
+            // finish onboarding, then ask again: nothing is sent, and verifying is refused with no setup token (it used to succeed)
             assertEquals(200, setup(client, field(pending, "setupToken"), user.getUsername(), NEW_PASSWORD).getResponse().getStatus());
             reset(emailService);
             send(post("/api/auth/email-verification/send"), client, "{\"identifier\":\"" + user.getUsername() + "\"}");
-            MvcResult onboarded = verifyEmail(client, user.getUsername(), emailedCode(user));
-            assertTrue(body(onboarded).contains("\"success\":true"), body(onboarded));
-            assertNull(field(onboarded, "setupToken"), role + " already onboarded: " + body(onboarded));
+            verify(emailService, never()).sendVerificationEmail(any(), any());
+            MvcResult onboarded = verifyEmail(client, user.getUsername(), "123456");
+            assertEquals(400, onboarded.getResponse().getStatus(), body(onboarded));
+            assertFalse(body(onboarded).contains("setupToken\":\""), role + " already onboarded: " + body(onboarded));
         }
     }
 

@@ -7,6 +7,7 @@ import {
   getAssignments,
   getUserRole,
   updateTask,
+  updateMyTaskStatus,
   deleteTask,
   createAssignment,
   reassignTask,
@@ -22,6 +23,7 @@ import EditTaskModal from '../components/tasks/EditTaskModal';
 import AssignTaskModal from '../components/tasks/AssignTaskModal';
 import DeleteTaskModal from '../components/tasks/DeleteTaskModal';
 import { filterEligibleStaff } from '../utils/staffFilter';
+import { staffStatusSuccessMessage } from '../utils/taskStatus';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -38,6 +40,10 @@ export default function TasksPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successBanner, setSuccessBanner] = useState('');
+  // Staff status updates: which task is being updated, and the error from the last attempt
+  const isStaff = userRole === 'STAFF';
+  const [statusBusyTaskId, setStatusBusyTaskId] = useState(null);
+  const [statusError, setStatusError] = useState('');
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
@@ -247,6 +253,24 @@ export default function TasksPage() {
     }
     return Array.from(pages).sort((a, b) => a - b);
   }, [totalPages, currentPage]);
+
+  // Staff: move their own task one step forward, then show the result and refresh the list
+  const handleStatusChange = async (task, nextStatus) => {
+    if (statusBusyTaskId) return;
+    setStatusBusyTaskId(task.id);
+    setStatusError('');
+    try {
+      await updateMyTaskStatus(task.id, nextStatus);
+      setSuccessBanner(staffStatusSuccessMessage(task.title, nextStatus));
+      await fetchTasksData(false);
+    } catch (err) {
+      setStatusError(err.message || 'The task status could not be updated. Please try again.');
+      // The list may be out of date (for example the task was reassigned): show what the server has now
+      await fetchTasksData(false);
+    } finally {
+      setStatusBusyTaskId(null);
+    }
+  };
 
   // Open Edit Modal
   const handleOpenEditModal = (task) => {
@@ -485,6 +509,19 @@ export default function TasksPage() {
         </div>
       )}
 
+      {statusError && (
+        <div role="alert" className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center justify-between shadow-xs">
+          <span className="font-semibold">{statusError}</span>
+          <button
+            type="button"
+            onClick={() => setStatusError('')}
+            className="text-xs font-bold text-red-800 hover:underline cursor-pointer"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* Task Summary Metrics Cards */}
       <TaskSummaryCards tasks={tasks} />
 
@@ -511,6 +548,8 @@ export default function TasksPage() {
           onEdit={handleOpenEditModal}
           onAssign={handleOpenAssignModal}
           onDelete={handleOpenDeleteModal}
+          onStatusChange={isStaff ? handleStatusChange : undefined}
+          busyTaskId={statusBusyTaskId}
         />
 
         {/* Pagination controls */}

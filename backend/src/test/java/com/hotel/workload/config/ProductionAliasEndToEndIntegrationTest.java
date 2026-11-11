@@ -28,7 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.password=",
         "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
         "spring.sql.init.mode=always",
-        "spring.sql.init.schema-locations=classpath:db/migration/V1__initial_schema.sql,classpath:db/migration/V2__add_credentials_setup_required.sql,classpath:db/h2-departments-table.sql,classpath:db/h2-support-assignments-table.sql,classpath:db/h2-user-profile-image.sql,classpath:db/h2-user-display-name.sql,classpath:db/h2-user-account-activity.sql,classpath:db/h2-user-preferences.sql,classpath:db/h2-notification-preferences.sql,classpath:db/h2-user-email-change.sql,classpath:db/h2-user-phone.sql,classpath:db/h2-verification-lockout.sql,classpath:db/h2-manager-department-changes.sql",
+        "spring.sql.init.schema-locations=classpath:db/migration/V1__initial_schema.sql,classpath:db/migration/V2__add_credentials_setup_required.sql,classpath:db/h2-departments-table.sql,classpath:db/h2-support-assignments-table.sql,classpath:db/h2-user-profile-image.sql,classpath:db/h2-user-display-name.sql,classpath:db/h2-user-account-activity.sql,classpath:db/h2-user-preferences.sql,classpath:db/h2-notification-preferences.sql,classpath:db/h2-user-email-change.sql,classpath:db/h2-user-phone.sql,classpath:db/h2-verification-lockout.sql,classpath:db/h2-manager-department-changes.sql,classpath:db/h2-system-settings.sql",
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.show-sql=false",
         "spring.jpa.properties.hibernate.format_sql=false",

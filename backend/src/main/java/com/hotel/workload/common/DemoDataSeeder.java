@@ -110,7 +110,8 @@ public class DemoDataSeeder implements CommandLineRunner {
 
         String defaultPassword = passwordEncoder.encode("password");
 
-        // Users
+        // Users. Every demo account is created already email-verified with its first password set (credentialsSetupRequired is false by
+        // default), so all five can sign in at once without SendGrid; real accounts still go through verification and setup.
         User admin = new User();
         admin.setUsername("admin");
         admin.setEmail("admin@hotel.com");
@@ -132,7 +133,7 @@ public class DemoDataSeeder implements CommandLineRunner {
         rahulUser.setEmail("rahul@hotel.com");
         rahulUser.setPassword(defaultPassword);
         rahulUser.setRole(Role.STAFF);
-        rahulUser.setEmailVerified(false);
+        rahulUser.setEmailVerified(true);
         rahulUser = userRepository.save(rahulUser);
 
         User priyaUser = new User();
@@ -140,7 +141,7 @@ public class DemoDataSeeder implements CommandLineRunner {
         priyaUser.setEmail("priya@hotel.com");
         priyaUser.setPassword(defaultPassword);
         priyaUser.setRole(Role.STAFF);
-        priyaUser.setEmailVerified(false);
+        priyaUser.setEmailVerified(true);
         priyaUser = userRepository.save(priyaUser);
 
         User amitUser = new User();
@@ -148,10 +149,19 @@ public class DemoDataSeeder implements CommandLineRunner {
         amitUser.setEmail("amit@hotel.com");
         amitUser.setPassword(defaultPassword);
         amitUser.setRole(Role.STAFF);
-        amitUser.setEmailVerified(false);
+        amitUser.setEmailVerified(true);
         amitUser = userRepository.save(amitUser);
 
-        // Staff
+        // Staff. The Manager needs a linked, active Staff record with an active department: that record is where a Manager's department
+        // comes from, and without it every Manager request is refused (403). Housekeeping is the Manager's department.
+        Staff managerStaff = new Staff();
+        managerStaff.setUser(manager);
+        managerStaff.setName("Manager");
+        managerStaff.setEmail(manager.getEmail());
+        managerStaff.setDepartment(department("HOUSEKEEPING"));
+        managerStaff.setAvailability(Availability.AVAILABLE);
+        staffRepository.save(managerStaff);
+
         Staff rahul = new Staff();
         rahul.setUser(rahulUser);
         rahul.setName("Rahul");

@@ -238,6 +238,66 @@ public class TaskServiceImpl implements TaskService {
         }
     }
 
+    /** What Staff may do to a task assigned to them: the next step only. Cancelling, going back, skipping a step and reopening are not theirs to do. */
+    static final java.util.Map<TaskStatus, TaskStatus> STAFF_NEXT_STATUS = java.util.Map.of(
+            TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS,
+            TaskStatus.IN_PROGRESS, TaskStatus.COMPLETED);
+
+    /**
+     * A Staff member moves a task assigned to THEM one step forward. Checked here, not only in the URL rules:
+     * <ul>
+     *   <li>the caller must be Staff (scope OWN): Admin and Manager use the full update; no sign-in is 401;</li>
+     *   <li>the caller's own linked, active Staff record is found from the signed-in user name, never from the request;</li>
+     *   <li>the task is locked, then it must have an assignment to THAT Staff record. A task that does not exist, one with no assignment
+     *       and one assigned to somebody else all give the same 404, so nothing is revealed about other people's tasks;</li>
+     *   <li>only {@link #STAFF_NEXT_STATUS} is allowed (409 otherwise). Only the status changes: no other field and no assignment.</li>
+     * </ul>
+     */
+    @Override
+    @Transactional
+    public TaskDto updateOwnTaskStatus(UUID id, TaskStatus requested) {
+        DepartmentScope scope = scopeResolver.resolve();
+        if (!scope.isOwn()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only Staff members update the status of their own tasks here. Use the task edit instead.");
+        }
+        if (requested == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
+        }
+        String username = scopeResolver.currentUsername();
+        Staff staff = staffRepository.findByUserUsername(username)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Staff record not found"));
+        if (!staff.isActive()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Your staff record is not active");
+        }
+
+        // Same order as every other task change: the task is locked first, then what it needs is read
+        taskRepository.lockByIds(Set.of(id));
+        Task task = taskRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
+        boolean mine = assignmentRepository.findAllByTaskId(id).stream()
+                .anyMatch(a -> a.getStaff() != null && staff.getId().equals(a.getStaff().getId()));
+        if (!mine) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found");
+        }
+
+        TaskStatus current = task.getStatus();
+        if (current != null && current.isTerminal()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, String.format(
+                    "This task is %s and cannot be changed to %s. Finished tasks cannot be reopened.", current.getDisplayName(), requested.getDisplayName()));
+        }
+        TaskStatus allowed = current == null ? null : STAFF_NEXT_STATUS.get(current);
+        if (allowed != requested) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, allowed == null
+                    ? String.format("A task that is %s cannot be changed to %s by Staff.", current == null ? "not started" : current.getDisplayName(), requested.getDisplayName())
+                    : String.format("A task that is %s can only be moved to %s, not %s.", current.getDisplayName(), allowed.getDisplayName(), requested.getDisplayName()));
+        }
+
+        task.setStatus(requested);
+        task = taskRepository.saveAndFlush(task);
+        // The same follow-up as the full update: temporary cross-department support ends when its task is completed
+        supportLifecycle.onTaskChanged(task);
+        return mapToDto(task);
+    }
+
     @Override
     @Transactional
     public void deleteTask(UUID id) {

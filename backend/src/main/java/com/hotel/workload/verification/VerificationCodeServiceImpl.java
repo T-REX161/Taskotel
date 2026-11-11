@@ -44,6 +44,13 @@ import java.util.UUID;
  * per-client limits in front of these endpoints are best effort only (per instance, cleared by a restart); this database state is what
  * holds across restarts.
  *
+ * <p><b>Who can use it (Stage 4A-2, K04).</b> This is the FIRST-TIME flow, so it is open only to an account that still has onboarding to do:
+ * one whose email is not yet verified, or which is verified but has not set its own password yet (login sends it a fresh code to get a new
+ * setup token). An account that has finished both ({@code emailVerified} and no setup required), whatever its role, is treated like an unknown
+ * one by both methods: a send does one hash and returns quietly (no email, nothing stored, not even the cooldown), and a verify is the
+ * generic failure and is not counted. So nobody who only knows a username or email can make a finished account receive codes, or use up its
+ * attempts and lock verification on it. The caller sees no difference (the same generic answers).
+ *
  * <p><b>Known limitation: timing.</b> Email dispatch is still synchronous (and runs while the account row is locked), so a send that
  * reaches SendGrid takes a network round trip while one that does not returns after a hash. A caller who measures response times can
  * still tell them apart. Asynchronous dispatch (a separately approved stage) is what closes this.
@@ -98,6 +105,13 @@ public class VerificationCodeServiceImpl implements VerificationCodeService {
         }
         User user = found.get();
         LocalDateTime now = LocalDateTime.now();
+
+        // Nothing is read or written for an account that has finished onboarding (not even a lock that has run out)
+        if (onboardingComplete(user)) {
+            hashCode(generateCode());
+            log.info("Verification code requested for a user who has already completed verification and setup; nothing was sent");
+            return;
+        }
 
         releaseLockIfOver(user, now);
         if (isLocked(user, now)) {
@@ -158,6 +172,12 @@ public class VerificationCodeServiceImpl implements VerificationCodeService {
         }
         User user = found.get();
         LocalDateTime now = LocalDateTime.now();
+
+        // A finished account has nothing to verify: the generic failure, and nothing is changed or counted (so its attempts cannot be used up)
+        if (onboardingComplete(user)) {
+            log.warn("Verification attempted for a user who has already completed verification and setup");
+            throw new VerificationException(GENERIC_FAILURE);
+        }
 
         // 0. A lock that has run out is lifted (the count starts again); one still running refuses everything, even the right code,
         //    and counts nothing
@@ -239,6 +259,11 @@ public class VerificationCodeServiceImpl implements VerificationCodeService {
     }
 
     // ── state rules ──────────────────────────────────────────────────────────
+
+    /** Email verified and the first password set: the first-time flow is over for this account. */
+    private static boolean onboardingComplete(User user) {
+        return user.isEmailVerified() && !user.isCredentialsSetupRequired();
+    }
 
     private static boolean isLocked(User user, LocalDateTime now) {
         return user.getVerificationLockedUntil() != null && now.isBefore(user.getVerificationLockedUntil());

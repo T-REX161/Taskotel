@@ -129,6 +129,8 @@ public class SecurityConfig {
         authz.requestMatchers(HttpMethod.POST, "/api/tasks", "/api/assignments").hasAnyRole(ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.PUT, "/api/tasks/*", "/api/assignments/*").hasAnyRole(ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.DELETE, "/api/tasks/*").hasAnyRole(ADMIN, MANAGER);
+        // A Staff member's own task status (the service also checks that the task is assigned to them)
+        authz.requestMatchers(HttpMethod.PATCH, "/api/tasks/*/status").hasRole(STAFF);
 
         // ── Workload and dashboard ────────────────────────────────────────────────────────────────────────────────────────────
         allowGet(authz, new String[]{"/api/workload", "/api/dashboard/summary"}, ADMIN, MANAGER, STAFF);
@@ -136,6 +138,10 @@ public class SecurityConfig {
 
         // ── Departments: everyone may read (how much each role sees is decided by the service); managing them is Admin only ───
         allowGet(authz, new String[]{"/api/departments"}, ADMIN, MANAGER, STAFF);
+        // ── System settings: Admin only, read and write (the service checks it again) ───────────────────────────────────────
+        allowGet(authz, new String[]{"/api/system-settings"}, ADMIN);
+        authz.requestMatchers(HttpMethod.PUT, "/api/system-settings").hasRole(ADMIN);
+
         authz.requestMatchers(HttpMethod.POST, "/api/departments").hasRole(ADMIN);
         authz.requestMatchers(HttpMethod.PUT, "/api/departments/*").hasRole(ADMIN);
         authz.requestMatchers(HttpMethod.DELETE, "/api/departments/*").hasRole(ADMIN);

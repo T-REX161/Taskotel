@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { TasksIcon, DotsVerticalIcon, EyeIcon } from '../icons/Icons';
+import { staffStatusAction } from '../../utils/taskStatus';
 import {
   getPriorityColor,
   formatPriority,
@@ -34,6 +35,8 @@ export default function TasksTable({
   onEdit,
   onAssign,
   onDelete,
+  onStatusChange,
+  busyTaskId = null,
 }) {
   const [activeMenu, setActiveMenu] = useState(null); // { task, buttonEl }
   const [menuPosition, setMenuPosition] = useState(null);
@@ -307,6 +310,30 @@ export default function TasksTable({
             <EyeIcon className="w-3.5 h-3.5 text-gray-400" />
             <span>View Details</span>
           </button>
+
+          {/* Staff: the next step for their own task (Start task / Mark as completed). Never shown to Admin or Manager. */}
+          {!canManageTasks && onStatusChange && (() => {
+            const task = activeMenu.task;
+            const action = staffStatusAction(task.status);
+            if (!action) return null;
+            const busy = busyTaskId === task.id;
+            return (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setActiveMenu(null);
+                  onStatusChange(task, action.status);
+                }}
+                className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 hover:text-emerald-700 flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <svg className="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>{busy ? action.busyLabel : action.label}</span>
+              </button>
+            );
+          })()}
 
           {/* Edit Task (if canManageTasks) */}
           {canManageTasks && (

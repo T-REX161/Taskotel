@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V16 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V17 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -85,7 +85,8 @@ public class MigrationFilesTest {
                 "V13__user_email_change.sql",
                 "V14__user_phone.sql",
                 "V15__manager_department_changes.sql",
-                "V16__verification_lockout.sql"), names);
+                "V16__verification_lockout.sql",
+                "V17__system_settings.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -93,7 +94,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16), versions, "Versions must be 1 to 16 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17), versions, "Versions must be 1 to 17 with no gaps or duplicates");
     }
 
     @Test
@@ -121,6 +122,22 @@ public class MigrationFilesTest {
         }
         assertEquals(5, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
         assertFalse(executable.toLowerCase().contains("email ") && executable.contains("ALTER COLUMN"), "the real email column is never altered");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+    }
+
+    @Test
+    @DisplayName("V17 only creates the system_settings table: one global row at most, no data added, nothing existing changed")
+    public void testV17OnlyCreatesOneTable() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V17__system_settings.sql")));
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|ALTER|RENAME|DROP)\\b").matcher(code).find(),
+                "V17 must not change, add or remove any data or existing object");
+        assertEquals(1, Pattern.compile("(?i)CREATE TABLE").matcher(executable).results().count());
+        assertTrue(executable.contains("CREATE TABLE system_settings ("));
+        assertTrue(executable.contains("CONSTRAINT uk_system_settings_key UNIQUE (settings_key)"), "the key is unique");
+        assertTrue(executable.contains("CHECK (settings_key = 'GLOBAL')"), "only the one global key is possible");
+        assertTrue(executable.contains("CHECK (capacity_threshold_percent BETWEEN 1 AND 100)"));
+        assertFalse(executable.contains("REFERENCES"), "no foreign key: the audit columns must survive account changes");
         assertTrue(executable.contains("SET LOCAL lock_timeout"));
     }
 
