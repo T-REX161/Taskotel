@@ -41,7 +41,7 @@ describe('System Settings page wiring (source checks)', () => {
 
   it('the threshold input is a labelled text box that shows an inline error for an invalid value and marks itself invalid', () => {
     assert.ok(page.includes('aria-label="Capacity Threshold (percent)"') && page.includes('inputMode="numeric"') && page.includes('maxLength={3}'));
-    assert.ok(page.includes('aria-invalid={!thresholdCheck.valid}') && page.includes('{!thresholdCheck.valid && ('));
+    assert.ok(page.includes('aria-invalid={!thresholdCheck.valid}') && page.includes('error={!thresholdCheck.valid ? thresholdCheck.message : null}'));
     assert.ok(page.includes('const thresholdCheck = form ? parseThreshold(form.capacityThresholdPercent)'));
   });
 
@@ -52,7 +52,7 @@ describe('System Settings page wiring (source checks)', () => {
   });
 
   it('saves through the shared request, shows success only after the server confirms, and replaces the form with the confirmed values', () => {
-    const save = page.slice(page.indexOf('const save = async'), page.indexOf('return (\n    <div className="w-full max-w-5xl space-y-6">\n      <div>\n        <Link to="/settings"'));
+    const save = page.slice(page.indexOf('const save = async'), page.indexOf('\n  return (\n    <div', page.indexOf('const save = async')));
     const ok = save.indexOf('const confirmed = await saveSystemSettings(form);');
     assert.ok(ok > 0);
     assert.ok(save.indexOf("setStatus({ phase: 'saved'") > ok, 'success is set only after the awaited save');
@@ -61,7 +61,7 @@ describe('System Settings page wiring (source checks)', () => {
   });
 
   it('a failed save shows the error and keeps what was typed and what is saved (the catch changes neither)', () => {
-    const save = page.slice(page.indexOf('const save = async'), page.indexOf('return (\n    <div className="w-full max-w-5xl space-y-6">\n      <div>\n        <Link to="/settings"'));
+    const save = page.slice(page.indexOf('const save = async'), page.indexOf('\n  return (\n    <div', page.indexOf('const save = async')));
     const failure = save.slice(save.indexOf('} catch (error) {'));
     assert.ok(failure.includes("setStatus({ phase: 'error'") && failure.includes('systemSettingsErrorMessage(error, SYSTEM_SETTINGS_MESSAGES.saveFailed)'));
     assert.ok(!failure.includes('setForm(') && !failure.includes('setSaved('));
