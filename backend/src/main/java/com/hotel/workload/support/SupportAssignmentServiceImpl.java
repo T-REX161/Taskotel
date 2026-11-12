@@ -73,6 +73,33 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         this.scopeResolver = scopeResolver;
     }
 
+    /** System Settings, Cross-Department Assistance. Optional (setter) so a hand-built service in a unit test keeps the default (allowed). */
+    private com.hotel.workload.settings.SystemSettingsService systemSettings;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setSystemSettings(com.hotel.workload.settings.SystemSettingsService systemSettings) {
+        this.systemSettings = systemSettings;
+    }
+
+    static final String CROSS_DEPARTMENT_OFF_MESSAGE =
+            "Cross-department assistance is turned off in System Settings, so new support arrangements cannot be planned or confirmed. "
+                    + "Existing support is not affected.";
+
+    /** Refuses a NEW cross-department arrangement while the setting is off. Existing support records are never read or changed by this. */
+    private void requireCrossDepartmentAssistanceEnabled() {
+        if (systemSettings != null && !systemSettings.current().crossDepartmentAssistanceEnabled()) {
+            throw new SupportPlanException(HttpStatus.CONFLICT, CROSS_DEPARTMENT_OFF_MESSAGE,
+                    List.of(new Problem("CROSS_DEPARTMENT_ASSISTANCE_DISABLED", CROSS_DEPARTMENT_OFF_MESSAGE, null, null)));
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public SupportDtos.CrossDepartmentStatus crossDepartmentStatus() {
+        readerDepartmentCode(); // who is asking: Admin or a valid Manager; anyone else is refused (401/403) before anything is read
+        return new SupportDtos.CrossDepartmentStatus(systemSettings == null || systemSettings.current().crossDepartmentAssistanceEnabled());
+    }
+
     // ── who is asking (read paths, Step 2G-2) ────────────────────────────────────────────────────────────────
 
     /**
@@ -491,6 +518,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     @Transactional(readOnly = true)
     public Preview preview(SupportPlanRequest request) {
         String managerDepartment = readerDepartmentCode();
+        requireCrossDepartmentAssistanceEnabled();
         if (managerDepartment != null) {
             String requested = request.getReceivingDepartment() == null ? "" : request.getReceivingDepartment().trim();
             if (!managerDepartment.equals(requested)) {
@@ -622,6 +650,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Sign in to confirm support");
         }
         String username = auth.getName();
+        requireCrossDepartmentAssistanceEnabled();
 
         // Serialize with other confirmations that touch the same departments, tasks or staff, in a fixed order
         Set<UUID> staffIds = request.getItems().stream().map(SupportPlanRequest.Item::getStaffId).collect(Collectors.toCollection(TreeSet::new));

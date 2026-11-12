@@ -24,6 +24,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.email = :email")
     Optional<User> findByEmailForUpdate(@org.springframework.data.repository.query.Param("email") String email);
+    /**
+     * Every active administrator account, locked for the rest of the transaction (SELECT ... FOR UPDATE, in id order). Used by
+     * AdminAccountGuard so concurrent deactivations of administrators are decided one at a time. Must be called inside a transaction.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.role = com.hotel.workload.security.Role.ADMIN AND u.active = true ORDER BY u.id")
+    List<User> findActiveAdminsForUpdate();
+
     // A list: the unique constraint on email is case-sensitive, so two accounts could differ only in case
     List<User> findAllByEmailIgnoreCase(String email);
     Optional<User> findBySetupToken(String setupToken);

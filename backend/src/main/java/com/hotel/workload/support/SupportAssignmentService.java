@@ -9,6 +9,12 @@ import java.util.UUID;
  */
 public interface SupportAssignmentService {
 
+    /**
+     * Whether new cross-department support can currently be planned and confirmed (System Settings), and nothing more of the settings.
+     * Admin and Manager (a valid Manager; the same caller checks as the other support reads); Staff and anonymous callers are refused.
+     */
+    SupportDtos.CrossDepartmentStatus crossDepartmentStatus();
+
     /** Everything needed to build a plan for this receiving department: its waiting tasks and the staff who could help. */
     SupportDtos.Options getOptions(String receivingDepartmentCode);
 

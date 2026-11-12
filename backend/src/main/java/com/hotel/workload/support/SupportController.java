@@ -29,6 +29,12 @@ public class SupportController {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(supportService.getOptions(receivingDepartment));
     }
 
+    /** Read-only: whether new cross-department support is switched on in System Settings. Admin and Manager; only that one flag is returned. */
+    @GetMapping("/cross-department-status")
+    public ResponseEntity<SupportDtos.CrossDepartmentStatus> crossDepartmentStatus() {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(supportService.crossDepartmentStatus());
+    }
+
     /** Validates a plan and shows its workload impact on both departments. Changes nothing. */
     @PostMapping("/preview")
     public ResponseEntity<SupportDtos.Preview> preview(@Valid @RequestBody SupportPlanRequest request) {

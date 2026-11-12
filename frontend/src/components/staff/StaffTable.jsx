@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { formatDepartment, isAvailable, isActive } from './staffFormatters';
 import { DotsVerticalIcon, EyeIcon } from '../icons/Icons';
-import { getUserRole } from '../../services/api';
+import { getUserRole, getUsername } from '../../services/api';
+import { OWN_ACCOUNT_DEACTIVATE_HINT, canOfferDeactivation } from '../../utils/ownAccount';
 import UserAvatar from '../common/UserAvatar';
 
 /**
@@ -38,6 +39,7 @@ export default function StaffTable({
   onActivate,
   onRemove,
   currentUserRole,
+  currentUsername,
 }) {
   const [activeMenu, setActiveMenu] = useState(null); // { staff, buttonEl }
   const [menuPosition, setMenuPosition] = useState(null);
@@ -45,6 +47,8 @@ export default function StaffTable({
 
   const role = currentUserRole !== undefined ? currentUserRole : getUserRole();
   const isAdmin = role === 'ADMIN' || role === 'ROLE_ADMIN';
+  // Your own row never offers "Deactivate" (the server refuses it too)
+  const signedInUsername = currentUsername !== undefined ? currentUsername : getUsername();
 
   const updatePosition = useCallback(() => {
     if (!activeMenu?.buttonEl) return;
@@ -312,8 +316,11 @@ export default function StaffTable({
           {isActive(activeMenu.staff.active) ? (
             <button
               type="button"
+              disabled={!canOfferDeactivation(activeMenu.staff, signedInUsername)}
+              title={canOfferDeactivation(activeMenu.staff, signedInUsername) ? undefined : OWN_ACCOUNT_DEACTIVATE_HINT}
               onClick={() => {
                 const staff = activeMenu.staff;
+                if (!canOfferDeactivation(staff, signedInUsername)) return;
                 setActiveMenu(null);
                 onDeactivate && onDeactivate(staff);
               }}

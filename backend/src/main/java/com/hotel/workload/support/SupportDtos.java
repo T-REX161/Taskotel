@@ -20,6 +20,9 @@ public final class SupportDtos {
      * Workload figures for one department. Minutes are the existing workload measure (estimated duration of active
      * tasks, 0 when missing). A supported task counts under the receiving department, never twice.
      */
+    /** The one System Settings fact a Manager may read: whether NEW cross-department support can be planned. Nothing else from the settings. */
+    public record CrossDepartmentStatus(boolean crossDepartmentAssistanceEnabled) {}
+
     public record Metrics(int waitingTasks, int waitingMinutes, int assignedMinutes, int availableStaff, int freeStaff,
                           int uncoveredTasks, int uncoveredMinutes) {}
 

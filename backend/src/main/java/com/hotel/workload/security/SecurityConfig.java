@@ -148,7 +148,7 @@ public class SecurityConfig {
 
         // ── Cross-department support: confirming a plan is Admin only (the service checks too); the rest is Admin and Manager ──
         authz.requestMatchers(HttpMethod.POST, "/api/support/assignments").hasRole(ADMIN);
-        allowGet(authz, new String[]{"/api/support/options", "/api/support/assignments"}, ADMIN, MANAGER);
+        allowGet(authz, new String[]{"/api/support/options", "/api/support/assignments", "/api/support/cross-department-status"}, ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.POST, "/api/support/preview", "/api/support/assignments/*/archive",
                 "/api/support/assignments/*/end").hasAnyRole(ADMIN, MANAGER);
 

@@ -61,6 +61,14 @@ public class StaffServiceImpl implements StaffService {
         this.emailChangeService = emailChangeService;
     }
 
+    // Own account / last active administrator rule, shared with UserAccountService. Null in the hand-built unit tests.
+    private com.hotel.workload.security.AdminAccountGuard adminAccountGuard;
+
+    @Autowired(required = false)
+    void setAdminAccountGuard(com.hotel.workload.security.AdminAccountGuard adminAccountGuard) {
+        this.adminAccountGuard = adminAccountGuard;
+    }
+
     @Autowired(required = false)
     void setManagerAuditRecorder(ManagerDepartmentAuditRecorder managerAuditRecorder) {
         this.managerAuditRecorder = managerAuditRecorder;
@@ -216,6 +224,10 @@ public class StaffServiceImpl implements StaffService {
         // holder through the verified self-service flow (EmailChangeService). A different address is refused, not silently ignored.
         requireLoginEmailUnchanged(staff, request.getEmail());
 
+        // Switching the account off (active=false) is held to the same rule as the deactivate route: not your own account, never the
+        // last active administrator. Checked before any field changes, so a refusal leaves the Staff record and the account untouched.
+        requireMayDeactivateAccount(staff, request.isActive());
+
         // Reject before any field changes so a refused deactivation leaves the record untouched
         if (staff.isActive() && !request.isActive() && hasActiveAssignments(staff.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, DEACTIVATE_WITH_ACTIVE_ASSIGNMENTS_MESSAGE);
@@ -276,6 +288,8 @@ public class StaffServiceImpl implements StaffService {
         if (!staff.isActive() && (staff.getUser() == null || !staff.getUser().isActive())) {
             return StaffDto.fromEntity(staff);
         }
+
+        requireMayDeactivateAccount(staff, false);
 
         if (staff.isActive() && hasActiveAssignments(staff.getId())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, DEACTIVATE_WITH_ACTIVE_ASSIGNMENTS_MESSAGE);
@@ -423,6 +437,17 @@ public class StaffServiceImpl implements StaffService {
      * changed, deactivated or reactivated by an administrator alone, whichever endpoint is used, so a manager cannot disable or
      * re-email a higher-privileged account.
      */
+    /**
+     * When {@code remainsActive} is false and the linked account is currently active, the account is being deactivated: ask the shared
+     * guard (own account: 400, last active administrator: 409). Nothing to check when the account stays active or is already inactive.
+     */
+    private void requireMayDeactivateAccount(Staff staff, boolean remainsActive) {
+        User account = staff.getUser();
+        if (!remainsActive && account != null && account.isActive() && adminAccountGuard != null) {
+            adminAccountGuard.requireMayDeactivate(account);
+        }
+    }
+
     private void requireMayManage(DepartmentScope scope, Staff staff) {
         if (hasPrivilegedAccount(staff) && !scope.isAll()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only administrators can change manager or admin accounts");

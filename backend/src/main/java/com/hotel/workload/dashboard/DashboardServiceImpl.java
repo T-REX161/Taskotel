@@ -94,6 +94,7 @@ public class DashboardServiceImpl implements DashboardService {
         dto.setTotalActiveAssignments(assignmentRepository.countActiveAssignments(ACTIVE_STATUSES));
 
         applyWorkloadBuckets(dto, scope);
+        applyCapacityAlerts(dto, scope);
         return dto;
     }
 
@@ -121,7 +122,63 @@ public class DashboardServiceImpl implements DashboardService {
         dto.setTotalActiveAssignments(assignmentRepository.countActiveByTaskAndStaffDepartment(ACTIVE_STATUSES, department));
 
         applyWorkloadBuckets(dto, scope);
+        applyCapacityAlerts(dto, scope);
         return dto;
+    }
+
+    /** System Settings (Max Task Capacity Alert, Capacity Threshold). Optional (setter) so a hand-built service in a unit test shows no alerts. */
+    private com.hotel.workload.settings.SystemSettingsService systemSettings;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setSystemSettings(com.hotel.workload.settings.SystemSettingsService systemSettings) {
+        this.systemSettings = systemSettings;
+    }
+
+    /**
+     * Capacity warnings for the caller's scope, only while the alert is switched on. A department is warned about when the share of its
+     * eligible staff who are in work has reached the configured threshold:
+     * (eligible staff with at least one active assignment) / (all eligible staff) x 100.
+     * Eligible = Staff role AND active AND AVAILABLE AND has a department; numerator and denominator use exactly this one population, so the
+     * percentage can never exceed 100. Managers, Administrators, inactive Staff, unavailable Staff (even when they hold work) and Staff with no
+     * department are in neither. A department with no eligible staff has no denominator, so it never warns (no division by zero). One entry
+     * per department, so there are no duplicate warnings.
+     * A Manager's scope is their own department only. Read-only: nothing is stored, sent or reassigned.
+     */
+    private void applyCapacityAlerts(AdminDashboardSummaryDto dto, DepartmentScope scope) {
+        if (systemSettings == null) return;
+        com.hotel.workload.settings.SystemSettingsDto settings = systemSettings.current();
+        if (!settings.capacityAlertEnabled()) return;
+        int threshold = settings.capacityThresholdPercent();
+
+        List<Staff> candidates = scope.isDepartment()
+                ? staffRepository.findByDepartmentAndUserRole(scope.department(), com.hotel.workload.security.Role.STAFF)
+                : staffRepository.findAllWithUser();
+        java.util.Set<java.util.UUID> busy = new java.util.HashSet<>(assignmentRepository.findBusyStaffIds(ACTIVE_STATUSES));
+
+        java.util.Map<String, int[]> counts = new java.util.LinkedHashMap<>(); // code -> {eligible staff, eligible staff in work}
+        java.util.Map<String, String> names = new java.util.HashMap<>();
+        for (Staff staff : candidates) {
+            // One eligible population for numerator and denominator: Staff role, active, AVAILABLE, with a department
+            if (staff.getUser() == null || staff.getUser().getRole() != com.hotel.workload.security.Role.STAFF
+                    || !staff.isActive() || staff.getAvailability() != Availability.AVAILABLE || staff.getDepartment() == null) continue;
+            String code = staff.getDepartment().getCode();
+            int[] c = counts.computeIfAbsent(code, k -> new int[2]);
+            names.put(code, staff.getDepartment().getName());
+            c[0]++;
+            if (busy.contains(staff.getId())) c[1]++;
+        }
+
+        List<AdminDashboardSummaryDto.CapacityAlert> alerts = new java.util.ArrayList<>();
+        for (java.util.Map.Entry<String, int[]> e : counts.entrySet()) {
+            int total = e.getValue()[0];
+            int inWork = e.getValue()[1];
+            if (total > 0 && inWork * 100 >= threshold * total) {
+                alerts.add(new AdminDashboardSummaryDto.CapacityAlert(e.getKey(), names.get(e.getKey()), inWork, total, inWork * 100 / total, threshold));
+            }
+        }
+        alerts.sort(java.util.Comparator.comparingInt(AdminDashboardSummaryDto.CapacityAlert::percentInWork).reversed()
+                .thenComparing(AdminDashboardSummaryDto.CapacityAlert::departmentName));
+        dto.setCapacityAlerts(alerts);
     }
 
     /** Workload buckets from the caller's scoped workload (the same calculation as GET /api/workload). */

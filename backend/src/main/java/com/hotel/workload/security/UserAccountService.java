@@ -31,8 +31,9 @@ public class UserAccountService {
 
     /** Shared with StaffServiceImpl.removeStaff: the same rule on both deletion paths. */
     public static final String ADMIN_ACCOUNT_MESSAGE = "Administrator accounts cannot be permanently removed. Deactivate the account instead.";
-    static final String OWN_ACCOUNT_MESSAGE = "You cannot deactivate or remove your own account.";
-    static final String LAST_ADMIN_MESSAGE = "Cannot deactivate the last active administrator.";
+    // The rules themselves live in AdminAccountGuard (shared with the Staff deactivation routes); these keep the old names
+    static final String OWN_ACCOUNT_MESSAGE = AdminAccountGuard.OWN_ACCOUNT_MESSAGE;
+    static final String LAST_ADMIN_MESSAGE = AdminAccountGuard.LAST_ADMIN_MESSAGE;
     static final String REMOVE_ACTIVE_MESSAGE = "Cannot remove an active account. Deactivate it first.";
     static final String HAS_TASKS_MESSAGE = "This account cannot be removed because it created tasks, and removing it would erase that history. Deactivate it instead.";
     static final String HAS_APPROVALS_MESSAGE = "This account cannot be removed because it approved support records, and removing it would erase that history. Deactivate it instead.";
@@ -44,11 +45,14 @@ public class UserAccountService {
     private final SupportAssignmentRepository supportRepository;
     private final NotificationPreferenceRepository preferenceRepository;
     private final CurrentUserScopeResolver scopeResolver;
+    private final AdminAccountGuard adminAccountGuard;
 
     public UserAccountService(UserRepository userRepository, StaffRepository staffRepository, StaffService staffService,
                               TaskRepository taskRepository, SupportAssignmentRepository supportRepository,
-                              NotificationPreferenceRepository preferenceRepository, CurrentUserScopeResolver scopeResolver) {
+                              NotificationPreferenceRepository preferenceRepository, CurrentUserScopeResolver scopeResolver,
+                              AdminAccountGuard adminAccountGuard) {
         this.scopeResolver = scopeResolver;
+        this.adminAccountGuard = adminAccountGuard;
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
         this.staffService = staffService;
@@ -60,12 +64,9 @@ public class UserAccountService {
     @Transactional
     public UserDto deactivate(UUID id) {
         scopeResolver.requireAdmin();
-        String actingUsername = scopeResolver.currentUsername(); // from the security context, never from the caller
         User user = find(id);
-        requireNotSelf(user, actingUsername);
-        if (user.isActive() && user.getRole() == Role.ADMIN && userRepository.countByRoleAndActiveTrue(Role.ADMIN) <= 1) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, LAST_ADMIN_MESSAGE);
-        }
+        // Own account / last active administrator: the same guard the Staff deactivation routes use (identity from the security context)
+        adminAccountGuard.requireMayDeactivate(user);
         Optional<Staff> staff = staffRepository.findByUserUsername(user.getUsername());
         if (staff.isPresent()) {
             staffService.deactivateStaff(staff.get().getId()); // staff rules (e.g. active assignments) still apply
@@ -91,9 +92,8 @@ public class UserAccountService {
     @Transactional
     public void remove(UUID id) {
         scopeResolver.requireAdmin();
-        String actingUsername = scopeResolver.currentUsername(); // from the security context, never from the caller
         User user = find(id);
-        requireNotSelf(user, actingUsername);
+        adminAccountGuard.requireNotOwnAccount(user); // identity from the security context, never from the caller
         // An Admin account is never deleted (deactivate it instead), whether or not it has a staff record
         if (user.getRole() == Role.ADMIN) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, ADMIN_ACCOUNT_MESSAGE);
@@ -120,12 +120,6 @@ public class UserAccountService {
 
     private User find(UUID id) {
         return userRepository.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-    }
-
-    private static void requireNotSelf(User user, String actingUsername) {
-        if (actingUsername.equalsIgnoreCase(user.getUsername())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, OWN_ACCOUNT_MESSAGE);
-        }
     }
 
     private UserDto reload(UUID id) {

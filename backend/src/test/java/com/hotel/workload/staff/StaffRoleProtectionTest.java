@@ -156,6 +156,8 @@ public class StaffRoleProtectionTest {
         String managerEmail = managerStaff.getUser().getEmail();
         assertEquals(200, send("ADMIN", update(managerStaff, managerEmail, true)));
         assertEquals(managerEmail, userRepository.findById(managerStaff.getUser().getId()).orElseThrow().getEmail(), "the login email is not changed by a staff update");
+        // An administrator may be deactivated while another active administrator remains (the last one never can: AdminDeactivationProtectionTest)
+        create(Role.ADMIN, "admin2");
         assertEquals(200, send("ADMIN", patch("/api/staff/" + adminStaff.getId() + "/deactivate")));
         assertEquals(false, userRepository.findById(adminStaff.getUser().getId()).orElseThrow().isActive());
         assertEquals(200, send("ADMIN", patch("/api/staff/" + adminStaff.getId() + "/activate")));

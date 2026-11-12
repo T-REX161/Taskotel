@@ -8,7 +8,9 @@ import {
   deactivateStaff,
   activateStaff,
   removeStaff,
+  getUsername,
 } from '../services/api';
+import { canOfferDeactivation } from '../utils/ownAccount';
 import {
   isAvailable,
   isActive,
@@ -242,6 +244,7 @@ export default function StaffPage() {
 
   // Deactivate modal handlers
   const handleOpenDeactivateModal = (staff) => {
+    if (!canOfferDeactivation(staff, getUsername())) return; // your own account (the server refuses it too)
     setDeactivateError('');
     setDeactivatingStaff(staff);
   };

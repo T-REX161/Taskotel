@@ -25,6 +25,22 @@ public class AdminDashboardSummaryDto {
     private long highWorkloadStaff;
     private long atRiskStaff;
 
+    /**
+     * Capacity warnings (System Settings: Max Task Capacity Alert and Capacity Threshold): one entry per department in the caller's scope
+     * whose share of staff in work has reached the threshold. Always empty while the alert is switched off.
+     */
+    private java.util.List<CapacityAlert> capacityAlerts = new java.util.ArrayList<>();
+
+    /**
+     * staffInWork: eligible Staff of the department holding at least one active assignment (the numerator); operationalStaff: all eligible
+     * Staff of the department (the denominator). Eligible = Staff role, active, AVAILABLE, with a department, the same population for both, so
+     * percentInWork never exceeds 100. Managers, Administrators, inactive and unavailable Staff and Staff without a department are in neither.
+     */
+    public record CapacityAlert(String departmentCode, String departmentName, int staffInWork, int operationalStaff, int percentInWork, int thresholdPercent) {}
+
+    public java.util.List<CapacityAlert> getCapacityAlerts() { return capacityAlerts; }
+    public void setCapacityAlerts(java.util.List<CapacityAlert> capacityAlerts) { this.capacityAlerts = capacityAlerts; }
+
     // Getters and Setters
     public long getTotalStaff() { return totalStaff; }
     public void setTotalStaff(long totalStaff) { this.totalStaff = totalStaff; }

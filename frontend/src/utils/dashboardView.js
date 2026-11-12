@@ -137,6 +137,8 @@ export function donutCenterTotal(data, total, isStaff) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 /** How many rows an expanded insight lists; the rest is summarised as "+N more". */
 export const INSIGHT_DETAIL_LIMIT = 4;
+/** The Operations Insights card shows at most this many rows: workload, capacity, support and tasks. */
+const MAX_INSIGHTS = 4;
 const PRIORITY_RANK = { URGENT: 2, HIGH: 1 };
 const SEVERITY_WORD = { CRITICAL: 'Critical', HIGH: 'High', MODERATE: 'Moderate' };
 
@@ -162,12 +164,13 @@ export const tasksNeedingAttention = (tasks) =>
  *   staffWorkload   – { status, data } from GET /api/workload (Admin / Manager)
  *   tasks           – { status, data } from GET /api/tasks (Admin / Manager: all tasks)
  *   recommendations – { status, data } normalised GET /api/workload/recommendations (Admin only)
+ *   capacityAlerts  – GET /api/dashboard summary's capacityAlerts (empty while the capacity alert is off in System Settings)
  *   showSupport     – false for a Manager: the recommendations endpoint is not yet department-scoped (Support isolation step), so a Manager's
  *                     dashboard neither requests nor shows the support insight
  * Returns { state, items, unavailable }: state is 'items' | 'clear' | 'loading' | 'unavailable' | 'hidden'. 'clear' (nothing to
  * report) is only ever returned when every source loaded, so a failed source is never mistaken for "no alerts".
  */
-export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendations, showSupport = true }) {
+export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendations, showSupport = true, capacityAlerts }) {
   if (isStaff) {
     const status = own?.workloadStatus;
     if (status !== 'HIGH' && status !== 'AT_RISK') return { state: 'hidden', items: [], unavailable: [] };
@@ -194,6 +197,16 @@ export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendati
     }
   }
 
+  // Capacity warnings come from the dashboard summary itself; the backend sends none while the alert is switched off in System Settings
+  if (Array.isArray(capacityAlerts) && capacityAlerts.length > 0) {
+    const top = capacityAlerts[0];
+    const full = top.percentInWork >= 100;
+    items.push({ key: 'capacity', kind: 'capacity', rank: full ? 95 : 75, tone: full ? 'red' : 'amber', to: '/workload',
+      details: { type: 'capacity', total: capacityAlerts.length, rows: capacityAlerts.slice(0, INSIGHT_DETAIL_LIMIT), viewAll: '/workload' },
+      title: `${plural(capacityAlerts.length, 'department', 'departments')} at capacity limit`,
+      detail: `${top.departmentName} · ${top.staffInWork} of ${top.operationalStaff} available staff in work (${top.percentInWork}%, limit ${top.thresholdPercent}%)${capacityAlerts.length > 1 ? ` +${capacityAlerts.length - 1} more` : ''}` });
+  }
+
   if (showSupport && recommendations?.status === 'ready') {
     const departments = supportHighlights(recommendations.data);
     if (departments.length > 0) {
@@ -218,7 +231,7 @@ export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendati
   items.sort((a, b) => b.rank - a.rank);
   const unavailable = Object.entries(sources).filter(([, s]) => s?.status === 'error').map(([name]) => name);
   const loading = Object.values(sources).some((s) => !s || s.status === 'loading');
-  if (items.length > 0) return { state: 'items', items: items.slice(0, 3), unavailable };
+  if (items.length > 0) return { state: 'items', items: items.slice(0, MAX_INSIGHTS), unavailable };
   if (loading) return { state: 'loading', items: [], unavailable };
   return { state: unavailable.length > 0 ? 'unavailable' : 'clear', items: [], unavailable };
 }

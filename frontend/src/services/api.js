@@ -487,6 +487,14 @@ export const getSupportOptions = (receivingDepartment) => {
   return apiFetch(`/api/support/options?receivingDepartment=${encodeURIComponent(receivingDepartment)}`);
 };
 
+/**
+ * Whether new cross-department support is switched on in System Settings (ADMIN or MANAGER). Answers only { crossDepartmentAssistanceEnabled }:
+ * the settings themselves stay Admin-only.
+ */
+export const getCrossDepartmentStatus = () => {
+  return apiFetch('/api/support/cross-department-status');
+};
+
 /** Validates a plan and returns its workload impact. Changes nothing. Request: { receivingDepartment, items: [{ staffId, taskId }] } */
 export const previewSupportPlan = (request) => {
   return apiFetch('/api/support/preview', { method: 'POST', body: JSON.stringify(request) });

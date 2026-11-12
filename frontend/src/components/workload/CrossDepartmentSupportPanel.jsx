@@ -6,10 +6,12 @@ import {
   getSupportAssignments,
   getUserRole,
   getSupportOptions,
+  getCrossDepartmentStatus,
   getWorkloadRecommendations,
   previewSupportPlan,
 } from '../../services/api';
-import { getSeverityLabel, getSeverityTone, normalizeRecommendations } from '../../utils/supportRecommendations';
+import { getSeverityLabel, getSeverityTone, normalizeRecommendations, recommendationsTurnedOff } from '../../utils/supportRecommendations';
+import { CROSS_DEPARTMENT_DISABLED_NOTICE, crossDepartmentAssistanceOff } from '../../utils/systemSettings';
 import { departmentLabel } from '../../utils/departmentRegistry';
 import {
   SUPPORT_STAGES,
@@ -127,7 +129,19 @@ function SupportPanelContent({ onChanged }) {
     }
   }, []);
 
-  useEffect(() => { loadNeeds(); loadHistory(); }, [loadNeeds, loadHistory]);
+  // Whether new cross-department support is switched off in System Settings, from the narrow status route that Admin and Manager may both read
+  // (the settings themselves stay Admin-only). When the read fails nothing is shown on a guess: the server still refuses a new plan with its own message.
+  const [crossDepartmentOff, setCrossDepartmentOff] = useState(false);
+  const loadCrossDepartmentSetting = useCallback(async () => {
+    try {
+      const off = crossDepartmentAssistanceOff(await getCrossDepartmentStatus());
+      if (mounted.current) setCrossDepartmentOff(off);
+    } catch {
+      if (mounted.current) setCrossDepartmentOff(false);
+    }
+  }, []);
+
+  useEffect(() => { loadNeeds(); loadHistory(); loadCrossDepartmentSetting(); }, [loadNeeds, loadHistory, loadCrossDepartmentSetting]);
   useEffect(() => { loadOptions(state.department); }, [state.department, loadOptions]);
 
   // Live preview: recalculated shortly after the plan stops changing; an answer for an older plan is ignored
@@ -168,8 +182,9 @@ function SupportPanelContent({ onChanged }) {
   const refreshAll = useCallback(() => {
     loadNeeds();
     loadHistory();
+    loadCrossDepartmentSetting();
     loadOptions(state.department);
-  }, [loadNeeds, loadHistory, loadOptions, state.department]);
+  }, [loadNeeds, loadHistory, loadCrossDepartmentSetting, loadOptions, state.department]);
 
   const handleConfirm = async () => {
     // Confirmation is Admin-only: a Manager never sends it (the server would refuse it with 403 anyway)
@@ -268,6 +283,12 @@ function SupportPanelContent({ onChanged }) {
         </button>
       </div>
 
+      {crossDepartmentOff && (
+        <p role="status" data-testid="cross-department-disabled-notice" className="-mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs sm:text-sm text-gray-700">
+          {CROSS_DEPARTMENT_DISABLED_NOTICE}
+        </p>
+      )}
+
       {/* What the labels mean, and what is not taken into account: one compact disclosure instead of a legend */}
       <details className="text-xs text-gray-500 -mt-2">
         <summary className="cursor-pointer font-medium text-gray-600 w-fit focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded">How this works</summary>
@@ -344,7 +365,9 @@ function SupportPanelContent({ onChanged }) {
         )}
         {needs.status !== 'error' && needs.data && departments.length === 0 && (
           <p className="text-sm text-gray-600 rounded-lg border border-gray-100 bg-gray-50/60 p-4 text-center">
-            No department currently has more waiting work than free staff, so no support is needed.
+            {recommendationsTurnedOff(needs.data)
+              ? 'Workload recommendations are turned off in System Settings, so no suggestions are shown.'
+              : 'No department currently has more waiting work than free staff, so no support is needed.'}
           </p>
         )}
         {departments.length > 0 && (

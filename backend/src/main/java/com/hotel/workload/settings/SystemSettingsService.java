@@ -47,6 +47,15 @@ public class SystemSettingsService {
         return repository.findBySettingsKey(SystemSettings.GLOBAL_KEY).map(SystemSettingsDto::of).orElseGet(SystemSettingsDto::defaults);
     }
 
+    /**
+     * The settings in force, for the application's own behaviour (support, recommendations, dashboard alerts). Internal: no controller exposes
+     * it and it makes no permission decision, because the callers have already resolved who is asking and never return these values to a
+     * non-Admin. Same source as {@link #get()}: the stored row, or the defaults while nothing has been saved. Writes nothing.
+     */
+    public SystemSettingsDto current() {
+        return repository.findBySettingsKey(SystemSettings.GLOBAL_KEY).map(SystemSettingsDto::of).orElseGet(SystemSettingsDto::defaults);
+    }
+
     /** Saves all four settings and returns them as stored. */
     public SystemSettingsDto update(UpdateSystemSettingsRequest request) {
         scopeResolver.requireAdmin();

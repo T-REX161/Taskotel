@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CloseIcon } from '../icons/Icons';
-import { updateStaff, requestStaffEmailChange, getUserRole } from '../../services/api';
+import { updateStaff, requestStaffEmailChange, getUserRole, getUsername } from '../../services/api';
+import { OWN_ACCOUNT_DEACTIVATE_HINT, canOfferDeactivation } from '../../utils/ownAccount';
 import {
   SENT_MESSAGE,
   canRequestEmailChange,
@@ -366,12 +367,16 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
                       active: e.target.value === 'true',
                     }))
                   }
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !canOfferDeactivation(staff, getUsername())}
+                  title={canOfferDeactivation(staff, getUsername()) ? undefined : OWN_ACCOUNT_DEACTIVATE_HINT}
                   className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-800 bg-white"
                 >
                   <option value="true">Active</option>
                   <option value="false">Inactive</option>
                 </select>
+                {!canOfferDeactivation(staff, getUsername()) && (
+                  <p className="text-xs text-gray-500">{OWN_ACCOUNT_DEACTIVATE_HINT}</p>
+                )}
               </div>
 
               {/* Username (Disabled in Edit Mode) */}

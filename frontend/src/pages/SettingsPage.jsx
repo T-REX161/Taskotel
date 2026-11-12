@@ -97,7 +97,7 @@ export function SystemSettingsPage() {
           <span aria-hidden="true">&larr;</span> Back to Settings
         </Link>
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">System Settings</h1>
-        <p className="text-sm sm:text-base text-gray-500">Configure hotel operations and task auto-balancing rules.</p>
+        <p className="text-sm sm:text-base text-gray-500">Configure hotel operations and workload balancing rules.</p>
       </header>
 
       <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden" aria-labelledby="system-settings-rules-title" aria-busy={loading || saving}>
@@ -142,7 +142,7 @@ export function SystemSettingsPage() {
               <SettingCard
                 icon={<ScaleIcon className="h-5 w-5" />}
                 title="Auto-Balancing Trigger"
-                description="Automatically suggest reassignments when staff enters HIGH or AT_RISK state"
+                description="Show workload balancing recommendations for departments under pressure. Suggestions only: no task is ever moved automatically"
               >
                 <SettingSwitch label="Auto-Balancing Trigger" checked={form.autoBalancingEnabled} disabled={saving} onChange={() => change({ autoBalancingEnabled: !form.autoBalancingEnabled })} />
               </SettingCard>
@@ -158,7 +158,7 @@ export function SystemSettingsPage() {
               <SettingCard
                 icon={<GaugeIcon className="h-5 w-5" />}
                 title="Capacity Threshold"
-                description={`Percentage of a department's staff in work at which the capacity alert applies (${THRESHOLD_MIN} to ${THRESHOLD_MAX})`}
+                description={`Percentage of a department's available staff who have active work (unavailable staff are not counted either way), at which the capacity alert applies (${THRESHOLD_MIN} to ${THRESHOLD_MAX})`}
                 error={!thresholdCheck.valid ? thresholdCheck.message : null}
               >
                 <div className={`flex items-center rounded-lg border bg-white transition-colors focus-within:ring-2 ${thresholdCheck.valid ? 'border-gray-300 hover:border-gray-400 focus-within:border-emerald-500 focus-within:ring-emerald-200' : 'border-red-400 focus-within:ring-red-200'} ${saving ? 'opacity-60 bg-gray-50' : ''}`}>
@@ -182,7 +182,7 @@ export function SystemSettingsPage() {
               <SettingCard
                 icon={<UsersIcon className="h-5 w-5" />}
                 title="Cross-Department Assistance"
-                description="Allow qualified staff to receive tasks from adjacent departments during surge periods"
+                description="Allow new cross-department support to be planned and confirmed. Turning it off does not end support that already exists"
               >
                 <SettingSwitch label="Cross-Department Assistance" checked={form.crossDepartmentAssistanceEnabled} disabled={saving} onChange={() => change({ crossDepartmentAssistanceEnabled: !form.crossDepartmentAssistanceEnabled })} />
               </SettingCard>

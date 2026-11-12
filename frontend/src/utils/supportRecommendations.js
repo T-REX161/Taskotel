@@ -71,3 +71,11 @@ export function normalizeRecommendations(data) {
 
 /** True when there is nothing to show: no department needs support and none is left without a possible donor. */
 export const hasNoPressure = (normalized) => normalized.recommendations.length === 0 && normalized.unsupported.length === 0;
+
+/** The server's note when the Auto-Balancing Trigger is off in System Settings (it sends no suggestions then and says so in `limitations`). */
+export const RECOMMENDATIONS_OFF_MARKER = 'turned off in System Settings';
+
+/** True when the empty list is because recommendations are switched off, not because nothing needs support. */
+export function recommendationsTurnedOff(data) {
+  return asArray(data?.limitations).some((note) => typeof note === 'string' && note.includes(RECOMMENDATIONS_OFF_MARKER));
+}

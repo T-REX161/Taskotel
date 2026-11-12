@@ -172,7 +172,7 @@ export default function Dashboard() {
     userRole === 'STAFF' ||
     (data && data.workload !== undefined && data.totalStaff === undefined);
 
-  const insights = buildInsights({ isStaff, own: data?.workload, staffWorkload, tasks, recommendations, showSupport: userRole !== 'MANAGER' });
+  const insights = buildInsights({ isStaff, own: data?.workload, staffWorkload, tasks, recommendations, showSupport: userRole !== 'MANAGER', capacityAlerts: data?.capacityAlerts });
   const welcomeName = preferredName(profile, describeUser(getUsername(), userRole).displayName);
 
   return (

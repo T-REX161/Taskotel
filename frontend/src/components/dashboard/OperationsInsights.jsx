@@ -4,7 +4,7 @@ import { WorkloadIcon, DepartmentsIcon, TasksIcon } from '../icons/Icons';
 import { workloadTone } from '../../utils/dashboardView';
 import { getSeverityLabel, getSeverityBadge } from '../../utils/supportRecommendations';
 
-const ICONS = { workload: WorkloadIcon, support: DepartmentsIcon, tasks: TasksIcon };
+const ICONS = { workload: WorkloadIcon, capacity: WorkloadIcon, support: DepartmentsIcon, tasks: TasksIcon };
 const TONES = {
   red: 'bg-red-50 text-red-600 ring-red-100',
   amber: 'bg-amber-50 text-amber-600 ring-amber-100',
@@ -42,6 +42,17 @@ function Details({ details }) {
                 </span>
                 <span className="tabular-nums text-gray-700">{r.percent}%</span>
                 <span className={`${pill} ${tone.badge}`}>{tone.label}</span>
+              </Row>
+            );
+          }
+          if (type === 'capacity') {
+            return (
+              <Row key={r.departmentCode}>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium text-gray-900 truncate" title={r.departmentName}>{r.departmentName}</span>
+                  <span className="block text-gray-500 truncate">{r.staffInWork} of {r.operationalStaff} available staff in work · limit {r.thresholdPercent}%</span>
+                </span>
+                <span className="tabular-nums text-gray-700">{r.percentInWork}%</span>
               </Row>
             );
           }
