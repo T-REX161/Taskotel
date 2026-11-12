@@ -36,6 +36,9 @@ final class StaffTransferRules {
 
     /** @throws ResponseStatusException 409 when the move is blocked by active tasks in another department */
     static void requireNoConflictingTasks(AssignmentRepository assignmentRepository, Staff staff, Department target) {
+        if (target == null) {
+            return; // clearing a department is a different rule (any active assignment blocks it), made by the caller
+        }
         List<Task> conflicting = activeTasksOutside(assignmentRepository, staff, target);
         if (!conflicting.isEmpty()) {
             String taskList = conflicting.stream()

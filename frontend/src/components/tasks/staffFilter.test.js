@@ -6,6 +6,7 @@ describe('filterEligibleStaff', () => {
   const sampleStaff = [
     {
       id: 'staff-1',
+      role: 'STAFF',
       name: 'Maria Santos',
       department: 'HOUSEKEEPING',
       active: true,
@@ -13,6 +14,7 @@ describe('filterEligibleStaff', () => {
     },
     {
       id: 'staff-2',
+      role: 'STAFF',
       name: 'Carlos Rodriguez',
       department: 'HOUSEKEEPING',
       active: true,
@@ -20,6 +22,7 @@ describe('filterEligibleStaff', () => {
     },
     {
       id: 'staff-3',
+      role: 'STAFF',
       name: 'Elena Rostova',
       department: 'HOUSEKEEPING',
       active: true,
@@ -27,6 +30,7 @@ describe('filterEligibleStaff', () => {
     },
     {
       id: 'staff-4',
+      role: 'STAFF',
       name: 'John Doe',
       department: 'HOUSEKEEPING',
       active: false,
@@ -34,6 +38,7 @@ describe('filterEligibleStaff', () => {
     },
     {
       id: 'staff-5',
+      role: 'STAFF',
       name: 'Priya Sharma',
       department: 'FRONT_DESK',
       active: true,
@@ -188,6 +193,7 @@ describe('filterEligibleStaff', () => {
       const realBackendStaff = [
         {
           id: 's-real-1',
+          role: 'STAFF',
           name: 'Elena Rostova',
           email: 'elena@example.com',
           phone: '555-0199',
@@ -197,6 +203,7 @@ describe('filterEligibleStaff', () => {
         },
         {
           id: 's-real-2',
+          role: 'STAFF',
           name: 'Igor Vane',
           email: 'igor@example.com',
           phone: '555-0200',
@@ -222,6 +229,7 @@ describe('filterEligibleStaff', () => {
       const legacyStaff = [
         {
           id: 's-legacy-1',
+          role: 'STAFF',
           name: 'Legacy Staff',
           department: 'HOUSEKEEPING',
           availabilityStatus: 'AVAILABLE', // legacy property name
@@ -229,6 +237,7 @@ describe('filterEligibleStaff', () => {
         },
         {
           id: 's-legacy-2',
+          role: 'STAFF',
           name: 'Legacy Busy',
           department: 'HOUSEKEEPING',
           availabilityStatus: 'BUSY',
@@ -251,6 +260,7 @@ describe('filterEligibleStaff', () => {
       const missingAvailStaff = [
         {
           id: 's-none-1',
+          role: 'STAFF',
           name: 'No Avail',
           department: 'HOUSEKEEPING',
           active: true,
@@ -314,5 +324,74 @@ describe('filterEligibleStaff', () => {
       });
       assert.ok(allowed.some((s) => s.id === 'staff-1'));
     });
+  });
+});
+
+describe('filterEligibleStaff: only operational Staff accounts are eligible', () => {
+  // Every record satisfies the other rules (department, active, AVAILABLE, no assignment); only the linked user's role differs
+  const record = (id, role) => ({ id, name: `Person ${id}`, department: 'HOUSEKEEPING', active: true, availability: 'AVAILABLE', role });
+  const pick = (allStaff, extra = {}) => filterEligibleStaff({ allStaff, tasks: [], assignments: [], department: 'HOUSEKEEPING', ...extra }).map((s) => s.id);
+
+  it('a STAFF account that satisfies every other rule stays eligible', () => {
+    assert.deepEqual(pick([record('a', 'STAFF')]), ['a']);
+  });
+
+  it('an ADMIN account is excluded even though it is in the department, active, available and free', () => {
+    assert.deepEqual(pick([record('admin-1', 'ADMIN')]), []);
+  });
+
+  it('a MANAGER account is excluded even though every other rule passes', () => {
+    assert.deepEqual(pick([record('mgr-1', 'MANAGER')]), []);
+  });
+
+  it('a missing, null, empty, lower-case or unknown role is excluded (nothing is assumed)', () => {
+    const odd = [undefined, null, '', 'staff', 'Staff', ' STAFF', 'SUPERVISOR', 'ROLE_STAFF', 'ADMINISTRATOR', 0, {}];
+    odd.forEach((role, i) => assert.deepEqual(pick([record(`odd-${i}`, role)]), [], `role ${JSON.stringify(role)}`));
+    const noRoleField = { id: 'bare', name: 'No Role', department: 'HOUSEKEEPING', active: true, availability: 'AVAILABLE' };
+    assert.deepEqual(pick([noRoleField]), []);
+  });
+
+  it('in a mixed list only the STAFF accounts remain, in their original order', () => {
+    const list = [record('s1', 'STAFF'), record('admin', 'ADMIN'), record('s2', 'STAFF'), record('mgr', 'MANAGER'), record('s3', 'STAFF')];
+    assert.deepEqual(pick(list), ['s1', 's2', 's3']);
+  });
+
+  it('privileged accounts are identified by role only, never by name, username or id', () => {
+    const lookAlike = [
+      { ...record('admin', 'STAFF'), name: 'Admin', username: 'admin' },
+      { ...record('x', 'ADMIN'), name: 'Ordinary Person', username: 'ordinary' },
+    ];
+    assert.deepEqual(pick(lookAlike), ['admin'], 'a STAFF account called Admin is eligible, an ADMIN account with an ordinary name is not');
+  });
+
+  it('the other rules still apply to STAFF accounts: department, inactive, availability and an active assignment', () => {
+    const list = [
+      record('ok', 'STAFF'),
+      { ...record('other-dept', 'STAFF'), department: 'FRONT_DESK' },
+      { ...record('inactive', 'STAFF'), active: false },
+      { ...record('busy', 'STAFF'), availability: 'BUSY' },
+      { ...record('unavailable', 'STAFF'), availability: 'UNAVAILABLE' },
+      record('assigned', 'STAFF'),
+      record('finished', 'STAFF'),
+    ];
+    const assignments = [
+      { id: 'a1', taskId: 't1', staffId: 'assigned', taskStatus: 'IN_PROGRESS' },
+      { id: 'a2', taskId: 't2', staffId: 'finished', taskStatus: 'COMPLETED' },
+    ];
+    assert.deepEqual(pick(list, { assignments }), ['ok', 'finished']);
+  });
+
+  it('reassignment exclusions still work for STAFF accounts, and still never admit a privileged account', () => {
+    const list = [record('s1', 'STAFF'), record('admin', 'ADMIN')];
+    const tasks = [{ id: 't', status: 'ASSIGNED' }];
+    const assignments = [{ id: 'a', taskId: 't', staffId: 's1', taskStatus: 'ASSIGNED' }];
+    assert.deepEqual(pick(list, { tasks, assignments }), []);
+    assert.deepEqual(pick(list, { tasks, assignments, excludeTaskId: 't' }), ['s1']);
+    assert.deepEqual(pick(list, { tasks, assignments, excludeAssignmentId: 'a' }), ['s1']);
+  });
+
+  it('a department-less or empty request still returns nothing', () => {
+    assert.deepEqual(filterEligibleStaff({ allStaff: [record('s1', 'STAFF')], department: '' }), []);
+    assert.deepEqual(filterEligibleStaff({ allStaff: [], department: 'HOUSEKEEPING' }), []);
   });
 });

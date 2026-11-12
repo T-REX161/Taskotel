@@ -184,8 +184,8 @@ public class CurrentUserScopeResolverDatabaseTest {
     }
 
     @Test
-    @DisplayName("A Staff record cannot be saved without a department, so the 'no department' state cannot arise in the database")
-    public void staffWithoutDepartmentCannotBeStored() {
+    @DisplayName("A Staff record may now be stored without a department (V19), and a Manager whose record has none is still refused with 403")
+    public void managerWithoutDepartmentIsStillRefused() {
         User user = newUser("scope_nodept", Role.MANAGER, true);
         Staff staff = new Staff();
         staff.setUser(user);
@@ -194,8 +194,10 @@ public class CurrentUserScopeResolverDatabaseTest {
         staff.setAvailability(Availability.AVAILABLE);
         staff.setActive(true);
 
-        assertThrows(Exception.class, () -> staffRepository.saveAndFlush(staff),
-                "The schema requires a department, so the resolver's null-department refusal is a second line of defence");
+        // The schema no longer forbids it (an operational STAFF account may have no department yet), so for a Manager it is the resolver's
+        // refusal that keeps the rule: the Manager's scope is their department, and without one there is none
+        staffRepository.saveAndFlush(staff);
+        assertRefused("scope_nodept");
     }
 
     @Test

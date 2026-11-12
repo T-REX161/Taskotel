@@ -2,6 +2,8 @@
 // assign or read the history, the department must exist and be active, the transfer rules); these helpers only decide what is
 // offered and how server answers are worded. Nothing here is a security control: hiding is for convenience, the API refuses anyway.
 
+import { UNASSIGNED_LABEL } from './staffDepartment.js';
+
 export const ADMIN_ONLY_MESSAGE = 'Only an Admin can view or change a Manager’s department.';
 export const NOT_MANAGER_MESSAGE = 'Departments are assigned to Manager accounts only.';
 
@@ -40,7 +42,7 @@ export function canSubmit({ currentCode, selectedCode, submitting }) {
 /** What the dialog says about the Manager's current department, never inventing one. */
 export function currentDepartmentText(info) {
   if (!info) return 'Not available';
-  if (!info.departmentName && !info.departmentCode) return 'No department';
+  if (!info.departmentName && !info.departmentCode) return UNASSIGNED_LABEL;
   return info.departmentName || info.departmentCode;
 }
 
@@ -56,10 +58,13 @@ export function validityNote(info) {
     : 'This Manager has no department access right now.';
 }
 
-/** One history line: "Housekeeping → Kitchen". Names are the snapshots stored with the record, so they stay correct after renames. */
+/**
+ * One history line: "Housekeeping → Kitchen". Names are the snapshots stored with the record, so they stay correct after renames.
+ * A missing side is a first assignment ("Unassigned → Kitchen") or a removal ("Housekeeping → Unassigned"), never null or blank.
+ */
 export function describeChange(change) {
-  const from = change?.previousDepartmentName || change?.previousDepartmentCode || 'Unknown';
-  const to = change?.newDepartmentName || change?.newDepartmentCode || 'Unknown';
+  const from = change?.previousDepartmentName || change?.previousDepartmentCode || UNASSIGNED_LABEL;
+  const to = change?.newDepartmentName || change?.newDepartmentCode || UNASSIGNED_LABEL;
   return `${from} → ${to}`;
 }
 

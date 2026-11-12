@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V18 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V21 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -87,7 +87,10 @@ public class MigrationFilesTest {
                 "V15__manager_department_changes.sql",
                 "V16__verification_lockout.sql",
                 "V17__system_settings.sql",
-                "V18__allow_multiple_staff_per_task.sql"), names);
+                "V18__allow_multiple_staff_per_task.sql",
+                "V19__staff_department_optional.sql",
+                "V20__manager_department_changes_nullable.sql",
+                "V21__department_constraints_reconcile.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -95,7 +98,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18), versions, "Versions must be 1 to 18 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21), versions, "Versions must be 1 to 21 with no gaps or duplicates");
     }
 
     @Test
@@ -124,6 +127,135 @@ public class MigrationFilesTest {
         assertEquals(5, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "only users is altered");
         assertFalse(executable.toLowerCase().contains("email ") && executable.contains("ALTER COLUMN"), "the real email column is never altered");
         assertTrue(executable.contains("SET LOCAL lock_timeout"));
+    }
+
+    @Test
+    @DisplayName("V19 only drops NOT NULL on staff.department: no row is touched, no other column, constraint or table changes, and the rollback warning is there")
+    public void testV19OnlyDropsNotNull() throws IOException {
+        String file = read(MIGRATIONS.resolve("V19__staff_department_optional.sql"));
+        String executable = withoutLineComments(file);
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|RENAME|CASCADE|CREATE|ADD)\\b").matcher(code).find(),
+                "V19 must not change, add or remove any row or object");
+        assertEquals(1, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "exactly one change");
+        assertTrue(executable.contains("ALTER TABLE staff ALTER COLUMN department DROP NOT NULL;"));
+        assertFalse(Pattern.compile("(?i)\\bDROP\\s+(TABLE|COLUMN|CONSTRAINT|INDEX)\\b").matcher(code).find(), "nothing is dropped except the NOT NULL");
+        assertFalse(executable.contains("tasks"), "the task department rules are not touched");
+        int change = executable.indexOf("ALTER TABLE staff");
+        assertTrue(executable.indexOf("to_regclass") >= 0 && executable.indexOf("to_regclass") < change, "it checks the table exists before changing it");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertTrue(file.contains("ROLLBACK WARNING") && file.contains("ONLY while no Staff record has a null department"), "the rollback limit is stated");
+        assertTrue(file.contains("Not applied automatically"));
+    }
+
+    @Test
+    @DisplayName("V20 only drops NOT NULL on the four snapshot columns of the Manager department audit: no row is touched, nothing else changes, the rollback warning is there")
+    public void testV20OnlyDropsNotNull() throws IOException {
+        String file = read(MIGRATIONS.resolve("V20__manager_department_changes_nullable.sql"));
+        String executable = withoutLineComments(file);
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|RENAME|CASCADE|CREATE|ADD)\\b").matcher(code).find(),
+                "V20 must not change, add or remove any row or object");
+        assertFalse(Pattern.compile("(?i)\\bDROP\\s+(TABLE|COLUMN|CONSTRAINT|INDEX)\\b").matcher(code).find(), "nothing is dropped except NOT NULL");
+        assertEquals(4, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "exactly the four column changes");
+        for (String column : new String[] {"previous_department_code", "previous_department_name", "new_department_code", "new_department_name"}) {
+            assertTrue(executable.contains("ALTER TABLE manager_department_changes ALTER COLUMN " + column + " DROP NOT NULL;"), column);
+        }
+        assertFalse(executable.contains("staff") || executable.contains("users"), "no other table is touched");
+        int change = executable.indexOf("ALTER TABLE manager_department_changes");
+        assertTrue(executable.indexOf("to_regclass") >= 0 && executable.indexOf("to_regclass") < change, "it checks the table exists before changing it");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertTrue(file.contains("ROLLBACK WARNING") && file.contains("ONLY while no audit record has a null"), "the rollback limit is stated");
+        assertTrue(file.contains("Not applied automatically"));
+    }
+
+    @Test
+    @DisplayName("The production-profile test schema for V20 exists, does the same thing and is loaded after the V15 stand-in")
+    public void testV20TestSchemaMatches() throws IOException {
+        String h2 = withoutLineComments(read(Path.of("src/test/resources/db/h2-manager-department-audit-nullable.sql"))).trim();
+        assertEquals(4, Pattern.compile("(?i)ALTER TABLE manager_department_changes ALTER COLUMN \\w+ DROP NOT NULL;").matcher(h2).results().count());
+        assertEquals(4, Pattern.compile("(?i)ALTER TABLE").matcher(h2).results().count());
+        for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
+            String source = read(Path.of("src/test/java/com/hotel/workload/config").resolve(test));
+            int v15 = source.indexOf("classpath:db/h2-manager-department-changes.sql");
+            int v20 = source.indexOf("classpath:db/h2-manager-department-audit-nullable.sql");
+            assertTrue(v15 >= 0 && v20 > v15, test + " must load the V20 stand-in after the V15 one");
+        }
+    }
+
+    @Test
+    @DisplayName("V15 is untouched (history is not rewritten); V20 is what relaxes it")
+    public void testV15IsUntouchedAndV20RelaxesIt() throws IOException {
+        assertTrue(read(MIGRATIONS.resolve("V15__manager_department_changes.sql")).contains("previous_department_code  VARCHAR(64)  NOT NULL"));
+    }
+
+    @Test
+    @DisplayName("V21 only reconciles the department constraints: it checks for orphaned codes before changing anything, touches no row and no nullability, and drops only the two enum CHECKs")
+    public void testV21ReconcilesDepartmentConstraints() throws IOException {
+        String file = read(MIGRATIONS.resolve("V21__department_constraints_reconcile.sql"));
+        String executable = withoutLineComments(file);
+        String code = withoutStringLiterals(executable);
+        assertFalse(Pattern.compile("(?i)\\b(DELETE|UPDATE|INSERT|TRUNCATE|RENAME|CASCADE)\\b").matcher(code).find(), "V21 must not change, add or remove any row");
+        assertFalse(Pattern.compile("(?i)SET\\s+NOT\\s+NULL|ALTER\\s+COLUMN|DROP\\s+NOT\\s+NULL").matcher(code).find(), "no nullability change: NULL stays valid");
+        assertFalse(Pattern.compile("(?i)\\bDROP\\s+(TABLE|COLUMN|INDEX)\\b").matcher(code).find(), "only constraints are dropped");
+        assertTrue(executable.contains("staff_department_check") && executable.contains("tasks_department_check"), "it names the two obsolete CHECKs");
+        assertTrue(executable.contains("fk_staff_department_code") && executable.contains("fk_tasks_department_code"), "the foreign keys keep the names V4 gave them");
+        assertTrue(executable.contains("idx_staff_department") && executable.contains("idx_tasks_department"));
+        assertEquals(1, Pattern.compile("(?i)DROP CONSTRAINT").matcher(executable).results().count(), "a single DROP CONSTRAINT, applied to the two CHECKs by name");
+        int orphans = executable.indexOf("not in departments.code");
+        assertTrue(orphans >= 0 && orphans < executable.indexOf("DROP CONSTRAINT") && orphans < executable.indexOf("ADD CONSTRAINT") && orphans < executable.indexOf("CREATE INDEX"),
+                "orphaned codes are rejected before anything is dropped or added");
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertTrue(file.contains("Not applied automatically") && file.contains("ROLLBACK") && file.contains("V4"));
+    }
+
+    @Test
+    @DisplayName("V21 drops a legacy CHECK only after proving it is exactly the six-department CHECK on the department column alone; a loose 'mentions department' test is not enough")
+    public void testV21ValidatesTheLegacyChecksStrictly() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V21__department_constraints_reconcile.sql")));
+        int drop = executable.indexOf("DROP CONSTRAINT");
+        int validation = executable.indexOf("RAISE EXCEPTION 'V21: % on % is not the legacy six-department CHECK");
+        assertTrue(validation > 0 && validation < drop, "the legacy-CHECK validation raises before the constraint is dropped");
+        String guard = executable.substring(executable.indexOf("IF FOUND THEN"), validation);
+        assertTrue(guard.contains("v_con.contype <> 'c'"), "the same-named object must be a CHECK");
+        assertTrue(guard.contains("v_con.conkey IS DISTINCT FROM ARRAY[v_dept_att]"), "it must be on the department column alone (no other column)");
+        assertTrue(guard.contains("v_con.def !~ '^CHECK"), "it must have the legacy shape: department = ANY (...)");
+        assertTrue(guard.contains("cardinality(v_literals) <> cardinality(v_expected)") && guard.contains("v_literals @> v_expected AND v_literals <@ v_expected"),
+                "it must allow exactly the six original codes, no more and no fewer");
+        assertTrue(guard.contains("~* ") && guard.contains("(and|or|not|null|is)"), "no extra boolean logic around the codes");
+        for (String code : new String[] {"HOUSEKEEPING", "FRONT_DESK", "MAINTENANCE", "ROOM_SERVICE", "FOOD_AND_BEVERAGE", "SECURITY"}) {
+            assertTrue(executable.contains("'" + code + "'"), code);
+        }
+        assertFalse(executable.contains("v_def !~* "), "the old 'mentions the word department' test is gone");
+    }
+
+    @Test
+    @DisplayName("V21 treats only a VALIDATED equivalent foreign key as sufficient: a NOT VALID one is validated after the orphan check, never skipped")
+    public void testV21RequiresValidatedForeignKeys() throws IOException {
+        String executable = withoutLineComments(read(MIGRATIONS.resolve("V21__department_constraints_reconcile.sql")));
+        int selects = Pattern.compile("contype = 'f'").matcher(executable).results().toList().size();
+        int validated = Pattern.compile("convalidated").matcher(executable).results().toList().size();
+        assertEquals(3, selects, "three lookups of an equivalent foreign key");
+        assertEquals(selects, validated, "every lookup of an equivalent foreign key looks at convalidated");
+        assertTrue(executable.contains("AND convalidated) THEN\n            CONTINUE;") || executable.contains("AND convalidated) THEN\r\n            CONTINUE;"),
+                "only a validated equivalent key lets the migration skip adding one");
+        assertTrue(executable.contains("AND NOT convalidated"), "an equivalent NOT VALID key is found...");
+        assertTrue(executable.contains("VALIDATE CONSTRAINT %I"), "...and validated");
+        int orphans = executable.indexOf("not in departments.code");
+        int validate = executable.indexOf("VALIDATE CONSTRAINT");
+        assertTrue(orphans > 0 && orphans < validate, "validation only happens after the orphan check has proved every row satisfies the key");
+        assertTrue(validate < executable.indexOf("ADD CONSTRAINT"), "a NOT VALID key is dealt with before a new one is considered");
+    }
+
+    @Test
+    @DisplayName("The production-profile test schema for V19 exists and does the same single thing")
+    public void testV19TestSchemaMatches() throws IOException {
+        String h2 = withoutLineComments(read(Path.of("src/test/resources/db/h2-staff-optional-department.sql"))).trim();
+        assertEquals("ALTER TABLE staff ALTER COLUMN department DROP NOT NULL;", h2);
+        for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
+            String source = read(Path.of("src/test/java/com/hotel/workload/config").resolve(test));
+            assertTrue(source.contains("classpath:db/h2-staff-optional-department.sql"), test + " must load the V19 stand-in");
+        }
     }
 
     @Test

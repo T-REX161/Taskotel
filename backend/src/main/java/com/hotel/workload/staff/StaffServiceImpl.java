@@ -123,9 +123,18 @@ public class StaffServiceImpl implements StaffService {
         }
         // A Manager adds staff to their own department only. The department in the request is never trusted: any other value is refused
         // before anything is looked up or saved (so the refusal says nothing about whether that department exists).
+        // A Manager never creates Staff without a department: a missing one is a plain validation error, never silently defaulted
+        if (scope.isDepartment() && (request.getDepartment() == null || request.getDepartment().isBlank())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Department is required");
+        }
         if (scope.isDepartment() && !isDepartmentCode(request.getDepartment(), scope.departmentCode())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, OWN_DEPARTMENT_ONLY_MESSAGE);
         }
+
+        // Any account (STAFF, MANAGER or ADMIN) may be created without a department by an Administrator; a Manager's own request is already
+        // held to their department above. A Manager account with no department gets no department-scoped access (CurrentUserScopeResolver
+        // refuses it) until an Administrator assigns one; an Admin account keeps full global access either way.
+        boolean noDepartment = request.getDepartment() == null || request.getDepartment().isBlank();
 
         passwordValidatorService.validate(request.getTemporaryPassword());
 
@@ -156,7 +165,7 @@ public class StaffServiceImpl implements StaffService {
         staff.setEmail(request.getEmail());
         staff.setPhone(request.getPhone());
         // For a Manager the department is the one resolved from their own records, never the one from the request
-        staff.setDepartment(scope.isDepartment() ? scope.department() : departmentResolver.requireActive(request.getDepartment()));
+        staff.setDepartment(scope.isDepartment() ? scope.department() : (noDepartment ? null : departmentResolver.requireActive(request.getDepartment())));
         staff.setAvailability(request.getAvailability());
         staff.setActive(true);
         
@@ -200,7 +209,7 @@ public class StaffServiceImpl implements StaffService {
         requireInScope(scope, staff);
         requireMayManage(scope, staff);
         // Only an administrator transfers staff between departments; a Manager's request must keep the staff member's own department
-        if (!scope.isAll() && !isDepartmentCode(request.getDepartment(), staff.getDepartment().getCode())) {
+        if (!scope.isAll() && !isDepartmentCode(request.getDepartment(), staff.getDepartment() == null ? null : staff.getDepartment().getCode())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, TRANSFER_ADMIN_ONLY_MESSAGE);
         }
         // The login email is never changed through this endpoint, by anyone (Admin included): it can only be changed by the account
@@ -212,12 +221,21 @@ public class StaffServiceImpl implements StaffService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, DEACTIVATE_WITH_ACTIVE_ASSIGNMENTS_MESSAGE);
         }
 
+        // A blank department clears it. Only an Administrator gets this far (a Manager's request must keep the department, above); any role
+        // (STAFF, MANAGER, ADMIN) may be cleared. A cleared Manager loses department-scoped access at once (the scope resolver fails closed).
+        boolean clearing = request.getDepartment() == null || request.getDepartment().isBlank();
+
         // Unchanged department: kept even if it is now inactive. Changed department: must be an active one.
-        Department targetDepartment = departmentResolver.forUpdate(staff.getDepartment(), request.getDepartment(), true);
+        Department targetDepartment = clearing ? null : departmentResolver.forUpdate(staff.getDepartment(), request.getDepartment(), true);
 
         Department previousDepartment = staff.getDepartment();
         boolean departmentChanged = !Objects.equals(targetDepartment, previousDepartment);
-        if (departmentChanged) {
+        if (departmentChanged && targetDepartment == null && hasActiveAssignments(staff.getId())) {
+            // Taking the department away from someone who holds active work would leave that work with an unassigned person
+            throw new ResponseStatusException(HttpStatus.CONFLICT, String.format(
+                    "Cannot remove the department of %s because they have active assignments. Reassign or complete those tasks first.", staff.getName()));
+        }
+        if (departmentChanged && targetDepartment != null) {
             // The same rule the dedicated Manager department assignment uses (StaffTransferRules)
             StaffTransferRules.requireNoConflictingTasks(assignmentRepository, staff, targetDepartment);
         }
@@ -236,6 +254,7 @@ public class StaffServiceImpl implements StaffService {
         staff = staffRepository.save(staff);
         // A Manager department change must always leave an audit record (Decision 17.6), also when an Admin makes it through this edit.
         // Same transaction: if the record cannot be written, the change is rolled back.
+        // A first assignment (no previous department), a transfer and a removal (no new department) are all recorded (null side = Unassigned, V20)
         if (departmentChanged && managerAuditRecorder != null && ManagerDepartmentAuditRecorder.isManagerRecord(staff)) {
             staffRepository.flush();
             managerAuditRecorder.record(staff, previousDepartment, targetDepartment, ManagerDepartmentChange.SOURCE_STAFF_EDIT);

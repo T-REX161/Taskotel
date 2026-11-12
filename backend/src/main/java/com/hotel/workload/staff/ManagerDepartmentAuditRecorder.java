@@ -31,11 +31,18 @@ public class ManagerDepartmentAuditRecorder {
         return staff.getUser() != null && staff.getUser().getRole() == Role.MANAGER;
     }
 
+    /**
+     * Records one change. {@code previous} is null for a first assignment (Unassigned to a department) and {@code next} is null for a removal
+     * (a department to Unassigned); the matching id, code and name columns are then null (V20). Both null is no change at all: nothing is written.
+     */
     @Transactional(propagation = Propagation.MANDATORY)
     public ManagerDepartmentChange record(Staff staff, Department previous, Department next, String source) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication is required.");
+        }
+        if (previous == null && next == null) {
+            return null;
         }
         // Fails (and so rolls the change back) when the acting Admin cannot be identified: no unattributed change
         User admin = userRepository.findByUsername(authentication.getName())
@@ -46,12 +53,16 @@ public class ManagerDepartmentAuditRecorder {
         change.setManagerUsername(staff.getUser().getUsername());
         change.setStaffId(staff.getId());
         change.setStaffName(staff.getName());
-        change.setPreviousDepartmentId(previous.getId());
-        change.setPreviousDepartmentCode(previous.getCode());
-        change.setPreviousDepartmentName(previous.getName());
-        change.setNewDepartmentId(next.getId());
-        change.setNewDepartmentCode(next.getCode());
-        change.setNewDepartmentName(next.getName());
+        if (previous != null) {
+            change.setPreviousDepartmentId(previous.getId());
+            change.setPreviousDepartmentCode(previous.getCode());
+            change.setPreviousDepartmentName(previous.getName());
+        }
+        if (next != null) {
+            change.setNewDepartmentId(next.getId());
+            change.setNewDepartmentCode(next.getCode());
+            change.setNewDepartmentName(next.getName());
+        }
         change.setChangedByUserId(admin.getId());
         change.setChangedByUsername(admin.getUsername());
         change.setChangeSource(source);

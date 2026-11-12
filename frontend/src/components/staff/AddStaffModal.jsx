@@ -21,6 +21,7 @@ import { createStaff, getUserRole } from '../../services/api';
 import { evaluatePasswordRules } from '../../utils/passwordPolicy';
 import PasswordRequirements from '../common/PasswordRequirements';
 import DepartmentOptions from '../common/DepartmentOptions';
+import { canChooseNoDepartment, departmentPayload, departmentProblem } from '../../utils/staffDepartment';
 import useDepartments from '../../hooks/useDepartments';
 import useUsernameAvailability from '../../hooks/useUsernameAvailability';
 import { generateUsername, validateUsername, USERNAME_INVALID_MESSAGES } from '../../utils/username';
@@ -135,6 +136,9 @@ export default function AddStaffModal({
   // Managers can add staff only; administrators can also create manager and admin accounts
   const canChooseRole = getUserRole() === 'ADMIN';
   const roleOptions = canChooseRole ? ROLE_OPTIONS : ROLE_OPTIONS.filter((option) => option.value === 'STAFF');
+  // Only an Admin may leave the department empty, for an account of any role; everything a Manager creates needs one
+  const effectiveRole = canChooseRole ? formData.role : 'STAFF';
+  const allowNoDepartment = canChooseNoDepartment(getUserRole(), effectiveRole);
 
   const usernameValue = formData.username.trim();
   const usernameInvalidReason = validateUsername(usernameValue);
@@ -155,12 +159,14 @@ export default function AddStaffModal({
     if (usernameCheck.status !== 'taken') hasPickedAlternative.current = false;
   }, [usernameEdited, usernameCheck.status, usernameCheck.suggestions, checked.username]);
 
-  // If the default department cannot take new staff (for example it is inactive), start on the first one that can
+  // If the default department cannot take new staff (for example it is inactive), start on the first one that can. An empty choice
+  // ("None (Unassigned)") is left alone while it is allowed (an Admin, whatever role is selected, so it survives role changes).
   useEffect(() => {
+    if (formData.department === '' && allowNoDepartment) return;
     if (activeDepartments.length > 0 && !activeDepartments.some((department) => department.code === formData.department)) {
       setFormData((prev) => ({ ...prev, department: activeDepartments[0].code }));
     }
-  }, [activeDepartments, formData.department]);
+  }, [activeDepartments, formData.department, allowNoDepartment]);
 
   if (!isOpen) return null;
 
@@ -225,6 +231,11 @@ export default function AddStaffModal({
       setFormError('Full name is required.');
       return;
     }
+    const missingDepartment = departmentProblem({ viewerRole: getUserRole(), accountRole: effectiveRole, department: formData.department });
+    if (missingDepartment) {
+      setFormError(missingDepartment);
+      return;
+    }
     if (!formData.email.trim()) {
       setFormError('Email is required.');
       return;
@@ -263,7 +274,7 @@ export default function AddStaffModal({
         email: formData.email.trim(),
         phone: formData.phone.trim() || null,
         role: canChooseRole ? formData.role : 'STAFF',
-        department: formData.department,
+        department: departmentPayload(formData.department),
         availability: formData.availability,
         username: formData.username.trim(),
         temporaryPassword: formData.temporaryPassword,
@@ -486,7 +497,7 @@ export default function AddStaffModal({
                     disabled={isSubmitting}
                     className={`${INPUT_CLASS} cursor-pointer`}
                   >
-                    <DepartmentOptions departments={departments} activeOnly />
+                    <DepartmentOptions departments={departments} activeOnly allowNone={allowNoDepartment} />
                   </select>
                 </Field>
                 <Field label="Availability *" htmlFor="add-staff-availability" icon={CalendarIcon}>

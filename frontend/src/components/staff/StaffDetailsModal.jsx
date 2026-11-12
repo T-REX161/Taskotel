@@ -2,6 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { CloseIcon } from '../icons/Icons';
 import UserAvatar from '../common/UserAvatar';
+import { UNASSIGNED_MANAGER_NOTICE, isUnassignedManager } from '../../utils/staffDepartment';
 import { avatarInitials } from '../../utils/profilePicture';
 import {
   formatDepartment,
@@ -69,6 +70,7 @@ export default function StaffDetailsModal({ staff, onClose }) {
             <p className="font-semibold text-gray-900 mt-1">
               {formatDepartment(staff.department)}
             </p>
+            {isUnassignedManager(staff) && <p className="text-xs text-amber-700 mt-1">{UNASSIGNED_MANAGER_NOTICE}</p>}
           </div>
 
           <div className="bg-gray-50/70 p-4 rounded-xl border border-gray-100">

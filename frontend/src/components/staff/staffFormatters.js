@@ -4,10 +4,11 @@
  */
 
 import { displayDepartmentName } from '../../utils/departmentRegistry.js';
+import { hasNoDepartment, UNASSIGNED_LABEL } from '../../utils/staffDepartment.js';
 
 
 export function formatDepartment(dept) {
-  if (!dept) return 'General';
+  if (hasNoDepartment(dept)) return UNASSIGNED_LABEL;
   return displayDepartmentName(dept, compactDepartmentLabel(dept));
 }
 

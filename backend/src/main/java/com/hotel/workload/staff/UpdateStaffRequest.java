@@ -15,7 +15,7 @@ public class UpdateStaffRequest {
 
     private String phone;
 
-    @NotBlank(message = "Department is required")
+    /** Blank or missing clears the department: only an Administrator, for any role (StaffServiceImpl decides). */
     private String department;
 
     @NotNull(message = "Availability is required")

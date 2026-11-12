@@ -98,9 +98,9 @@ describe('staffFormatters', () => {
       assert.strictEqual(formatDepartment('FOOD_AND_BEVERAGE'), 'F&B');
     });
 
-    it('falls back to General for null or undefined', () => {
-      assert.strictEqual(formatDepartment(null), 'General');
-      assert.strictEqual(formatDepartment(undefined), 'General');
+    it('falls back to Unassigned for null, undefined or blank', () => {
+      assert.strictEqual(formatDepartment(null), 'Unassigned');
+      assert.strictEqual(formatDepartment(undefined), 'Unassigned');
     });
   });
 

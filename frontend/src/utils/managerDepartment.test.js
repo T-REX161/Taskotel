@@ -114,7 +114,7 @@ describe('what the dialog shows', () => {
   it('current department and validity, never inventing a department', () => {
     assert.equal(currentDepartmentText({ departmentName: 'Kitchen', departmentCode: 'KITCHEN' }), 'Kitchen');
     assert.equal(currentDepartmentText({ departmentCode: 'KITCHEN' }), 'KITCHEN');
-    assert.equal(currentDepartmentText({}), 'No department');
+    assert.equal(currentDepartmentText({}), 'Unassigned');
     assert.equal(currentDepartmentText(null), 'Not available');
     assert.equal(validityNote({ valid: true }), '');
     assert.match(validityNote({ valid: false, accountActive: true, staffActive: false, departmentActive: true }), /staff record is inactive/);
@@ -127,6 +127,15 @@ describe('what the dialog shows', () => {
     assert.equal(describeChangedBy(change), 'by root');
     assert.equal(describeChangedBy({}), 'by an Admin');
     assert.equal(describeChange({ previousDepartmentCode: 'A', newDepartmentCode: 'B' }), 'A → B');
+  });
+
+  it('a first assignment reads "Unassigned → X" and a removal "X → Unassigned", never null, undefined or blank', () => {
+    assert.equal(describeChange({ previousDepartmentId: null, previousDepartmentCode: null, previousDepartmentName: null, newDepartmentName: 'Kitchen' }), 'Unassigned → Kitchen');
+    assert.equal(describeChange({ previousDepartmentName: 'Kitchen', newDepartmentId: null, newDepartmentCode: null, newDepartmentName: null }), 'Kitchen → Unassigned');
+    assert.equal(describeChange({ previousDepartmentName: '', newDepartmentName: '   '.trim() }), 'Unassigned → Unassigned');
+    for (const change of [{}, null, undefined]) assert.ok(!/null|undefined|^s*$/.test(describeChange(change)), String(change));
+    // an older record, with both sides, reads exactly as before
+    assert.equal(describeChange({ previousDepartmentName: 'Housekeeping', newDepartmentName: 'Kitchen' }), 'Housekeeping → Kitchen');
   });
 });
 

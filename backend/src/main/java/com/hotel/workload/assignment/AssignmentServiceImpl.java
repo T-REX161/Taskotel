@@ -175,6 +175,10 @@ public class AssignmentServiceImpl implements AssignmentService {
             if (task.getDepartment() != null && staff.getDepartment() != null && !task.getDepartment().equals(staff.getDepartment())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, named("Staff member does not belong to the task's department", staff, several));
             }
+            // An operational Staff member without a department is not an assignment target, whatever the task's department
+            if (staff.getDepartment() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, named("Staff member has no department and cannot be assigned tasks", staff, several));
+            }
         }
 
         if (task.getStatus() == TaskStatus.COMPLETED) {
@@ -295,6 +299,10 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         if (task != null && task.getDepartment() != null && targetStaff.getDepartment() != null && !task.getDepartment().equals(targetStaff.getDepartment())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target staff member does not belong to the task's department");
+        }
+
+        if (targetStaff.getDepartment() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target staff member has no department and cannot be assigned tasks");
         }
 
         if (task != null && task.getStatus() == TaskStatus.COMPLETED) {

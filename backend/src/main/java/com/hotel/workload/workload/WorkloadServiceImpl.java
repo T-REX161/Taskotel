@@ -84,7 +84,8 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
 
     /** Managers and administrators are not operational staff, so they have no workload row. */
     private List<Staff> operationalStaff() {
-        return staffRepository.findAll().stream().filter(staff -> !staff.isPrivilegedAccount()).collect(java.util.stream.Collectors.toList());
+        // Operational staff only: Managers and Administrators have no workload row, and neither does a Staff member with no department yet
+        return staffRepository.findAll().stream().filter(staff -> !staff.isPrivilegedAccount() && staff.getDepartment() != null).collect(java.util.stream.Collectors.toList());
     }
 
     private Staff ownStaffRecord(String username) {

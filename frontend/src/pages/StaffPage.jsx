@@ -15,6 +15,7 @@ import {
   formatDepartment,
   sortStaffAlphabetically,
 } from '../components/staff/staffFormatters';
+import { matchesDepartmentFilter } from '../utils/staffDepartment';
 import StaffFilters from '../components/staff/StaffFilters';
 import StaffTable from '../components/staff/StaffTable';
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
@@ -126,14 +127,7 @@ export default function StaffPage() {
       }
 
       // 2. Department filter
-      if (selectedDepartment) {
-        if (
-          (staff.department || '').toUpperCase() !==
-          selectedDepartment.toUpperCase()
-        ) {
-          return false;
-        }
-      }
+      if (!matchesDepartmentFilter(staff, selectedDepartment)) return false;
 
       // 3. Availability filter
       if (selectedAvailability) {

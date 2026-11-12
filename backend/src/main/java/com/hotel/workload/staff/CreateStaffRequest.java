@@ -16,7 +16,7 @@ public class CreateStaffRequest {
 
     private String phone;
 
-    @NotBlank(message = "Department is required")
+    /** Blank or missing means no department: only an Administrator may create an account of any role that way (StaffServiceImpl decides). */
     private String department;
 
     @NotNull(message = "Availability is required")

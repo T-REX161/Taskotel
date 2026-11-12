@@ -2,6 +2,8 @@ import React from 'react';
 import { SearchIcon } from '../icons/Icons';
 import DepartmentOptions from '../common/DepartmentOptions';
 import useDepartments from '../../hooks/useDepartments';
+import { getUserRole } from '../../services/api';
+import { UNASSIGNED_FILTER, UNASSIGNED_LABEL, canFilterUnassigned } from '../../utils/staffDepartment';
 
 /**
  * StaffFilters — unified, cohesive filter toolbar beneath the Staff Management header.
@@ -55,6 +57,7 @@ export default function StaffFilters({
         >
           <option value="">All Departments</option>
           <DepartmentOptions departments={departments} />
+          {canFilterUnassigned(getUserRole()) && <option value={UNASSIGNED_FILTER}>{UNASSIGNED_LABEL}</option>}
         </select>
       </div>
 

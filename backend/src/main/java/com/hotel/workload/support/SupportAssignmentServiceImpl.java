@@ -438,7 +438,11 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             resolved.problems.add(new Problem("SAME_DEPARTMENT", name + " already belongs to " + receiving.department.getName() + ". Assign them to its tasks normally.", staff.getId(), item.getTaskId()));
             return false;
         }
-        if (home == null || !state.byCode.containsKey(home)) {
+        if (home == null) {
+            // A Staff member with no department has no home department to lend from: never a support candidate
+            resolved.problems.add(new Problem("STAFF_NO_DEPARTMENT", name + " has no department, so they cannot be lent to another department.", staff.getId(), item.getTaskId()));
+            ok = false;
+        } else if (!state.byCode.containsKey(home)) {
             resolved.problems.add(new Problem("DONOR_INACTIVE", name + "'s department is not active.", staff.getId(), item.getTaskId()));
             ok = false;
         }

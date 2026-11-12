@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CloseIcon } from '../icons/Icons';
-import { updateStaff, requestStaffEmailChange } from '../../services/api';
+import { updateStaff, requestStaffEmailChange, getUserRole } from '../../services/api';
 import {
   SENT_MESSAGE,
   canRequestEmailChange,
@@ -13,6 +13,7 @@ import {
   validateNewEmail,
 } from '../../utils/loginEmailChange';
 import DepartmentOptions from '../common/DepartmentOptions';
+import { UNASSIGNED_MANAGER_NOTICE, canChooseNoDepartment, departmentPayload, departmentProblem, isUnassignedManager } from '../../utils/staffDepartment';
 import useDepartments from '../../hooks/useDepartments';
 
 /**
@@ -32,7 +33,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
     fullName: '',
     email: '',
     phone: '',
-    department: 'HOUSEKEEPING',
+    department: '',
     availability: 'AVAILABLE',
     active: true,
     username: '',
@@ -52,7 +53,8 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
         fullName: staff.fullName || staff.name || '',
         email: staff.email || '',
         phone: staff.phone || '',
-        department: staff.department || 'HOUSEKEEPING',
+        // A Staff member without a department opens as "None (Unassigned)"; nothing is invented for them
+        department: staff.department || '',
         availability: staff.availability || 'AVAILABLE',
         active: staff.active !== undefined ? staff.active : true,
         username: staff.username || '',
@@ -66,6 +68,11 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
   }, [staff]);
 
   if (!isOpen || !staff) return null;
+
+  // Only an Admin may assign, change or clear a department, on an account of any role; a Manager is shown theirs but cannot edit it
+  const viewerRole = getUserRole();
+  const allowNoDepartment = canChooseNoDepartment(viewerRole, staff.role || 'STAFF');
+  const canEditDepartment = viewerRole === 'ADMIN';
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -117,6 +124,11 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
       setFormError('Full name is required.');
       return;
     }
+    const missingDepartment = departmentProblem({ viewerRole: getUserRole(), accountRole: staff.role || 'STAFF', department: formData.department });
+    if (missingDepartment) {
+      setFormError(missingDepartment);
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -127,7 +139,8 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
         // any other. The staff member changes it themselves, with verification, from their own account settings.
         email: staff.email,
         phone: formData.phone.trim() || null,
-        department: formData.department,
+        // null clears the department (Admin only, Staff accounts only; the server refuses it while the person has active assignments)
+        department: departmentPayload(formData.department),
         availability: formData.availability,
         active: formData.active,
       };
@@ -313,11 +326,15 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
                   name="department"
                   value={formData.department}
                   onChange={handleInputChange}
-                  disabled={isSubmitting}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-800 bg-white"
+                  disabled={isSubmitting || !canEditDepartment}
+                  title={canEditDepartment ? undefined : 'Only administrators can change a department'}
+                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-800 bg-white disabled:bg-gray-50 disabled:text-gray-500"
                 >
-                  <DepartmentOptions departments={departments} activeOnly currentCode={staff?.department} />
+                  <DepartmentOptions departments={departments} activeOnly currentCode={staff?.department} allowNone={allowNoDepartment} />
                 </select>
+                {isUnassignedManager(staff) && (
+                  <p role="status" data-testid="unassigned-manager-notice" className="text-xs text-amber-700">{UNASSIGNED_MANAGER_NOTICE}</p>
+                )}
               </div>
 
               {/* Availability */}

@@ -25,8 +25,9 @@ public class Staff {
 
     private String phone;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "department", referencedColumnName = "code", nullable = false,
+    /** Null for an account (STAFF, MANAGER or ADMIN) that has not been given a department yet (an Admin assigns it later). A Manager with none gets no department-scoped access (CurrentUserScopeResolver fails closed). */
+    @ManyToOne(fetch = FetchType.EAGER, optional = true)
+    @JoinColumn(name = "department", referencedColumnName = "code", nullable = true,
             foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Department department;
 

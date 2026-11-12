@@ -1,5 +1,7 @@
 /**
  * Filter staff members eligible to receive a task:
+ * 0. Must be an operational Staff account: the linked user's role (StaffDto.role) must be exactly STAFF. ADMIN and MANAGER accounts can have
+ *    Staff records, but are never assignment targets (the backend refuses them too), and a missing or unknown role is not trusted.
  * 1. Must match the specified department.
  * 2. Must be active (active !== false and status !== 'INACTIVE').
  * 3. Must have AVAILABLE availability (checks actual API response field `availability`, with fallback to `availabilityStatus`).
@@ -55,6 +57,9 @@ export function filterEligibleStaff({
   return (Array.isArray(allStaff) ? allStaff : []).filter((s) => {
     if (!s) return false;
 
+    // 0. Role: only operational Staff (the backend already refuses ADMIN and MANAGER targets; this keeps them out of the picker)
+    const isOperationalStaff = s.role === 'STAFF';
+
     // 1. Department match
     const matchesDept = s.department === department;
 
@@ -68,6 +73,6 @@ export function filterEligibleStaff({
     // 4. Must not have an active task assignment on another task
     const hasActiveAssignment = staffWithActiveAssignments.has(String(s.id));
 
-    return matchesDept && isActive && isAvailable && !hasActiveAssignment;
+    return isOperationalStaff && matchesDept && isActive && isAvailable && !hasActiveAssignment;
   });
 }

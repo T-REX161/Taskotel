@@ -40,18 +40,18 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     Optional<Staff> lockByIdAndDepartment(@Param("id") UUID id, @Param("department") Department department);
 
     /** The home-department codes of these staff members, without loading the records. */
-    @Query("SELECT DISTINCT s.department.code FROM Staff s WHERE s.id IN :ids")
+    @Query("SELECT DISTINCT s.department.code FROM Staff s WHERE s.id IN :ids AND s.department IS NOT NULL")
     List<String> departmentCodesOf(@Param("ids") Collection<UUID> ids);
     Optional<Staff> findByUserUsername(String username);
     
-    // Operational staff only: records linked to an admin or manager account are left out of the dashboard staff totals
-    @Query("SELECT COUNT(s) FROM Staff s WHERE s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
+    // Operational staff only: records linked to an admin or manager account, and Staff with no department yet, are left out of the dashboard staff totals
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.department IS NOT NULL AND s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
     long countOperational();
 
-    @Query("SELECT COUNT(s) FROM Staff s WHERE s.active = false AND s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.department IS NOT NULL AND s.active = false AND s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
     long countOperationalInactive();
 
-    @Query("SELECT COUNT(s) FROM Staff s WHERE s.active = true AND s.availability = :availability AND s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.department IS NOT NULL AND s.active = true AND s.availability = :availability AND s.user.role NOT IN (com.hotel.workload.security.Role.ADMIN, com.hotel.workload.security.Role.MANAGER)")
     long countOperationalActiveByAvailability(@Param("availability") Availability availability);
 
     /** Every active staff member of one department with their account loaded. */

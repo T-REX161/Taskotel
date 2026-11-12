@@ -46,19 +46,19 @@ public class ManagerDepartmentChange {
     @Column(name = "previous_department_id", updatable = false)
     private UUID previousDepartmentId;
 
-    @Column(name = "previous_department_code", nullable = false, updatable = false, length = 64)
+    @Column(name = "previous_department_code", updatable = false, length = 64)
     private String previousDepartmentCode;
 
-    @Column(name = "previous_department_name", nullable = false, updatable = false, length = 100)
+    @Column(name = "previous_department_name", updatable = false, length = 100)
     private String previousDepartmentName;
 
     @Column(name = "new_department_id", updatable = false)
     private UUID newDepartmentId;
 
-    @Column(name = "new_department_code", nullable = false, updatable = false, length = 64)
+    @Column(name = "new_department_code", updatable = false, length = 64)
     private String newDepartmentCode;
 
-    @Column(name = "new_department_name", nullable = false, updatable = false, length = 100)
+    @Column(name = "new_department_name", updatable = false, length = 100)
     private String newDepartmentName;
 
     @Column(name = "changed_by_user_id", nullable = false, updatable = false)

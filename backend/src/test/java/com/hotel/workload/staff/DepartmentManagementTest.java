@@ -517,14 +517,16 @@ public class DepartmentManagementTest {
 
     @Test
     @WithMockUser(username = "testadmin", roles = "ADMIN")
-    @DisplayName("Unknown department codes are rejected for staff and tasks")
+    @DisplayName("Unknown department codes are rejected for staff and tasks (a blank one now means no department for a STAFF account)")
     public void testUnknownDepartmentRejected() throws Exception {
         mockMvc.perform(post("/api/staff").contentType(MediaType.APPLICATION_JSON).content(staffJson("ghost", "NO_SUCH_DEPT")))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(taskJson("Ghost task", "NO_SUCH_DEPT", 10)))
                 .andExpect(status().isBadRequest());
+        // A blank department used to be a validation error. An Admin may now create a STAFF account without a department (V19); the unknown
+        // codes above are still refused, and a Manager or Administrator account still needs one (see OptionalDepartmentStaffTest)
         mockMvc.perform(post("/api/staff").contentType(MediaType.APPLICATION_JSON).content(staffJson("nodept", "")))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isCreated());
     }
 
     // ── inactive departments ─────────────────────────────────────────────────

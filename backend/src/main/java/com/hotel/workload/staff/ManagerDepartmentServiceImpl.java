@@ -81,9 +81,7 @@ public class ManagerDepartmentServiceImpl implements ManagerDepartmentService {
         // One transaction: the department and its audit record are saved together or not at all
         staff.setDepartment(target);
         staff = staffRepository.saveAndFlush(staff);
-        if (previous != null) {
-            auditRecorder.record(staff, previous, target, ManagerDepartmentChange.SOURCE_ASSIGNMENT);
-        }
+        auditRecorder.record(staff, previous, target, ManagerDepartmentChange.SOURCE_ASSIGNMENT);
         return ManagerDepartmentDtos.ManagerDepartment.of(staff);
     }
 

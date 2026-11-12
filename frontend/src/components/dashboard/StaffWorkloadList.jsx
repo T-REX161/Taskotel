@@ -44,7 +44,7 @@ export default function StaffWorkloadList({ staff }) {
     <ul className="divide-y divide-gray-100" aria-label="Staff workload">
       {rows.map((row) => {
         const tone = workloadTone(row.workloadStatus);
-        const department = `${row.departmentName || row.department || 'No department'}${row.supportDepartmentName ? ` → ${row.supportDepartmentName}` : ''}`;
+        const department = `${row.departmentName || row.department || 'Unassigned'}${row.supportDepartmentName ? ` → ${row.supportDepartmentName}` : ''}`;
         return (
           <li
             key={row.staffId}
