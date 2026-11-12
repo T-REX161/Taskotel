@@ -2,6 +2,7 @@ import React from 'react';
 import { CloseIcon } from '../icons/Icons';
 import DepartmentOptions from '../common/DepartmentOptions';
 import useDepartments from '../../hooks/useDepartments';
+import { DEPARTMENT_CHANGE_LOCKED_HINT } from '../../utils/taskDepartment';
 
 /**
  * Inline spinner SVG reused across the submit buttons.
@@ -31,6 +32,8 @@ function Spinner() {
  *   onClose        – () => void
  *   isSubmitting   – boolean
  *   formError      – string | ''
+ *   canChangeDepartment – false for a Manager: the department is shown but cannot be changed (the server refuses a move too).
+ *                        Defaults to true (Admin behaviour unchanged).
  */
 export default function EditTaskModal({
   task,
@@ -40,6 +43,7 @@ export default function EditTaskModal({
   onClose,
   isSubmitting,
   formError,
+  canChangeDepartment = true,
 }) {
   const { departments } = useDepartments();
 
@@ -106,10 +110,14 @@ export default function EditTaskModal({
               <label className="text-sm font-medium text-gray-700">Department *</label>
               <select
                 {...field('department')}
-                className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-white"
+                data-testid="edit-task-department"
+                disabled={isSubmitting || !canChangeDepartment}
+                title={canChangeDepartment ? undefined : DEPARTMENT_CHANGE_LOCKED_HINT}
+                className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm bg-white disabled:bg-gray-50 disabled:text-gray-600"
               >
                 <DepartmentOptions departments={departments} activeOnly currentCode={task.department} />
               </select>
+              {!canChangeDepartment && <p className="text-xs text-gray-500">{DEPARTMENT_CHANGE_LOCKED_HINT}</p>}
             </div>
 
             {/* Category */}

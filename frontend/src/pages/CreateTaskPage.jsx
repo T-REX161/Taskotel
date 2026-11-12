@@ -1,20 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TasksIcon } from '../components/icons/Icons';
-import { createTask, createAssignment, getStaff, getTasks, getAssignments } from '../services/api';
+import { createTask, createAssignment, getStaff, getTasks, getAssignments, getUserRole } from '../services/api';
 import CreateTaskForm from '../components/tasks/CreateTaskForm';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import useDepartments from '../hooks/useDepartments';
+import { loadCurrentProfile } from '../utils/currentUserProfile';
+import {
+  MANAGER_DEPARTMENT_LOAD_FAILED_MESSAGE,
+  MANAGER_NO_DEPARTMENT_MESSAGE,
+  createTaskDepartmentAccess,
+  managerDepartmentFromProfile,
+} from '../utils/taskDepartment';
 
 export default function CreateTaskPage() {
   const navigate = useNavigate();
   const { departments, activeDepartments } = useDepartments();
+  // A Manager creates tasks in their own department only (the server refuses any other): it is read from their own profile before the form
+  // is shown, and never defaulted. An Admin keeps the existing selector and default.
+  const isManager = getUserRole() === 'MANAGER';
+  const [managerDepartment, setManagerDepartment] = useState({ status: isManager ? 'loading' : 'not-needed' });
+  const departmentAccess = createTaskDepartmentAccess(getUserRole(), managerDepartment);
 
   const initialFormState = {
     title: '',
     assignTo: '',
     description: '',
-    department: 'HOUSEKEEPING',
+    department: isManager ? '' : 'HOUSEKEEPING',
     category: 'Cleaning',
     priority: 'MEDIUM',
     estimatedDuration: '45',
@@ -32,12 +44,37 @@ export default function CreateTaskPage() {
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
   const [createdTaskRecord, setCreatedTaskRecord] = useState(null);
 
-  // If the default department cannot take new tasks (for example it is inactive), start on the first one that can
+  // If the default department cannot take new tasks (for example it is inactive), start on the first one that can. Not for a Manager:
+  // their department is their own, from their profile, and is never replaced by another one.
   useEffect(() => {
+    if (isManager) return;
     if (activeDepartments.length > 0 && !activeDepartments.some((department) => department.code === formData.department)) {
       setFormData((prev) => ({ ...prev, department: activeDepartments[0].code }));
     }
-  }, [activeDepartments, formData.department]);
+  }, [isManager, activeDepartments, formData.department]);
+
+  // A Manager's own department, read fresh from their profile (an Admin may have changed it since the profile was cached)
+  const loadManagerDepartment = React.useCallback(async () => {
+    if (!isManager) return;
+    setManagerDepartment({ status: 'loading' });
+    const resolved = managerDepartmentFromProfile(await loadCurrentProfile({ force: true }));
+    setManagerDepartment(resolved);
+    if (resolved.status === 'ready') {
+      setFormData((prev) => ({ ...prev, department: resolved.code }));
+    }
+  }, [isManager]);
+
+  useEffect(() => {
+    let active = true;
+    if (isManager) {
+      loadManagerDepartment().catch(() => {
+        if (active) setManagerDepartment({ status: 'error' });
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [isManager, loadManagerDepartment]);
 
   useEffect(() => {
     let isMounted = true;
@@ -95,6 +132,8 @@ export default function CreateTaskPage() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    // A Manager's department is locked to their own; any change event for it is ignored
+    if (name === 'department' && isManager) return;
     if (name === 'department') {
       setFormData((prev) => {
         const nextEligible = filterEligibleStaff({
@@ -125,6 +164,12 @@ export default function CreateTaskPage() {
 
     setFormError('');
     setSuccessMessage('');
+
+    // A Manager can only submit once their own department is known (the server checks it again)
+    if (isManager && departmentAccess !== 'locked') {
+      setFormError(departmentAccess === 'none' ? MANAGER_NO_DEPARTMENT_MESSAGE : MANAGER_DEPARTMENT_LOAD_FAILED_MESSAGE);
+      return;
+    }
 
     // Client-side validations
     if (!formData.title.trim()) {
@@ -253,20 +298,48 @@ export default function CreateTaskPage() {
         </div>
       )}
 
-      {/* Form Card */}
-      <CreateTaskForm
-        formData={formData}
-        onInputChange={handleInputChange}
-        staffList={eligibleStaff}
-        departments={departments}
-        isLoadingStaff={isLoadingStaff}
-        isSubmitting={isSubmitting}
-        createdTaskRecord={createdTaskRecord}
-        formError={formError}
-        onSubmit={handleSubmit}
-        onCancel={() => navigate('/tasks')}
-        onViewTasks={() => navigate('/tasks')}
-      />
+      {/* A Manager sees no form (and so no editable department) until their own department is known */}
+      {departmentAccess === 'loading' && (
+        <div role="status" data-testid="manager-department-loading" className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8 text-sm text-gray-500">
+          Loading your department…
+        </div>
+      )}
+      {departmentAccess === 'none' && (
+        <div role="alert" data-testid="manager-no-department" className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm flex flex-wrap items-center justify-between gap-3">
+          <span>{MANAGER_NO_DEPARTMENT_MESSAGE}</span>
+          <button type="button" onClick={() => navigate('/tasks')} className="text-xs font-semibold underline cursor-pointer">Back to Tasks</button>
+        </div>
+      )}
+      {departmentAccess === 'error' && (
+        <div role="alert" data-testid="manager-department-error" className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex flex-wrap items-center justify-between gap-3">
+          <span>{MANAGER_DEPARTMENT_LOAD_FAILED_MESSAGE}</span>
+          <button
+            type="button"
+            onClick={() => loadManagerDepartment().catch(() => setManagerDepartment({ status: 'error' }))}
+            className="text-xs font-semibold underline cursor-pointer"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/* Form Card: Admin (the existing selector) or a Manager whose own department is known (locked to it) */}
+      {(departmentAccess === 'select' || departmentAccess === 'locked') && (
+        <CreateTaskForm
+          formData={formData}
+          onInputChange={handleInputChange}
+          staffList={eligibleStaff}
+          departments={departments}
+          lockedDepartment={departmentAccess === 'locked' ? { code: managerDepartment.code, name: managerDepartment.name } : null}
+          isLoadingStaff={isLoadingStaff}
+          isSubmitting={isSubmitting}
+          createdTaskRecord={createdTaskRecord}
+          formError={formError}
+          onSubmit={handleSubmit}
+          onCancel={() => navigate('/tasks')}
+          onViewTasks={() => navigate('/tasks')}
+        />
+      )}
     </div>
   );
 }

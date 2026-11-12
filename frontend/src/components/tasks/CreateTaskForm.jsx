@@ -1,5 +1,6 @@
 import React from 'react';
 import DepartmentOptions from '../common/DepartmentOptions';
+import { MANAGER_DEPARTMENT_LOCKED_HINT } from '../../utils/taskDepartment';
 
 /**
  * CreateTaskForm — controlled form card presentation for task creation and optional initial assignment.
@@ -15,12 +16,15 @@ import DepartmentOptions from '../common/DepartmentOptions';
  *   onSubmit           – form submit handler
  *   onCancel           – cancellation handler (navigates back to tasks)
  *   onViewTasks        – fallback navigation to tasks list upon partial failure
+ *   lockedDepartment   – { code, name } for a Manager: their own department, shown read-only (cannot be changed); null keeps the
+ *                        normal selector (Admin)
  */
 export default function CreateTaskForm({
   formData,
   onInputChange,
   staffList = [],
   departments = [],
+  lockedDepartment = null,
   isLoadingStaff = false,
   isSubmitting = false,
   createdTaskRecord = null,
@@ -84,16 +88,32 @@ export default function CreateTaskForm({
           {/* Row 1 - Left: Department */}
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-gray-700">Department *</label>
-            <select
-              name="department"
-              required
-              value={formData.department}
-              onChange={onInputChange}
-              disabled={isSubmitting || isTaskLocked}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-900 bg-white disabled:bg-gray-50 disabled:text-gray-500"
-            >
-              <DepartmentOptions departments={departments} activeOnly />
-            </select>
+            {lockedDepartment ? (
+              <>
+                <select
+                  name="department"
+                  data-testid="locked-department"
+                  value={lockedDepartment.code}
+                  disabled
+                  title={MANAGER_DEPARTMENT_LOCKED_HINT}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+                >
+                  <option value={lockedDepartment.code}>{lockedDepartment.name}</option>
+                </select>
+                <p className="text-xs text-gray-500">{MANAGER_DEPARTMENT_LOCKED_HINT}</p>
+              </>
+            ) : (
+              <select
+                name="department"
+                required
+                value={formData.department}
+                onChange={onInputChange}
+                disabled={isSubmitting || isTaskLocked}
+                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-900 bg-white disabled:bg-gray-50 disabled:text-gray-500"
+              >
+                <DepartmentOptions departments={departments} activeOnly />
+              </select>
+            )}
           </div>
 
           {/* Row 1 - Right: Assign To */}

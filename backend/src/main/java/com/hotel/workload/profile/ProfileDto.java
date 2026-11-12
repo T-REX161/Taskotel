@@ -13,9 +13,13 @@ import java.time.LocalDateTime;
  * null when there is none (an account without a staff record, or no number entered): it is never invented. No hashes, codes or
  * tokens are ever part of this response. {@code pendingEmailMasked} and {@code pendingEmailExpiresAt} describe an email change that is waiting
  * for this user's verification code (the address masked, never in full); both are null when there is none or its code has expired.
+ * {@code departmentCode} and {@code departmentName} are the department of this user's OWN staff record, only while that department is
+ * active; both are null when there is no staff record, no department, or the department is inactive. Another user's department is never
+ * part of this response. Informational for the screens only: every department rule is still decided by the server.
  */
 public record ProfileDto(String username, String role, String fullName, String profileImageUrl, String displayName,
                          boolean active, boolean emailVerified,
                          LocalDateTime createdAt, LocalDateTime lastLoginAt, LocalDateTime passwordChangedAt,
                          UserPreferences.Values preferences, String email, String phone,
-                         String pendingEmailMasked, LocalDateTime pendingEmailExpiresAt) {}
+                         String pendingEmailMasked, LocalDateTime pendingEmailExpiresAt,
+                         String departmentCode, String departmentName) {}

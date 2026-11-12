@@ -24,6 +24,7 @@ import AssignTaskModal from '../components/tasks/AssignTaskModal';
 import DeleteTaskModal from '../components/tasks/DeleteTaskModal';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import { staffStatusSuccessMessage } from '../utils/taskStatus';
+import { canChangeTaskDepartment } from '../utils/taskDepartment';
 import { assigneeMatchesSearch, groupAssignmentsByTask } from '../utils/assignmentUtils';
 import { assignmentSuccessMessage, buildAssignmentRequest, submittableStaffIds, toggleStaffSelection } from '../utils/staffSelection';
 
@@ -652,6 +653,7 @@ export default function TasksPage() {
             onClose={() => setEditModalTask(null)}
             isSubmitting={isSubmittingEdit}
             formError={editFormError}
+            canChangeDepartment={canChangeTaskDepartment(userRole)}
           />
 
           <AssignTaskModal

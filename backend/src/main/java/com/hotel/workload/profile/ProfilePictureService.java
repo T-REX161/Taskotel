@@ -200,10 +200,15 @@ public class ProfilePictureService {
         // A pending email change is reported (masked) only while its code is still valid; an expired one is not shown as active
         boolean pending = user.getPendingEmail() != null && user.getPendingEmailCodeHash() != null && user.getPendingEmailExpiresAt() != null
                 && user.getPendingEmailExpiresAt().isAfter(java.time.LocalDateTime.now());
+        // The department of the user's OWN staff record, only while it is active (null otherwise); nobody else's department is looked up
+        java.util.Optional<com.hotel.workload.staff.Department> ownDepartment = staffRecord.map(Staff::getDepartment)
+                .filter(com.hotel.workload.staff.Department::isActive);
         return new ProfileDto(user.getUsername(), user.getRole() == null ? null : user.getRole().name(), fullName, user.getProfileImageUrl(),
                 DisplayNames.effective(user), user.isActive(), user.isEmailVerified(),
                 user.getCreatedAt(), user.getLastLoginAt(), user.getPasswordChangedAt(), UserPreferences.of(user), user.getEmail(), phone,
-                pending ? EmailChangeService.mask(user.getPendingEmail()) : null, pending ? user.getPendingEmailExpiresAt() : null);
+                pending ? EmailChangeService.mask(user.getPendingEmail()) : null, pending ? user.getPendingEmailExpiresAt() : null,
+                ownDepartment.map(com.hotel.workload.staff.Department::getCode).orElse(null),
+                ownDepartment.map(com.hotel.workload.staff.Department::getName).orElse(null));
     }
 
     /** A new name for every upload, so a replacement never overwrites the picture that is still in use. */
