@@ -1,4 +1,5 @@
 import React from 'react';
+import UserAvatar from '../../common/UserAvatar';
 import SupportStageBadge from './SupportStageBadge';
 import { donorCapacityLeft, donorSummaryText, needsReserveOverride, personWorkloadText, suggestedStaffIds, whyCannotAdd } from '../../../utils/supportPlan';
 
@@ -13,15 +14,16 @@ const initialsOf = (name) => {
   return (parts.length === 1 ? parts[0].slice(0, 2) : parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 };
 
-const Avatar = ({ name, active }) => (
-  <span
-    aria-hidden="true"
-    className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold select-none ${
-      active ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'
-    }`}
-  >
-    {initialsOf(name)}
-  </span>
+// The person's profile picture (from the support options), or their initials; in the plan a photo gets a green ring, initials a green fill
+const Avatar = ({ name, imageUrl, active }) => (
+  <UserAvatar
+    imageUrl={imageUrl}
+    name={name}
+    initials={initialsOf(name)}
+    className="w-9 h-9 rounded-full shrink-0"
+    photoClassName={active ? 'ring-2 ring-emerald-500 ring-offset-1' : ''}
+    fallbackClassName={`text-xs font-bold ${active ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-600'}`}
+  />
 );
 
 const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1';
@@ -85,7 +87,7 @@ export default function SupportPlanBuilder({ options, plan, suggestions, notice,
                     }`}
                   >
                     <div className="flex items-start gap-2.5">
-                      <Avatar name={person.name} active={inPlan} />
+                      <Avatar name={person.name} imageUrl={person.profileImageUrl} active={inPlan} />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-gray-900 leading-5 break-words">{person.name}</p>
                         <div className="mt-0.5 flex items-center justify-between gap-2 min-h-[1.25rem]">
@@ -180,7 +182,7 @@ export default function SupportPlanBuilder({ options, plan, suggestions, notice,
               return (
                 <li key={pair.staffId} className="rounded-xl border border-gray-200 bg-white p-3 space-y-2">
                   <div className="flex items-center gap-2.5">
-                    <Avatar name={person?.name} active />
+                    <Avatar name={person?.name} imageUrl={person?.profileImageUrl} active />
                     <p className="min-w-0 flex-1 text-sm font-semibold text-gray-900 leading-5">
                       {person?.name || 'Staff member'}
                       <span className="block text-xs font-normal text-gray-500">from {person?.homeName || 'another department'}</span>

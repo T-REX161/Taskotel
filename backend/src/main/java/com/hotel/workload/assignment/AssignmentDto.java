@@ -12,6 +12,8 @@ public class AssignmentDto {
     private TaskStatus taskStatus;
     private UUID staffId;
     private String staffName;
+    /** The assigned staff member's existing profile picture (the same URL the Staff and Users lists show), or null when there is none. */
+    private String staffProfileImageUrl;
     private LocalDateTime assignedAt;
 
     public AssignmentDto() {}
@@ -27,6 +29,9 @@ public class AssignmentDto {
         if (assignment.getStaff() != null) {
             dto.setStaffId(assignment.getStaff().getId());
             dto.setStaffName(assignment.getStaff().getName());
+            if (assignment.getStaff().getUser() != null) {
+                dto.setStaffProfileImageUrl(assignment.getStaff().getUser().getProfileImageUrl());
+            }
         }
         dto.setAssignedAt(assignment.getAssignedAt());
         return dto;
@@ -78,6 +83,14 @@ public class AssignmentDto {
 
     public void setStaffName(String staffName) {
         this.staffName = staffName;
+    }
+
+    public String getStaffProfileImageUrl() {
+        return staffProfileImageUrl;
+    }
+
+    public void setStaffProfileImageUrl(String staffProfileImageUrl) {
+        this.staffProfileImageUrl = staffProfileImageUrl;
     }
 
     public LocalDateTime getAssignedAt() {

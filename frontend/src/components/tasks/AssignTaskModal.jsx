@@ -14,6 +14,7 @@ import {
   calculateProjectedWorkload,
 } from '../../utils/workloadUtils';
 import { getWorkload } from '../../services/api';
+import UserAvatar from '../common/UserAvatar';
 import { formatSelectedStaffCount } from '../../utils/staffSelection';
 
 /**
@@ -567,23 +568,15 @@ export default function AssignTaskModal({
                     {/* Top Row: Avatar + Name + Checkbox/Indicator */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        {staff.profileImage || staff.avatarUrl ? (
-                          <img
-                            src={staff.profileImage || staff.avatarUrl}
-                            alt={displayName}
-                            className="w-9 h-9 rounded-full object-cover flex-shrink-0"
-                          />
-                        ) : (
-                          <div
-                            className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs flex-shrink-0 ${
-                              isSelected
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
-                          >
-                            {getStaffInitials(displayName)}
-                          </div>
-                        )}
+                        {/* The staff member's profile picture (from the staff list), or their initials; a selected photo gets a green ring */}
+                        <UserAvatar
+                          imageUrl={staff.profileImageUrl}
+                          name={displayName}
+                          initials={getStaffInitials(displayName)}
+                          className="w-9 h-9 rounded-full flex-shrink-0"
+                          photoClassName={isSelected ? 'ring-2 ring-emerald-500 ring-offset-1' : ''}
+                          fallbackClassName={`font-bold text-xs ${isSelected ? 'bg-emerald-600 text-white shadow-xs' : 'bg-emerald-100 text-emerald-800'}`}
+                        />
                         <div className="min-w-0">
                           <span className="font-bold text-gray-900 text-sm block truncate" title={displayName}>
                             {displayName}

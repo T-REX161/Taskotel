@@ -27,6 +27,7 @@ import DepartmentBadge from '../components/workload/DepartmentBadge';
 import UtilizationMeter from '../components/workload/UtilizationMeter';
 import CrossDepartmentSupportPanel from '../components/workload/CrossDepartmentSupportPanel';
 import PageSizeToggle from '../components/common/PageSizeToggle';
+import UserAvatar from '../components/common/UserAvatar';
 
 // Staff rows per page by default (this list has always shown 5); the toggle offers 5, 10 or 15
 const ITEMS_PER_PAGE = 5;
@@ -177,6 +178,7 @@ export default function WorkloadPage() {
         name: item.staffName,
         department: item.department,
         availability: item.availability,
+        profileImageUrl: item.profileImageUrl || null,
         active: true,
         role: 'STAFF',
         email: '',
@@ -549,17 +551,14 @@ export default function WorkloadPage() {
                       {/* 1. Staff (Avatar + Name with accessible View trigger + Role) */}
                       <td className="px-4 py-2 min-w-0 align-middle">
                         <div className="flex items-center gap-2 lg:gap-3 min-w-0">
-                          {staffMatch?.avatarUrl || staffMatch?.profileImage ? (
-                            <img
-                              src={staffMatch.avatarUrl || staffMatch.profileImage}
-                              alt={item.staffName}
-                              className="w-7 h-7 lg:w-9 lg:h-9 rounded-full object-cover shrink-0 border border-gray-200"
-                            />
-                          ) : (
-                            <div className="w-7 h-7 lg:w-9 lg:h-9 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-200 select-none">
-                              {initials}
-                            </div>
-                          )}
+                          <UserAvatar
+                            imageUrl={item.profileImageUrl || staffMatch?.profileImageUrl}
+                            name={item.staffName}
+                            initials={initials}
+                            className="w-7 h-7 lg:w-9 lg:h-9 rounded-full shrink-0 border"
+                            photoClassName="border-gray-200"
+                            fallbackClassName="bg-emerald-50 text-emerald-700 font-bold text-xs border-emerald-200"
+                          />
                           <div className="min-w-0 flex-1">
                             <button
                               type="button"
@@ -667,17 +666,14 @@ export default function WorkloadPage() {
                   {/* Header Row: Staff Info + Availability Pill */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5 min-w-0">
-                      {staffMatch?.avatarUrl || staffMatch?.profileImage ? (
-                        <img
-                          src={staffMatch.avatarUrl || staffMatch?.profileImage}
-                          alt={item.staffName}
-                          className="w-8 h-8 rounded-full object-cover shrink-0 border border-gray-200"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 font-bold text-xs flex items-center justify-center shrink-0 border border-emerald-200 select-none">
-                          {initials}
-                        </div>
-                      )}
+                      <UserAvatar
+                        imageUrl={item.profileImageUrl || staffMatch?.profileImageUrl}
+                        name={item.staffName}
+                        initials={initials}
+                        className="w-8 h-8 rounded-full shrink-0 border"
+                        photoClassName="border-gray-200"
+                        fallbackClassName="bg-emerald-50 text-emerald-700 font-bold text-xs border-emerald-200"
+                      />
                       <div className="min-w-0">
                         <button
                           type="button"

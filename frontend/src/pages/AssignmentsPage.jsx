@@ -759,7 +759,9 @@ export default function AssignmentsPage() {
                       </td>
                       <td className="px-6 py-4 align-middle">
                         <div className="flex items-center gap-2.5 min-w-0">
+                          {/* The staff member's profile picture when they have one (initials if not, or if it fails to load) */}
                           <UserAvatar
+                            imageUrl={assignment.staffProfileImageUrl}
                             initials={staffInitials(staffName)}
                             name={staffName}
                             className="h-7 w-7 shrink-0 rounded-full text-[11px] font-semibold"

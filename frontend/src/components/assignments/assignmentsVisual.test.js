@@ -80,6 +80,8 @@ test('table: stronger header, roomier rows with hover, readable long text, and a
   assert.ok(page.includes('line-clamp-2" title={taskTitle}>{taskTitle}</p>'), 'long titles wrap to two lines with the full text in a tooltip');
   assert.ok(page.includes('truncate font-medium text-gray-700" title={staffName}>{staffName}</span>'), 'long names are truncated with a tooltip');
   assert.ok(page.includes('initials={staffInitials(staffName)}'));
+  assert.match(page, /<UserAvatar\s+imageUrl=\{assignment\.staffProfileImageUrl\}\s+initials=\{staffInitials\(staffName\)\}/,
+    'the staff member\'s profile picture is shown, with initials as the fallback');
   assert.ok(page.includes('<AssignmentStatusBadge status={statusRaw} label={statusLabel} />'));
 });
 
@@ -113,4 +115,14 @@ test('the user\'s saved theme is respected: these files never read or write the 
   for (const source of [page, bar, badge, read('components', 'assignments', 'assignmentTableStyles.js')]) {
     assert.doesNotMatch(source, /useTheme|taskotel-theme|themePreference|localStorage/);
   }
+});
+
+test('staff photos: the shared avatar shows the picture, falls back to initials with no URL or a failed load, and keeps the circle', () => {
+  const avatar = read('components', 'common', 'UserAvatar.jsx');
+  assert.match(avatar, /if \(imageUrl && !failed\) \{/, 'picture only when there is a URL and it has not failed');
+  assert.ok(avatar.includes('onError={() => setFailedUrl(imageUrl)}'), 'a failed load switches to the initials');
+  assert.ok(avatar.includes('const failed = Boolean(imageUrl) && failedUrl === imageUrl;'), 'a failure is tied to its URL: a new URL gets a fresh try');
+  assert.doesNotMatch(avatar, /useEffect|setFailed\(false\)/, 'no effect that could undo a failure that happened at once (blocked, offline, cached error)');
+  assert.ok(avatar.includes('className={`${shape} ${photoClassName} object-cover`}') && avatar.includes('rounded-full shrink-0'), 'the photo is cropped to fill the circle');
+  assert.ok(page.includes('className="h-7 w-7 shrink-0 rounded-full text-[11px] font-semibold"'), 'same 28px circle for photo and initials');
 });

@@ -23,7 +23,8 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     @Query("DELETE FROM Assignment a WHERE a.task.id = :taskId")
     void deleteByTaskId(@Param("taskId") UUID taskId);
 
-    @EntityGraph(attributePaths = {"task", "staff"})
+    // staff.user is fetched with the row so each assignment can carry its holder's profile picture without one query per person
+    @EntityGraph(attributePaths = {"task", "staff", "staff.user"})
     List<Assignment> findAllByOrderByAssignedAtDesc();
 
     /**
@@ -31,7 +32,7 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
      * caller never loads other departments' assignments, and tasks with no department are never matched. The holder's own department
      * plays no part (a task supported by lent staff is still the task's department's assignment).
      */
-    @Query("SELECT a FROM Assignment a JOIN FETCH a.task t JOIN FETCH a.staff s WHERE t.department = :department ORDER BY a.assignedAt DESC")
+    @Query("SELECT a FROM Assignment a JOIN FETCH a.task t JOIN FETCH a.staff s LEFT JOIN FETCH s.user WHERE t.department = :department ORDER BY a.assignedAt DESC")
     List<Assignment> findByTaskDepartmentOrderByAssignedAtDesc(@Param("department") com.hotel.workload.staff.Department department);
 
     /**
@@ -64,7 +65,7 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
 
     List<Assignment> findByStaffId(UUID staffId);
 
-    @EntityGraph(attributePaths = {"task", "staff"})
+    @EntityGraph(attributePaths = {"task", "staff", "staff.user"})
     List<Assignment> findByStaffIdOrderByAssignedAtDesc(UUID staffId);
 
     @Query("SELECT CASE WHEN COUNT(a) > 0 THEN true ELSE false END FROM Assignment a WHERE a.staff.id = :staffId AND a.task.status IN :statuses")

@@ -171,6 +171,7 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
                 dto.setDepartmentName(staff.getDepartment().getName());
             }
             dto.setAvailability(staff.getAvailability());
+            if (staff.getUser() != null) dto.setProfileImageUrl(staff.getUser().getProfileImageUrl());
             dto.setActiveTaskCount(activeTaskCount);
             dto.setTotalEstimatedDuration(totalDuration);
             dto.setWorkloadStatus(WorkloadDto.deriveStatus(totalDuration));

@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { durationPercent, loadPercent, sortByLoad, workloadTone } from '../../utils/dashboardView';
 import { SHIFT_MINUTES } from '../../utils/workloadUtils';
+import UserAvatar from '../common/UserAvatar';
 
 const initialsOf = (name) => {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -52,9 +53,13 @@ export default function StaffWorkloadList({ staff }) {
             data-workload={row.workloadStatus}
             className={`border-l-[3px] pl-4 sm:pl-5 pr-5 sm:pr-6 py-3 grid items-center gap-x-4 gap-y-2.5 ${ROW_GRID} transition-colors hover:bg-gray-50/70 ${tone.row}`}
           >
-            <span aria-hidden="true" className="w-11 h-11 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 text-sm font-semibold flex items-center justify-center select-none">
-              {initialsOf(row.staffName)}
-            </span>
+            <UserAvatar
+              imageUrl={row.profileImageUrl}
+              name={row.staffName}
+              initials={initialsOf(row.staffName)}
+              className="w-11 h-11 rounded-full ring-1 ring-emerald-100"
+              fallbackClassName="bg-emerald-50 text-emerald-700 text-sm font-semibold"
+            />
             <div className="min-w-0 text-left">
               <p className="text-[15px] font-semibold text-gray-900 truncate" title={row.staffName}>{row.staffName}</p>
               <p className="text-sm text-gray-500 truncate" title={department}>{department}</p>

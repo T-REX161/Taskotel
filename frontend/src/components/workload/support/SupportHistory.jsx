@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { formatDate, formatTime } from '../../../utils/dateTimeFormat';
 import { getPreferences } from '../../../utils/preferences';
 import SupportStageBadge from './SupportStageBadge';
+import UserAvatar from '../../common/UserAvatar';
 import { canArchiveSupport, canEndSupport, recordStage, recordView, stageOf, supportRecordDisplay } from '../../../utils/supportPlan';
 
 const formatWhen = (value) => {
@@ -86,14 +87,14 @@ export default function SupportHistory({ history, departmentName, canEnd = false
               return (
                 <li key={row.id} data-stage={stage} className={`px-4 py-3 space-y-2.5 lg:space-y-0 ${COLUMNS}`}>
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span
-                      aria-hidden="true"
-                      className={`w-9 h-9 rounded-full shrink-0 flex items-center justify-center text-xs font-bold select-none ${
-                        stage === 'active' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'
-                      }`}
-                    >
-                      {initialsOf(row.staffName)}
-                    </span>
+                    <UserAvatar
+                      imageUrl={row.staffProfileImageUrl}
+                      name={row.staffName}
+                      initials={initialsOf(row.staffName)}
+                      className="w-9 h-9 rounded-full shrink-0"
+                      photoClassName={stage === 'active' ? 'ring-2 ring-emerald-500 ring-offset-1' : ''}
+                      fallbackClassName={`text-xs font-bold ${stage === 'active' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'}`}
+                    />
                     <p className="min-w-0 text-sm font-semibold text-gray-900 leading-5 break-words">{row.staffName}</p>
                   </div>
                   <Cell label="Department">

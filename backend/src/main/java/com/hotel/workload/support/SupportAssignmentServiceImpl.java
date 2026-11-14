@@ -329,7 +329,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                     : "Its free staff are needed for its own waiting work and reserve.";
             List<DonorStaff> staff = donor.lendable.stream().map(s -> {
                 int mins = state.minutesByStaff.getOrDefault(s.getId(), 0);
-                return new DonorStaff(s.getId(), s.getName(), s.getAvailability(), state.countByStaff.getOrDefault(s.getId(), 0), mins, WorkloadDto.deriveStatus(mins));
+                return new DonorStaff(s.getId(), s.getName(), s.getAvailability(), state.countByStaff.getOrDefault(s.getId(), 0), mins, WorkloadDto.deriveStatus(mins),
+                        s.getUser() == null ? null : s.getUser().getProfileImageUrl());
             }).toList();
             donors.add(new DonorDepartment(donor.department.getCode(), donor.department.getName(), donor.free.size(), donor.available.size(),
                     donor.waitingCount(), maxLendable, overrideLendable, maxLendable > 0, note, staff));
@@ -345,7 +346,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
      */
     private static Options redactOptionsForManager(Options options) {
         List<DonorDepartment> donors = options.donors().stream().map(d -> new DonorDepartment(d.code(), d.name(), null, null, null, null, null, null, null,
-                d.staff().stream().map(s -> new DonorStaff(s.staffId(), s.name(), s.availability(), null, null, null)).toList())).toList();
+                d.staff().stream().map(s -> new DonorStaff(s.staffId(), s.name(), s.availability(), null, null, null, s.profileImageUrl())).toList())).toList();
         return new Options(options.receiving(), options.tasks(), options.maxHelpers(), donors, options.limitations());
     }
 
@@ -715,9 +716,9 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             log.warn("Support reserve override: {} acknowledged leaving {} below its reserve (plan {}, receiving {})",
                     username, resolved.overriddenDonors, planId, resolved.receiving.department.getCode());
         }
-        return created.stream()
+        return withStaffPictures(created.stream()
                 .map(s -> SupportAssignmentDto.from(s, null, resolved.overriddenDonors.contains(s.getHomeDepartmentCode())))
-                .toList();
+                .toList());
     }
 
     // ── history ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -738,7 +739,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         Map<UUID, TaskStatus> taskStatuses = new HashMap<>();
         taskRepository.findAllById(rows.stream().filter(r -> r.getStatus() == SupportStatus.ACTIVE).map(SupportAssignment::getTaskId).toList())
                 .forEach(task -> taskStatuses.put(task.getId(), task.getStatus()));
-        return rows.stream().map(row -> SupportAssignmentDto.from(row, taskStatuses.get(row.getTaskId()))).toList();
+        return withStaffPictures(rows.stream().map(row -> SupportAssignmentDto.from(row, taskStatuses.get(row.getTaskId()))).toList());
     }
 
     /**
@@ -753,11 +754,11 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         taskRepository.findAllById(rows.stream().filter(r -> r.getStatus() == SupportStatus.ACTIVE && code.equals(r.getReceivingDepartmentCode()))
                         .map(SupportAssignment::getTaskId).toList())
                 .forEach(task -> taskStatuses.put(task.getId(), task.getStatus()));
-        return rows.stream()
+        return withStaffPictures(rows.stream()
                 .map(row -> code.equals(row.getReceivingDepartmentCode())
                         ? SupportAssignmentDto.forReceivingManager(row, taskStatuses.get(row.getTaskId()))
                         : SupportAssignmentDto.forDonorManager(row))
-                .toList();
+                .toList());
     }
 
     // ── removing an ended record from the history ────────────────────────────────────────────────────────────
@@ -784,7 +785,25 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                     List.of(new Problem("ALREADY_ARCHIVED", "This record was already removed from the history.", support.getStaffId(), taskIdFor(support, managerDepartment))));
         }
         support.archive(auth.getName(), LocalDateTime.now());
-        return view(supportRepository.saveAndFlush(support), null, managerDepartment);
+        return withStaffPicture(view(supportRepository.saveAndFlush(support), null, managerDepartment));
+    }
+
+    /**
+     * The rows with each supported person's existing profile picture (the same URL the Staff and Users lists show), looked up once for the
+     * people in the list. Only the picture is added: which rows and fields each caller sees is decided before this, unchanged.
+     */
+    private List<SupportAssignmentDto> withStaffPictures(List<SupportAssignmentDto> rows) {
+        Set<UUID> ids = rows.stream().map(SupportAssignmentDto::staffId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) return rows;
+        Map<UUID, String> pictures = new HashMap<>();
+        for (Staff member : staffRepository.findAllById(ids)) {
+            if (member.getUser() != null && member.getUser().getProfileImageUrl() != null) pictures.put(member.getId(), member.getUser().getProfileImageUrl());
+        }
+        return rows.stream().map(row -> row.withStaffProfileImageUrl(pictures.get(row.staffId()))).toList();
+    }
+
+    private SupportAssignmentDto withStaffPicture(SupportAssignmentDto row) {
+        return withStaffPictures(List.of(row)).get(0);
     }
 
     /** The record as the caller may see it: everything for an Admin, the receiving or donor projection (never the approver) for a Manager. */
@@ -826,13 +845,13 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         Task task = taskRepository.findById(support.getTaskId()).orElse(null);
         if (task == null) {
             support.end(SupportStatus.CANCELLED, SupportEndReason.TASK_DELETED, now);
-            return view(supportRepository.saveAndFlush(support), null, managerDepartment);
+            return withStaffPicture(view(supportRepository.saveAndFlush(support), null, managerDepartment));
         }
         // The task finished or moved meanwhile: record what really happened rather than a manual end
         if (task.getStatus() == TaskStatus.COMPLETED || task.getStatus() == TaskStatus.CANCELLED
                 || task.getDepartment() == null || !task.getDepartment().getCode().equals(support.getReceivingDepartmentCode())) {
             endIfTaskDone(support, task);
-            return view(support, task.getStatus(), managerDepartment);
+            return withStaffPicture(view(support, task.getStatus(), managerDepartment));
         }
         if (task.getStatus() == TaskStatus.IN_PROGRESS) {
             // A donor-only Manager is told nothing about the receiving department's task: no title, no id
@@ -856,7 +875,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             support.end(SupportStatus.CANCELLED, SupportEndReason.MANUALLY_ENDED, now);
         }
         supportRepository.saveAndFlush(support);
-        return view(support, task.getStatus(), managerDepartment);
+        return withStaffPicture(view(support, task.getStatus(), managerDepartment));
     }
 
     /** A coded 404, so a client can tell "this record does not exist" from "this server has no such route". */

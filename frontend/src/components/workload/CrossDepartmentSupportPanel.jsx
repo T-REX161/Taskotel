@@ -122,7 +122,7 @@ function SupportPanelContent({ onChanged }) {
     setOptions((prev) => ({ ...prev, status: 'loading', error: '' }));
     try {
       const data = await getSupportOptions(code);
-      data.donors.forEach((donor) => donor.staff.forEach((s) => knownStaff.current.set(s.staffId, { name: s.name, homeName: donor.name })));
+      data.donors.forEach((donor) => donor.staff.forEach((s) => knownStaff.current.set(s.staffId, { name: s.name, homeName: donor.name, profileImageUrl: s.profileImageUrl || null })));
       if (mounted.current && id === requestCounters.current.options) setOptions({ status: 'ready', data, error: '' });
     } catch (err) {
       if (mounted.current && id === requestCounters.current.options) setOptions({ status: 'error', data: null, error: err?.message || 'Unable to load this department.' });

@@ -45,8 +45,8 @@ describe('profile page: the avatar opens the picture editor', () => {
 
 describe('profile pictures across Taskotel', () => {
   it('the avatar falls back to the default (initials) when there is no picture or it fails to load', () => {
-    assert.ok(avatar.includes('if (imageUrl && !failed)') && avatar.includes('onError={() => setFailed(true)}'));
-    assert.ok(avatar.includes('{initials}') && avatar.includes('object-cover'));
+    assert.ok(avatar.includes('if (imageUrl && !failed)') && avatar.includes('onError={() => setFailedUrl(imageUrl)}'));
+    assert.ok(avatar.includes('{initials ?? avatarInitials(name)}') && avatar.includes('object-cover'));
   });
 
   it('the navbar shows the signed-in user\'s picture from the shared, once-loaded profile', () => {

@@ -20,6 +20,8 @@ public class WorkloadDto {
     // Set while the person is on temporary cross-department support: the department they are helping
     private String supportDepartment;
     private String supportDepartmentName;
+    /** The person's existing profile picture (the same URL the Staff and Users lists show), or null when there is none. */
+    private String profileImageUrl;
 
     public WorkloadDto() {}
 
@@ -75,6 +77,9 @@ public class WorkloadDto {
 
     public String getSupportDepartmentName() { return supportDepartmentName; }
     public void setSupportDepartmentName(String supportDepartmentName) { this.supportDepartmentName = supportDepartmentName; }
+
+    public String getProfileImageUrl() { return profileImageUrl; }
+    public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
 
     public WorkloadStatus getWorkloadStatus() { return workloadStatus; }
     public void setWorkloadStatus(WorkloadStatus workloadStatus) {

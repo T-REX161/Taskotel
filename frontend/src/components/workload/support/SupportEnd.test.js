@@ -39,7 +39,8 @@ describe('End Support confirmation dialog', () => {
 
   it('shows the staff member in a card with initials, name and the Active badge, in the emerald palette', () => {
     assert.ok(dialog.includes('initialsOf(row.staffName)') && dialog.includes('{row.staffName}') && dialog.includes('<SupportStageBadge stage="active" />'));
-    assert.ok(dialog.includes('bg-emerald-50 border border-emerald-100') && dialog.includes('text-emerald-700 border border-emerald-200'), 'same tints as the Workload table avatars');
+    assert.ok(dialog.includes('bg-emerald-50 border border-emerald-100') && dialog.includes('border border-emerald-200"') && dialog.includes('fallbackClassName="bg-white text-emerald-700 font-bold text-sm"'), 'same tints as the Workload table avatars');
+    assert.ok(dialog.includes('imageUrl={row.staffProfileImageUrl}'), 'the person\'s profile picture when they have one');
   });
 
   it('separates permanent department, receiving department and assigned task', () => {

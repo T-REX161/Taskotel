@@ -35,7 +35,7 @@ public final class SupportDtos {
 
     /** The workload figures are null in a Manager's response (they are the donor department's data). */
     public record DonorStaff(UUID staffId, String name, Availability availability, Integer activeTaskCount,
-                             Integer totalEstimatedDuration, WorkloadStatus workloadStatus) {}
+                             Integer totalEstimatedDuration, WorkloadStatus workloadStatus, String profileImageUrl) {}
 
     /**
      * A department that has staff who could help, and how many it may lend while keeping its reserve. {@code overrideLendable}
@@ -71,7 +71,7 @@ public final class SupportDtos {
                                        String receivingDepartmentCode, UUID taskId, String taskTitle, UUID assignmentId,
                                        String approvedBy, SupportStatus status, SupportEndReason endReason,
                                        LocalDateTime createdAt, LocalDateTime completedAt, TaskStatus taskStatus,
-                                       Boolean reserveOverride, LocalDateTime archivedAt) {
+                                       Boolean reserveOverride, LocalDateTime archivedAt, String staffProfileImageUrl) {
         public static SupportAssignmentDto from(SupportAssignment s) {
             return from(s, null);
         }
@@ -83,7 +83,7 @@ public final class SupportDtos {
         public static SupportAssignmentDto forReceivingManager(SupportAssignment s, TaskStatus taskStatus) {
             return new SupportAssignmentDto(s.getId(), s.getPlanId(), s.getStaffId(), s.getStaffName(), s.getHomeDepartmentCode(),
                     s.getReceivingDepartmentCode(), s.getTaskId(), s.getTaskTitle(), s.getAssignmentId(),
-                    null, s.getStatus(), s.getEndReason(), s.getCreatedAt(), s.getCompletedAt(), taskStatus, null, s.getArchivedAt());
+                    null, s.getStatus(), s.getEndReason(), s.getCreatedAt(), s.getCompletedAt(), taskStatus, null, s.getArchivedAt(), null);
         }
 
         /**
@@ -92,7 +92,7 @@ public final class SupportDtos {
          */
         public static SupportAssignmentDto forDonorManager(SupportAssignment s) {
             return new SupportAssignmentDto(s.getId(), null, s.getStaffId(), s.getStaffName(), s.getHomeDepartmentCode(),
-                    null, null, null, null, null, s.getStatus(), null, s.getCreatedAt(), s.getCompletedAt(), null, null, s.getArchivedAt());
+                    null, null, null, null, null, s.getStatus(), null, s.getCreatedAt(), s.getCompletedAt(), null, null, s.getArchivedAt(), null);
         }
 
         /** {@code taskStatus} is the supported task's current status (null when unknown or the task is gone). */
@@ -108,7 +108,13 @@ public final class SupportDtos {
             return new SupportAssignmentDto(s.getId(), s.getPlanId(), s.getStaffId(), s.getStaffName(), s.getHomeDepartmentCode(),
                     s.getReceivingDepartmentCode(), s.getTaskId(), s.getTaskTitle(), s.getAssignmentId(),
                     s.getApprovedByUsername(), s.getStatus(), s.getEndReason(), s.getCreatedAt(), s.getCompletedAt(), taskStatus, reserveOverride,
-                    s.getArchivedAt());
+                    s.getArchivedAt(), null);
+        }
+
+        /** The same row with the supported person's existing profile picture (null when they have none). Nothing else changes. */
+        public SupportAssignmentDto withStaffProfileImageUrl(String url) {
+            return new SupportAssignmentDto(id, planId, staffId, staffName, homeDepartmentCode, receivingDepartmentCode, taskId, taskTitle,
+                    assignmentId, approvedBy, status, endReason, createdAt, completedAt, taskStatus, reserveOverride, archivedAt, url);
         }
     }
 }

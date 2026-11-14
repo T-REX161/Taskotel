@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { RESTRICTED_LABEL, describeEndEffect } from '../../../utils/supportPlan';
 import SupportStageBadge from './SupportStageBadge';
+import UserAvatar from '../../common/UserAvatar';
 
 const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -78,9 +79,13 @@ export default function SupportEndDialog({ row, departmentName, status, error, s
 
         {/* Who */}
         <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 p-3">
-          <div aria-hidden="true" className="w-10 h-10 rounded-full bg-white text-emerald-700 border border-emerald-200 font-bold text-sm flex items-center justify-center shrink-0 select-none">
-            {initialsOf(row.staffName)}
-          </div>
+          <UserAvatar
+            imageUrl={row.staffProfileImageUrl}
+            name={row.staffName}
+            initials={initialsOf(row.staffName)}
+            className="w-10 h-10 rounded-full shrink-0 border border-emerald-200"
+            fallbackClassName="bg-white text-emerald-700 font-bold text-sm"
+          />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-gray-900 truncate">{row.staffName}</p>
             <p className="text-xs text-gray-500">On temporary support</p>
