@@ -7,6 +7,7 @@ import {
   MANAGER_NO_DEPARTMENT_MESSAGE,
   canChangeTaskDepartment,
   createTaskDepartmentAccess,
+  createTaskFormDataNeeded,
   managerDepartmentFromProfile,
 } from './taskDepartment.js';
 
@@ -106,4 +107,77 @@ test('EditTaskModal: department locked for a Manager, editable for an Admin (def
   assert.match(modal, /const field = \(name\) => \(\{\s*value: formData\[name\] \?\? '',\s*onChange: \(e\) => onFormChange\(name, e\.target\.value\),\s*disabled: isSubmitting,/);
   const tasksPage = read('pages', 'TasksPage.jsx');
   assert.match(tasksPage, /canChangeDepartment=\{canChangeTaskDepartment\(userRole\)\}/);
+});
+
+// ── Create Task form data: requested only when the form will be shown ────────────────────────────────────────
+// What the page asks for, for a role and the Manager profile state it holds: the four form reads, or nothing.
+const FORM_READS = ['departments', 'staff', 'tasks', 'assignments'];
+const formReads = (role, managerDepartment) =>
+  (createTaskFormDataNeeded(createTaskDepartmentAccess(role, managerDepartment)) ? FORM_READS : []);
+
+test('department-less Manager: once the profile says there is no department, none of the form data is requested', () => {
+  const state = managerDepartmentFromProfile(profile(null, null));
+  assert.equal(createTaskDepartmentAccess('MANAGER', state), 'none');
+  assert.deepEqual(formReads('MANAGER', state), []);
+  assert.deepEqual(formReads('MANAGER', managerDepartmentFromProfile(profile('', null))), []);
+});
+
+test('Manager: nothing is requested while the profile is loading or after it failed; Try again that finds a department loads it all', () => {
+  assert.deepEqual(formReads('MANAGER', { status: 'loading' }), []);
+  assert.deepEqual(formReads('MANAGER', undefined), []);
+  const failed = managerDepartmentFromProfile(null);
+  assert.deepEqual(formReads('MANAGER', failed), []);
+  // retry (the existing Try again) resolves to a department: the form and its data follow
+  assert.deepEqual(formReads('MANAGER', managerDepartmentFromProfile(profile('FRONT_DESK', 'Front Desk'))), FORM_READS);
+});
+
+test('regression: Manager with a department loads all the form data', () => {
+  assert.deepEqual(formReads('MANAGER', managerDepartmentFromProfile(profile('SECURITY', 'Security'))), FORM_READS);
+});
+
+test('regression: Admin loads all the form data at once, whatever the (unused) Manager state', () => {
+  for (const state of [{ status: 'not-needed' }, undefined, { status: 'loading' }, { status: 'none' }, { status: 'error' }]) {
+    assert.deepEqual(formReads('ADMIN', state), FORM_READS, JSON.stringify(state));
+  }
+  assert.equal(createTaskFormDataNeeded('select'), true);
+  assert.equal(createTaskFormDataNeeded('locked'), true);
+  for (const access of ['loading', 'none', 'error', undefined, null, '']) {
+    assert.equal(createTaskFormDataNeeded(access), false, String(access));
+  }
+});
+
+test('Create Task page: departments, staff, tasks and assignments are all gated on the form being shown', () => {
+  const page = read('pages', 'CreateTaskPage.jsx');
+  assert.match(page, /const formDataNeeded = createTaskFormDataNeeded\(departmentAccess\);/);
+  // departments: the shared hook, held back until needed (and no longer the unconditional call)
+  assert.match(page, /useDepartments\(\{ enabled: formDataNeeded \}\)/);
+  assert.doesNotMatch(page, /useDepartments\(\)/);
+  // staff, tasks, assignments: one effect, skipped until needed, re-run when it becomes needed
+  assert.match(page,
+    /useEffect\(\(\) => \{\s*if \(!formDataNeeded\) return undefined;[\s\S]*?getStaff\(\),\s*getTasks\(\),\s*getAssignments\(\),[\s\S]*?\}, \[formDataNeeded\]\);/);
+  // and that effect is the only place they are called
+  for (const call of ['getStaff(', 'getTasks(', 'getAssignments(']) {
+    assert.equal(page.split(call).length - 1, 1, `${call} must be called only inside the gated effect`);
+  }
+  // a genuine failure (Admin, or a Manager with a department) is still reported as before
+  assert.match(page, /console\.error\('Failed to load staff and assignment data:', err\);/);
+  // the explanation, the hidden form and Try again are unchanged
+  assert.match(page, /departmentAccess === 'none' && \([\s\S]*?\{MANAGER_NO_DEPARTMENT_MESSAGE\}/);
+  assert.match(page, /\{\(departmentAccess === 'select' \|\| departmentAccess === 'locked'\) && \(\s*<CreateTaskForm/);
+  assert.match(page, /onClick=\{\(\) => loadManagerDepartment\(\)\.catch\(\(\) => setManagerDepartment\(\{ status: 'error' \}\)\)\}/);
+});
+
+test('useDepartments: optional "enabled" holds the request back; every other caller still loads at once', () => {
+  const hook = read('hooks', 'useDepartments.js');
+  assert.match(hook, /export default function useDepartments\(\{ enabled = true \} = \{\}\) \{/);
+  assert.match(hook, /useEffect\(\(\) => \{\s*if \(!enabled\) return;\s*reload\(\);\s*\}, \[enabled, reload\]\);/);
+  for (const file of [
+    ['components', 'staff', 'AddStaffModal.jsx'],
+    ['components', 'staff', 'EditStaffModal.jsx'],
+    ['components', 'staff', 'StaffFilters.jsx'],
+    ['components', 'tasks', 'EditTaskModal.jsx'],
+    ['components', 'tasks', 'TaskFilters.jsx'],
+  ]) {
+    assert.match(read(...file), /= useDepartments\(\);/, file.join('/'));
+  }
 });

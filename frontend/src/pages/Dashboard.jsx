@@ -4,7 +4,7 @@ import { getDashboardSummary, getUserRole, getUsername, getWorkload, getWorkload
 import { describeUser } from '../components/layout/Header';
 import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
 import { preferredName } from '../utils/displayName';
-import { buildInsights } from '../utils/dashboardView';
+import { buildInsights, dashboardLoadErrorMessage } from '../utils/dashboardView';
 import { keepIfSame, singleFlight, startPolling } from '../utils/polling';
 import { normalizeRecommendations } from '../utils/supportRecommendations';
 import OperationsInsights from '../components/dashboard/OperationsInsights';
@@ -46,7 +46,7 @@ export default function Dashboard() {
         navigate('/login');
         return;
       }
-      if (!silent) setError('Unable to load dashboard data. Please try again.');
+      if (!silent) setError(dashboardLoadErrorMessage(err));
     } finally {
       if (!silent) setIsLoading(false);
     }

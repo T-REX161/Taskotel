@@ -10,17 +10,21 @@ import {
   MANAGER_DEPARTMENT_LOAD_FAILED_MESSAGE,
   MANAGER_NO_DEPARTMENT_MESSAGE,
   createTaskDepartmentAccess,
+  createTaskFormDataNeeded,
   managerDepartmentFromProfile,
 } from '../utils/taskDepartment';
 
 export default function CreateTaskPage() {
   const navigate = useNavigate();
-  const { departments, activeDepartments } = useDepartments();
   // A Manager creates tasks in their own department only (the server refuses any other): it is read from their own profile before the form
   // is shown, and never defaulted. An Admin keeps the existing selector and default.
   const isManager = getUserRole() === 'MANAGER';
   const [managerDepartment, setManagerDepartment] = useState({ status: isManager ? 'loading' : 'not-needed' });
   const departmentAccess = createTaskDepartmentAccess(getUserRole(), managerDepartment);
+  // The form's data (departments, staff, tasks, assignments) is loaded only once the form will be shown: at once for an Admin, and for a
+  // Manager only after their profile names their department. A Manager without one gets the explanation and no requests at all.
+  const formDataNeeded = createTaskFormDataNeeded(departmentAccess);
+  const { departments, activeDepartments } = useDepartments({ enabled: formDataNeeded });
 
   const initialFormState = {
     title: '',
@@ -77,6 +81,7 @@ export default function CreateTaskPage() {
   }, [isManager, loadManagerDepartment]);
 
   useEffect(() => {
+    if (!formDataNeeded) return undefined;
     let isMounted = true;
     const loadFormData = async () => {
       setIsLoadingStaff(true);
@@ -106,7 +111,7 @@ export default function CreateTaskPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [formDataNeeded]);
 
   // Filter staff by selected department, active status, availability, and active assignment status
   const eligibleStaff = React.useMemo(() => {

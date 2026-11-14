@@ -1,4 +1,5 @@
 import React from 'react';
+import { durationPercent } from '../../utils/dashboardView';
 
 /**
  * StaffWorkloadTable — table rendering workload distributions or individual workload record.
@@ -53,10 +54,7 @@ export default function StaffWorkloadTable({ data, isStaff }) {
                             : 'bg-emerald-500'
                         }`}
                         style={{
-                          width: `${Math.min(
-                            100,
-                            ((data.workload.totalEstimatedDuration || 0) / 360) * 100
-                          )}%`,
+                          width: `${durationPercent(data.workload.totalEstimatedDuration)}%`,
                         }}
                       />
                     </div>

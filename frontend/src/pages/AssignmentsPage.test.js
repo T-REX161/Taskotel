@@ -153,15 +153,15 @@ describe('AssignmentsPage Component Integration', () => {
         'Assigned Time must show a medium-weight date line above a smaller, muted time line, both centered'
       );
       assert.ok(
-        pageSource.includes('<td className="px-6 py-3.5 align-middle whitespace-nowrap text-center tabular-nums">'),
+        pageSource.includes('<td className="px-6 py-4 align-middle whitespace-nowrap text-center tabular-nums">'),
         'Assigned Time cell must center the two-line group horizontally and vertically'
       );
       assert.ok(
         pageSource.includes('<th className="px-6 py-3 whitespace-nowrap text-center">Assigned Time</th>'),
         'Assigned Time header must be centered over its content'
       );
-      assert.ok(pageSource.includes('getAssignmentStatusBadge'), 'Row must apply badge styling');
-      assert.ok(pageSource.includes('formatAssignmentStatus'), 'Row must display formatted status');
+      assert.ok(pageSource.includes('<AssignmentStatusBadge status={statusRaw} label={statusLabel} />'), 'Row must apply badge styling');
+      assert.ok(pageSource.includes('const statusLabel = formatAssignmentStatus(statusRaw);'), 'Row must display formatted status');
     });
 
     it('preserves row actions (View Details, Reassign in the ⋮ menu) and Assign Task button', () => {
@@ -315,13 +315,16 @@ describe('AssignmentsPage Component Integration', () => {
     it('opening: renders a menu with View Details and (for managers) Reassign items', () => {
       assert.ok(pageSource.includes('role="menu"'), 'Dropdown must have role="menu"');
       assert.ok(pageSource.includes('id={ACTIONS_MENU_ID}'), 'Dropdown id must match aria-controls');
-      assert.strictEqual((pageSource.match(/^\s+role="menuitem"$/gm) || []).length, 2, 'Menu must have exactly two items');
+      // View Details, plus one Reassign item: enabled for an open task, disabled for a finished one (never both)
+      assert.strictEqual((pageSource.match(/^\s+role="menuitem"$/gm) || []).length, 3, 'View Details and the two Reassign variants');
       assert.ok(pageSource.includes('<span>View Details</span>'), 'Menu must contain "View Details"');
       assert.ok(pageSource.includes('<span>Reassign</span>'), 'Menu must contain "Reassign"');
       assert.ok(
-        /\{canManageAssignments && \(\s*<button\s+type="button"\s+role="menuitem"\s+onClick=\{handleMenuReassign\}/.test(pageSource),
+        /\{canManageAssignments && !isAssignmentTaskFinished\(activeMenu\.assignment, tasks\) && \(\s*<button\s+type="button"\s+role="menuitem"\s+onClick=\{handleMenuReassign\}/.test(pageSource),
         'Reassign must stay restricted to ADMIN and MANAGER'
       );
+      assert.ok(/\{canManageAssignments && isAssignmentTaskFinished\(activeMenu\.assignment, tasks\) && \(/.test(pageSource),
+        'the disabled variant is also ADMIN and MANAGER only');
     });
 
     it('selecting View Details closes the menu and reuses the existing view handler', () => {
@@ -427,16 +430,16 @@ describe('AssignmentsPage Component Integration', () => {
   });
 
   describe('Pagination (10 assignments per page)', () => {
-    it('paginates the fetched list client-side with 10 rows per page', () => {
+    it('paginates the fetched (and filtered) list client-side with 10 rows per page', () => {
       assert.ok(pageSource.includes('const ASSIGNMENTS_PER_PAGE = 10;'), 'Page size must be 10');
       assert.ok(
-        pageSource.includes('getPaginationState({ totalItems: assignments.length, currentPage, pageSize })'),
-        'Pagination state must come from getPaginationState over the full assignments list'
+        pageSource.includes('getPaginationState({ totalItems: filteredAssignments.length, currentPage, pageSize })'),
+        'Pagination state must come from getPaginationState over the filtered assignments list'
       );
       assert.ok(pageSource.includes('useState(ASSIGNMENTS_PER_PAGE)'), 'The chosen page size starts at 10');
       assert.ok(
-        pageSource.includes('assignments.slice(pagination.startIndex, pagination.endIndex)'),
-        'Rows must be a slice of the fetched list (no new API call)'
+        pageSource.includes('filteredAssignments.slice(pagination.startIndex, pagination.endIndex)'),
+        'Rows must be a slice of the filtered fetched list (no new API call)'
       );
       assert.ok(pageSource.includes('paginatedAssignments.map((assignment) => {'), 'Table body must render the current page only');
       assert.strictEqual(pageSource.includes('assignments.map((assignment) => {'), false, 'Table body must not render the full list');
@@ -452,9 +455,9 @@ describe('AssignmentsPage Component Integration', () => {
     });
 
     it('shows "Showing X–Y of N assignments" and hides all controls when there are no assignments', () => {
-      assert.ok(pageSource.includes('{assignments.length > 0 && ('), 'Pagination footer must be hidden for zero assignments');
-      assert.ok(/Showing\{' '\}[\s\S]*?pagination\.rangeStart[\s\S]*?pagination\.rangeEnd[\s\S]*?assignments\.length/.test(pageSource), 'Summary must show the visible range and total');
-      assert.ok(pageSource.includes("assignments.length === 1 ? 'assignment' : 'assignments'"), 'Summary noun must be singular for one assignment');
+      assert.ok(pageSource.includes('{filteredAssignments.length > 0 && ('), 'Pagination footer must be hidden when nothing is shown');
+      assert.ok(/Showing\{' '\}[\s\S]*?pagination\.rangeStart[\s\S]*?pagination\.rangeEnd[\s\S]*?filteredAssignments\.length/.test(pageSource), 'Summary must show the visible range and the filtered total');
+      assert.ok(pageSource.includes("filteredAssignments.length === 1 ? 'assignment' : 'assignments'"), 'Summary noun must be singular for one assignment');
       assert.ok(pageSource.includes('{pagination.totalPages > 1 && ('), 'Page buttons appear only when there is more than one page');
     });
 

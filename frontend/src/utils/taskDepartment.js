@@ -47,6 +47,16 @@ export function createTaskDepartmentAccess(role, managerDepartment) {
   return 'loading';
 }
 
+/**
+ * Whether the Create Task page should load the data only its form uses (departments, staff, tasks, assignments): only when the form is
+ * shown, that is for an Admin ('select', at once, as before) or a Manager whose own department is known ('locked'). Never while a
+ * Manager's profile is loading or failed, and never for a Manager without an active department (the server would refuse every one of
+ * those reads, and the page shows only the explanation).
+ */
+export function createTaskFormDataNeeded(access) {
+  return access === 'select' || access === 'locked';
+}
+
 /** Whether the Edit Task modal lets this role change the department (Admin yes; a Manager never). */
 export function canChangeTaskDepartment(role) {
   return role !== 'MANAGER';

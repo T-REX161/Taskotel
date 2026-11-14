@@ -131,6 +131,17 @@ export function getAssignmentStatusBadge(status) {
 }
 
 /**
+ * Whether the task behind an assignment row is finished (Completed or Cancelled), so it can no longer be reassigned (the server refuses it).
+ * The status from the loaded task list wins (it is the freshest); the row's own taskStatus is used when the task is not in the list.
+ */
+export function isAssignmentTaskFinished(assignment, tasks = []) {
+  if (!assignment) return false;
+  const task = Array.isArray(tasks) ? tasks.find((t) => t && String(t.id) === String(assignment.taskId)) : null;
+  const status = task?.status || assignment.taskStatus;
+  return status === 'COMPLETED' || status === 'CANCELLED';
+}
+
+/**
  * Resolves the department for an assignment.
  * Since AssignmentDto in the backend does not expose department directly,
  * this function resolves it by:
@@ -449,4 +460,108 @@ export function assigneeMatchesSearch(taskAssignments = [], query = '') {
   const text = String(query || '').toLowerCase();
   if (!text) return false;
   return assigneeNames(taskAssignments).some((name) => name.toLowerCase().includes(text));
+}
+
+// ── Current Staff Assignments: search and filters ──────────────────────────────────────────────────────────────────────────
+// Everything below works on the assignment list the page has already loaded (which the server has already limited to what the
+// signed-in user may see); nothing here calls the API or decides access.
+
+/** The Assigned Time filter, in display order. '' is "Any Time" (no filtering). */
+export const ASSIGNED_TIME_OPTIONS = [
+  { value: '', label: 'Any Time' },
+  { value: 'TODAY', label: 'Today' },
+  { value: 'LAST_7_DAYS', label: 'Last 7 Days' },
+  { value: 'LAST_30_DAYS', label: 'Last 30 Days' },
+  { value: 'OLDER', label: 'Older' },
+];
+
+/** No search and no filter: the complete list. */
+export const EMPTY_ASSIGNMENT_FILTERS = Object.freeze({ search: '', department: '', assignedTime: '' });
+
+/** How search text and searched fields are compared: trimmed, inner runs of whitespace made single, lower case. */
+export function normalizeSearchText(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** An assignment's assigned timestamp (assignedAt) as a Date, or null when it is missing or cannot be read. */
+export function parseAssignedAt(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const parsed = new Date(value.trim());
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
+ * Whether an assigned timestamp falls in an Assigned Time range, by the local calendar of referenceDate:
+ * - TODAY: assigned today;
+ * - LAST_7_DAYS: today or the 6 days before it;
+ * - LAST_30_DAYS: today or the 29 days before it;
+ * - OLDER: before those 30 days.
+ * '' (Any Time) matches everything, including a missing or unreadable timestamp; every other range leaves such a record out. A timestamp
+ * later than today matches none of the ranges.
+ */
+export function matchesAssignedTime(assignedAt, range, referenceDate = new Date()) {
+  if (!range) return true;
+  const when = parseAssignedAt(assignedAt);
+  if (!when) return false;
+  const dayStart = (daysAgo) => new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate() - daysAgo);
+  const tomorrow = dayStart(-1);
+  switch (range) {
+    case 'TODAY':
+      return when >= dayStart(0) && when < tomorrow;
+    case 'LAST_7_DAYS':
+      return when >= dayStart(6) && when < tomorrow;
+    case 'LAST_30_DAYS':
+      return when >= dayStart(29) && when < tomorrow;
+    case 'OLDER':
+      return when < dayStart(29);
+    default:
+      return true;
+  }
+}
+
+/**
+ * The department code an assignment belongs to, looked up the same way as resolveAssignmentDepartment (the department shown in the
+ * table): the assignment's own department, else its task's, else its staff member's. '' when none is known.
+ */
+export function resolveAssignmentDepartmentCode(assignment, tasks = [], workload = []) {
+  if (!assignment) return '';
+  if (assignment.department) return String(assignment.department);
+  if (assignment.taskId && Array.isArray(tasks)) {
+    const task = tasks.find((t) => t && String(t.id) === String(assignment.taskId));
+    if (task && task.department) return String(task.department);
+  }
+  if (assignment.staffId && Array.isArray(workload)) {
+    const staff = workload.find((w) => w && String(w.staffId) === String(assignment.staffId));
+    if (staff && staff.department) return String(staff.department);
+  }
+  return '';
+}
+
+/** Whether any search or filter is set (a search of only spaces does not count). */
+export function hasActiveAssignmentFilters(filters = EMPTY_ASSIGNMENT_FILTERS) {
+  return Boolean(normalizeSearchText(filters?.search) || filters?.department || filters?.assignedTime);
+}
+
+/**
+ * The assignments that match every set filter at once:
+ * - search: the task title or the staff member's name contains the text (case-insensitive, whitespace trimmed);
+ * - department: the assignment's department code (see resolveAssignmentDepartmentCode) equals it;
+ * - assignedTime: the assigned timestamp is in that range (see matchesAssignedTime).
+ * With nothing set, the list itself is returned (same order, nothing copied or dropped).
+ */
+export function filterAssignments(assignments, filters = EMPTY_ASSIGNMENT_FILTERS, { tasks = [], workload = [], referenceDate = new Date() } = {}) {
+  const list = Array.isArray(assignments) ? assignments : [];
+  if (!hasActiveAssignmentFilters(filters)) return list;
+  const query = normalizeSearchText(filters.search);
+  const text = (value) => (typeof value === 'string' ? normalizeSearchText(value) : '');
+  return list.filter((assignment) => {
+    if (!assignment) return false;
+    if (query && !text(assignment.taskTitle || assignment.task).includes(query) && !text(assignment.staffName || assignment.staff).includes(query)) {
+      return false;
+    }
+    if (filters.department && resolveAssignmentDepartmentCode(assignment, tasks, workload) !== filters.department) return false;
+    if (filters.assignedTime && !matchesAssignedTime(assignment.assignedAt, filters.assignedTime, referenceDate)) return false;
+    return true;
+  });
 }

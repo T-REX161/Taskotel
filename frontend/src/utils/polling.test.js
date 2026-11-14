@@ -46,7 +46,7 @@ describe('dashboard background refresh', () => {
   it('the Dashboard refreshes every 30s, silently, from every source once, and keeps loaded data when a refresh fails', () => {
     const page = fs.readFileSync(new URL('../pages/Dashboard.jsx', import.meta.url), 'utf8');
     assert.ok(page.includes('const DASHBOARD_REFRESH_MS = 30000;') && page.includes('startPolling({ refresh: () => refreshRef.current(true), intervalMs: DASHBOARD_REFRESH_MS })'));
-    assert.ok(page.includes("if (!silent) setError('Unable to load dashboard data. Please try again.');"), 'a failed silent refresh never shows the error screen');
+    assert.ok(page.includes('if (!silent) setError(dashboardLoadErrorMessage(err));'), 'a failed silent refresh never shows the error screen');
     assert.ok(page.includes("prev.status === 'ready' ? prev : { status: 'error', data: prev.data }"), 'failed refresh keeps loaded data');
     assert.ok(page.includes("...(getUserRole() !== 'STAFF' ? [loadStaffWorkload(), loadRecommendations(), loadTasks()] : [])"), 'Staff never refresh org-wide sources');
     assert.ok(page.includes('refreshRef.current(false);') && page.includes('return startPolling('), 'initial load on mount and cleanup on unmount');

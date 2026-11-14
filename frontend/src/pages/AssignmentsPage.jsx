@@ -17,19 +17,26 @@ import {
   formatAssignedAt,
   splitAssignedAt,
   formatAssignmentStatus,
-  getAssignmentStatusBadge,
   getEligibleUnassignedTasks,
   getActionsMenuPosition,
   getNextMenuItemIndex,
   getPaginationState,
   getPageNumbers,
   groupAssignmentsByTask,
+  isAssignmentTaskFinished,
+  EMPTY_ASSIGNMENT_FILTERS,
+  filterAssignments,
+  hasActiveAssignmentFilters,
 } from '../utils/assignmentUtils';
 import { assignmentSuccessMessage, buildAssignmentRequest, submittableStaffIds, toggleStaffSelection } from '../utils/staffSelection';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import AssignTaskModal from '../components/tasks/AssignTaskModal';
 import PageSizeToggle from '../components/common/PageSizeToggle';
 import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
+import AssignmentFilters from '../components/assignments/AssignmentFilters';
+import AssignmentStatusBadge from '../components/assignments/AssignmentStatusBadge';
+import UserAvatar from '../components/common/UserAvatar';
+import { staffInitials } from '../components/assignments/assignmentTableStyles';
 
 const ASSIGN_TASK_BUTTON_CLASS =
   'shrink-0 inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2';
@@ -154,13 +161,31 @@ export default function AssignmentsPage() {
     return calculateAssignmentSummary({ assignments, tasks });
   }, [assignments, tasks]);
 
-  // Client-side pagination of the fetched assignments (summary cards keep using the full list)
+  // Search and filters over the fetched assignments (no API call per keystroke). The summary cards keep using the full list.
+  const [filters, setFilters] = useState(EMPTY_ASSIGNMENT_FILTERS);
+  const filtersActive = hasActiveAssignmentFilters(filters);
+  const filteredAssignments = useMemo(
+    () => filterAssignments(assignments, filters, { tasks, workload }),
+    [assignments, filters, tasks, workload]
+  );
+
+  // Client-side pagination of the filtered assignments
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(ASSIGNMENTS_PER_PAGE); // rows per page, chosen with the toggle
   const pagination = useMemo(
-    () => getPaginationState({ totalItems: assignments.length, currentPage, pageSize }),
-    [assignments.length, currentPage, pageSize]
+    () => getPaginationState({ totalItems: filteredAssignments.length, currentPage, pageSize }),
+    [filteredAssignments.length, currentPage, pageSize]
   );
+
+  // Any change to the search or a filter starts again at page 1; clearing restores the complete list
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
+  };
+  const handleClearFilters = () => {
+    setFilters(EMPTY_ASSIGNMENT_FILTERS);
+    setCurrentPage(1);
+  };
 
   // A new page size starts again at page 1
   const handlePageSizeChange = (size) => {
@@ -176,8 +201,8 @@ export default function AssignmentsPage() {
   }, [currentPage, pagination.page]);
 
   const paginatedAssignments = useMemo(
-    () => assignments.slice(pagination.startIndex, pagination.endIndex),
-    [assignments, pagination.startIndex, pagination.endIndex]
+    () => filteredAssignments.slice(pagination.startIndex, pagination.endIndex),
+    [filteredAssignments, pagination.startIndex, pagination.endIndex]
   );
 
   const pageNumbers = useMemo(
@@ -299,7 +324,7 @@ export default function AssignmentsPage() {
         return;
       }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        const items = menuRef.current ? Array.from(menuRef.current.querySelectorAll('[role="menuitem"]')) : [];
+        const items = menuRef.current ? Array.from(menuRef.current.querySelectorAll('[role="menuitem"]:not([disabled])')) : [];
         const nextIndex = getNextMenuItemIndex(items.indexOf(document.activeElement), items.length, e.key);
         if (nextIndex >= 0) {
           e.preventDefault();
@@ -356,7 +381,8 @@ export default function AssignmentsPage() {
   const handleMenuReassign = () => {
     const assignment = activeMenu?.assignment;
     setActiveMenu(null);
-    if (assignment) handleOpenReassignModal(assignment);
+    // A completed or cancelled task cannot be reassigned (the server refuses it), so its dialog is never opened
+    if (assignment && !isAssignmentTaskFinished(assignment, tasks)) handleOpenReassignModal(assignment);
   };
 
   const handleCloseAssignModal = () => {
@@ -633,12 +659,45 @@ export default function AssignmentsPage() {
 
       {/* Assignments Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200/70 overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100">
-          <h2 className="text-base font-semibold text-gray-900">Current Staff Assignments</h2>
+        <div className="px-6 pt-5 pb-3 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold tracking-tight text-gray-900">Current Staff Assignments</h2>
+              <p className="mt-1 text-sm text-gray-500">Monitor and manage your team&apos;s active task assignments.</p>
+            </div>
+            {/* How many records match (the whole list when nothing is set), as a quiet pill; green while filters are applied */}
+            <p
+              className={`self-start shrink-0 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium whitespace-nowrap ${
+                filtersActive ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-gray-200 bg-gray-50 text-gray-600'
+              }`}
+              aria-live="polite"
+              data-testid="assignment-match-count"
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${filtersActive ? 'bg-emerald-500' : 'bg-gray-400'}`} aria-hidden="true" />
+              {filtersActive ? (
+                <span>
+                  <span className="font-semibold tabular-nums text-gray-900">{filteredAssignments.length}</span> of {assignments.length}{' '}
+                  {assignments.length === 1 ? 'assignment matches' : 'assignments match'}
+                </span>
+              ) : (
+                <span>
+                  <span className="font-semibold tabular-nums text-gray-900">{assignments.length}</span>{' '}
+                  {assignments.length === 1 ? 'assignment' : 'assignments'}
+                </span>
+              )}
+            </p>
+          </div>
+          <AssignmentFilters
+            filters={filters}
+            onChange={handleFilterChange}
+            onClear={handleClearFilters}
+            isActive={filtersActive}
+          />
         </div>
+        {/* The table keeps its column layout on small screens and scrolls sideways inside the card */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-emerald-50/40 text-xs font-semibold uppercase tracking-wide text-gray-500 border-b border-gray-100">
+          <table className="w-full min-w-[760px] text-left">
+            <thead className="bg-emerald-50/50 text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap text-gray-600 border-y border-gray-200/70">
               <tr>
                 <th className="px-6 py-3">Task</th>
                 <th className="px-6 py-3">Staff Member</th>
@@ -651,13 +710,34 @@ export default function AssignmentsPage() {
             <tbody className="divide-y divide-gray-100 text-sm">
               {assignments.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 px-6 text-center text-sm text-gray-500">
+                  <td colSpan={6} className="py-14 px-6 text-center text-sm text-gray-500">
                     <div className="flex flex-col items-center gap-2">
-                      <AssignmentsIcon className="w-8 h-8 text-gray-300" />
-                      <p className="font-medium text-gray-700">No assignments found</p>
-                      <p className="text-xs text-gray-400">
+                      <span className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 ring-1 ring-inset ring-emerald-100 text-emerald-600" aria-hidden="true">
+                        <AssignmentsIcon className="w-6 h-6" />
+                      </span>
+                      <p className="font-semibold text-gray-900">No assignments found</p>
+                      <p className="text-sm text-gray-500">
                         There are currently no staff assignments in the system.
                       </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredAssignments.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-14 px-6 text-center text-sm text-gray-500" data-testid="assignments-no-match">
+                    <div className="flex flex-col items-center gap-2">
+                      <span className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 ring-1 ring-inset ring-emerald-100 text-emerald-600" aria-hidden="true">
+                        <AssignmentsIcon className="w-6 h-6" />
+                      </span>
+                      <p className="font-semibold text-gray-900">No assignments match your filters</p>
+                      <p className="text-sm text-gray-500">Try a different search, department or assigned time.</p>
+                      <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        className="mt-2 px-4 py-2 text-sm font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg ring-1 ring-inset ring-emerald-100 transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+                      >
+                        Clear Filters
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -669,15 +749,27 @@ export default function AssignmentsPage() {
                   const assignedTime = splitAssignedAt(formatAssignedAt(assignment.assignedAt));
                   const statusRaw = assignment.taskStatus || assignment.status;
                   const statusLabel = formatAssignmentStatus(statusRaw);
-                  const statusBadgeClass = getAssignmentStatusBadge(statusRaw);
                   const isMenuOpen = activeMenu?.assignment?.id === assignment.id;
 
                   return (
-                    <tr key={assignment.id} className="hover:bg-emerald-50/30 transition-colors">
-                      <td className="px-6 py-3.5 align-middle font-medium text-gray-900">{taskTitle}</td>
-                      <td className="px-6 py-3.5 align-middle text-gray-700">{staffName}</td>
-                      <td className="px-6 py-3.5 align-middle text-gray-600">{department}</td>
-                      <td className="px-6 py-3.5 align-middle whitespace-nowrap text-center tabular-nums">
+                    <tr key={assignment.id} className={`transition-colors duration-150 hover:bg-emerald-50/40 ${isMenuOpen ? 'bg-emerald-50/40' : ''}`}>
+                      {/* Long titles wrap to two lines at most; the full text is in the tooltip */}
+                      <td className="px-6 py-4 align-middle">
+                        <p className="max-w-[18rem] font-semibold leading-snug text-gray-900 break-words line-clamp-2" title={taskTitle}>{taskTitle}</p>
+                      </td>
+                      <td className="px-6 py-4 align-middle">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <UserAvatar
+                            initials={staffInitials(staffName)}
+                            name={staffName}
+                            className="h-7 w-7 shrink-0 rounded-full text-[11px] font-semibold"
+                            fallbackClassName="bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100"
+                          />
+                          <span className="max-w-[12rem] truncate font-medium text-gray-700" title={staffName}>{staffName}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 align-middle whitespace-nowrap text-gray-600">{department}</td>
+                      <td className="px-6 py-4 align-middle whitespace-nowrap text-center tabular-nums">
                         {/* Date above time, centered; 16px + 2px + 12px stays within the 32px actions-button row height */}
                         <div className="flex flex-col items-center justify-center gap-0.5">
                           <span className="text-[13px] leading-4 font-medium text-slate-600">{assignedTime.date}</span>
@@ -686,19 +778,17 @@ export default function AssignmentsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-3.5 align-middle whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${statusBadgeClass}`}>
-                          {statusLabel}
-                        </span>
+                      <td className="px-6 py-4 align-middle whitespace-nowrap">
+                        <AssignmentStatusBadge status={statusRaw} label={statusLabel} />
                       </td>
-                      <td className="px-6 py-3.5 align-middle text-right">
+                      <td className="px-6 py-4 align-middle text-right">
                         <button
                           type="button"
                           onClick={(e) => handleActionsButtonClick(e, assignment)}
                           className={`w-8 h-8 rounded-lg border transition-colors cursor-pointer inline-flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1 ${
                             isMenuOpen
-                              ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                              : 'border-gray-200 bg-white text-gray-500 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700'
+                              ? 'border-emerald-300 bg-emerald-50 text-emerald-700 shadow-xs'
+                              : 'border-transparent bg-transparent text-gray-400 hover:border-gray-200 hover:bg-white hover:text-gray-700 hover:shadow-xs dark:hover:bg-gray-100'
                           }`}
                           aria-label={`Actions for ${taskTitle}`}
                           aria-haspopup="menu"
@@ -717,8 +807,8 @@ export default function AssignmentsPage() {
           </table>
         </div>
 
-        {/* Pagination controls (hidden when there are no assignments) */}
-        {assignments.length > 0 && (
+        {/* Pagination controls over the filtered list (hidden when nothing is shown) */}
+        {filteredAssignments.length > 0 && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-6 py-3 border-t border-gray-100 bg-gray-50/50">
             <p className="text-xs text-gray-500 shrink-0" aria-live="polite">
               Showing{' '}
@@ -726,8 +816,8 @@ export default function AssignmentsPage() {
               {'–'}
               <span className="font-medium text-gray-700">{pagination.rangeEnd}</span>
               {' '}of{' '}
-              <span className="font-medium text-gray-700">{assignments.length}</span>
-              {' '}{assignments.length === 1 ? 'assignment' : 'assignments'}
+              <span className="font-medium text-gray-700">{filteredAssignments.length}</span>
+              {' '}{filteredAssignments.length === 1 ? 'assignment' : 'assignments'}
             </p>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -812,7 +902,19 @@ export default function AssignmentsPage() {
             <EyeIcon className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
             <span>View Details</span>
           </button>
-          {canManageAssignments && (
+          {canManageAssignments && isAssignmentTaskFinished(activeMenu.assignment, tasks) && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled
+              title="Cannot reassign completed or cancelled task"
+              data-testid="reassign-finished-disabled"
+              className="w-full text-left px-3 py-2 text-xs text-gray-400 flex items-center gap-2 cursor-not-allowed opacity-60"
+            >
+              <span>Reassign (task finished)</span>
+            </button>
+          )}
+          {canManageAssignments && !isAssignmentTaskFinished(activeMenu.assignment, tasks) && (
             <button
               type="button"
               role="menuitem"

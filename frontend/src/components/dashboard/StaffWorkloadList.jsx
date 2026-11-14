@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { durationPercent, loadPercent, sortByLoad, workloadTone } from '../../utils/dashboardView';
+import { SHIFT_MINUTES } from '../../utils/workloadUtils';
 
 const initialsOf = (name) => {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -23,7 +24,7 @@ export const DASHBOARD_ROW_LIMIT = 7;
 
 /**
  * StaffWorkloadList — one row per staff member (Admin / Manager), from GET /api/workload.
- * Name and department, a load bar with its percentage (of the 360-minute At-risk threshold) and the backend's workload
+ * Name and department, a load bar with its percentage (of one 480-minute shift, as on the Workload page) and the backend's workload
  * state, and the active task count with the estimated duration the backend calculated. People on HIGH or AT_RISK get a
  * thin accent on the left and a faint tint; nothing else changes for them.
  *
@@ -70,8 +71,8 @@ export default function StaffWorkloadList({ staff }) {
                 role="progressbar"
                 aria-label={`${row.staffName} workload`}
                 aria-valuemin={0}
-                aria-valuemax={360}
-                aria-valuenow={Math.min(360, row.totalEstimatedDuration || 0)}
+                aria-valuemax={SHIFT_MINUTES}
+                aria-valuenow={Math.min(SHIFT_MINUTES, row.totalEstimatedDuration || 0)}
               >
                 <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${tone.bar}`} style={{ width: `${durationPercent(row.totalEstimatedDuration)}%` }} />
               </div>

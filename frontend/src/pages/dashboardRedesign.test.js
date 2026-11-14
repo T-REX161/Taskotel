@@ -79,7 +79,7 @@ describe('workload display helpers', () => {
     assert.equal(formatMinutes(120), '2h');
     assert.equal(formatMinutes(150), '2h 30m');
     assert.equal(formatMinutes(null), '0m');
-    assert.equal(durationPercent(180), 50);
+    assert.equal(durationPercent(240), 50);
     assert.equal(durationPercent(900), 100);
     assert.equal(durationPercent(-5), 0);
   });
@@ -91,8 +91,8 @@ describe('workload display helpers', () => {
     assert.deepEqual(sortByLoad(null), []);
   });
 
-  it('shows load as a rounded share of the 360-minute threshold, and the date in the chosen date format', () => {
-    assert.deepEqual([loadPercent(0), loadPercent(180), loadPercent(270), loadPercent(999)], [0, 50, 75, 100]);
+  it('shows load as a rounded share of one 480-minute shift, and the date in the chosen date format', () => {
+    assert.deepEqual([loadPercent(0), loadPercent(240), loadPercent(360), loadPercent(999)], [0, 50, 75, 100]);
     assert.equal(formatDashboardDate(new Date(2026, 8, 29)), 'Tue, 29/09/2026');
   });
 
@@ -345,7 +345,8 @@ describe('operations insights', () => {
     assert.equal(r.details.type, 'tasks');
     assert.equal(r.details.viewAll, '/tasks');
     const w = buildInsights({ ...base, staffWorkload: ready([{ staffId: 'a', staffName: 'Omar', departmentName: 'Housekeeping', workloadStatus: 'AT_RISK', totalEstimatedDuration: 420, activeTaskCount: 5 }]) }).items[0];
-    assert.deepEqual(w.details.rows[0], { id: 'a', name: 'Omar', department: 'Housekeeping', percent: 100, status: 'AT_RISK', activeTasks: 5 });
+    // 420 of a 480-minute shift: 88%, the same number the Workload page shows for Omar
+    assert.deepEqual(w.details.rows[0], { id: 'a', name: 'Omar', department: 'Housekeeping', percent: 88, status: 'AT_RISK', activeTasks: 5 });
     const many = Array.from({ length: 9 }, (_, i) => person('s' + i, 'N' + i, 'HIGH', 300));
     const m = buildInsights({ ...base, staffWorkload: ready(many) }).items[0];
     assert.equal(m.details.rows.length, 4); assert.equal(m.details.total, 9);
@@ -424,11 +425,12 @@ describe('visual polish', () => {
 describe('header', () => {
   const header = read('components', 'layout', 'Header.jsx');
 
-  it('the messages, notifications and settings icons are gone; search stays', () => {
+  it('the messages, notifications and settings icons are gone, and so is the search box that searched nothing', () => {
     for (const gone of ['MessageIcon', 'BellIcon', 'SettingsIcon', 'aria-label="Messages"', 'aria-label="Notifications"', 'aria-label="Settings"']) {
       assert.ok(!header.includes(gone), gone);
     }
-    assert.ok(header.includes('placeholder="Search..."') && header.includes('<SearchIcon'));
+    assert.ok(!header.includes('placeholder="Search..."') && !header.includes('SearchIcon'), 'no non-functional header search');
+    assert.ok(header.includes('<div className="flex-1" aria-hidden="true" />'), 'the free space keeps the controls on the right');
   });
 
   it('the theme toggle is untouched and still sits just before the divider', () => {

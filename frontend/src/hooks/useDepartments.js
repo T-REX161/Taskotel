@@ -12,8 +12,11 @@ const FALLBACK_DEPARTMENTS = Object.entries(BUILT_IN_DEPARTMENT_NAMES).map(([cod
  * - activeDepartments: only those that can take new staff and tasks. A department from an older API that has no
  *   "active" field counts as active.
  * - reload(): fetch again, for example after a department was created
+ *
+ * Options: { enabled } (default true). While false nothing is fetched and the built-in list is kept; the list loads as soon as it
+ * becomes true. Every existing caller passes nothing and so loads at once, as before.
  */
-export default function useDepartments() {
+export default function useDepartments({ enabled = true } = {}) {
   const [departments, setDepartments] = useState(FALLBACK_DEPARTMENTS);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,8 +37,9 @@ export default function useDepartments() {
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     reload();
-  }, [reload]);
+  }, [enabled, reload]);
 
   const activeDepartments = useMemo(() => departments.filter((department) => department.active !== false), [departments]);
 

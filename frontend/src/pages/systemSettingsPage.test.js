@@ -72,8 +72,9 @@ describe('System Settings page wiring (source checks)', () => {
     assert.ok(page.includes("if (status.phase !== 'saving') setStatus({ phase: 'idle', message: '' });"));
   });
 
-  it('is honest that the settings are not applied yet (no behaviour is wired in this stage)', () => {
-    assert.ok(page.includes('They take effect on workload balancing, alerts and cross-department assistance in a later update.'));
+  it('says the saved settings take effect now (they drive recommendations, capacity alerts and new support), never "in a later update"', () => {
+    assert.ok(page.includes('Saved changes take effect straight away on workload recommendations, capacity alerts and new cross-department support.'));
+    assert.ok(!page.includes('in a later update'), 'the stale footer is gone');
   });
 
   it('the success, error and status messages are announced (role status and alert)', () => {

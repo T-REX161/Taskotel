@@ -12,6 +12,7 @@ import {
   formatDate,
   formatTime,
   formatDuration,
+  isTaskOverdue,
 } from './taskFormatters';
 
 /**
@@ -209,19 +210,29 @@ export default function TasksTable({
                       {(() => {
                         const dateText = formatDate(task.dueDate);
                         const timeText = formatTime(task.deadlineTime);
+                        // An open task past its due date (or today's deadline) is marked; the date itself is unchanged
+                        const overdue = isTaskOverdue(task);
+                        const dateClass = `text-sm font-medium whitespace-nowrap ${overdue ? 'text-red-700' : 'text-gray-900'}`;
+                        const overdueBadge = overdue ? (
+                          <span data-testid="task-overdue" className="mt-1 inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-red-50 text-red-700 ring-1 ring-inset ring-red-200">
+                            Overdue
+                          </span>
+                        ) : null;
 
                         if (dateText && timeText) {
                           return (
                             <div className="flex flex-col items-center justify-center min-w-0 leading-tight text-center">
-                              <span className="text-sm font-medium text-gray-900 whitespace-nowrap">{dateText}</span>
+                              <span className={dateClass}>{dateText}</span>
                               <span className="text-xs text-gray-500 whitespace-nowrap mt-0.5">{timeText}</span>
+                              {overdueBadge}
                             </div>
                           );
                         }
                         if (dateText) {
                           return (
                             <div className="flex flex-col items-center justify-center min-w-0 leading-tight text-center">
-                              <span className="text-sm font-medium text-gray-900 whitespace-nowrap">{dateText}</span>
+                              <span className={dateClass}>{dateText}</span>
+                              {overdueBadge}
                             </div>
                           );
                         }

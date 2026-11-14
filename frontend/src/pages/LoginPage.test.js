@@ -176,12 +176,13 @@ describe('LoginPage result indicators', () => {
       assert.ok(!/localStorage\.setItem[^\n]*loginError/.test(pageSource));
     });
 
-    it('keeps the redirect, loading state, password toggle and remember-me behaviour', () => {
+    it('keeps the redirect, loading state and password toggle; the no-op "Remember me" box is gone', () => {
       assert.ok(/setTimeout\(\(\) => \{\s*navigate\('\/'\);\s*\}, 700\);/.test(handleSubmit), 'Redirect to the dashboard must be unchanged');
       assert.ok(/finally \{\s*setIsLoading\(false\);/.test(handleSubmit), 'Loading state always ends');
       assert.ok(pageSource.includes('disabled={isLoading || loginSuccess}'), 'Sign In stays disabled while loading or after success');
       assert.ok(pageSource.includes("type={showPassword ? 'text' : 'password'}"), 'Password visibility toggle unchanged');
-      assert.ok(pageSource.includes('checked={rememberMe}'), 'Remember me unchanged');
+      assert.ok(!pageSource.includes('rememberMe') && !pageSource.includes('Remember me</'), 'No "Remember me" control that changes nothing');
+      assert.ok(pageSource.includes("onClick={() => navigate('/forgot-password')}"), 'Forgot password stays');
       assert.ok(pageSource.includes("{verifiedMessage && !loginError && !loginSuccess && ("), 'Verification banner hides while a result is shown');
     });
   });
@@ -208,7 +209,7 @@ describe('LoginPage result indicators', () => {
     it('one field takes a username or an email, sent through the same login request', () => {
       assert.ok(/<label htmlFor="username" className="sr-only">\s*Username or Email\s*<\/label>/.test(pageSource), 'Label says username or email');
       assert.ok(pageSource.includes('placeholder="Username or Email"') && pageSource.includes('autoComplete="username"'));
-      assert.strictEqual((pageSource.match(/<input/g) || []).length, 3, 'Still only the identifier, password and Remember me inputs');
+      assert.strictEqual((pageSource.match(/<input/g) || []).length, 2, 'Only the identifier and password inputs');
       assert.ok(!/type="email"/.test(pageSource), 'No separate email field');
     });
   });

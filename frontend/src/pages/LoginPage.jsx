@@ -14,7 +14,6 @@ export default function LoginPage() {
   const [username, setUsername] = useState(initialUsername);
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [loginError, setLoginError] = useState(null); // { kind: 'invalid' | 'rateLimited' | 'server' | 'network', message }
@@ -227,20 +226,8 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember Me Checkbox & Forgot Password */}
-            <div className="flex items-center justify-between pt-1.5">
-              <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-[18px] h-[18px] rounded text-[#0c6f50] dark:text-emerald-400 border-gray-300 focus:ring-emerald-500/20 focus:ring-offset-0 cursor-pointer accent-[#0c6f50]"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  Remember me
-                </span>
-              </label>
-
+            {/* Forgot Password. (The "Remember me" box was removed: it changed nothing, a session is always kept until sign-out) */}
+            <div className="flex items-center justify-end pt-1.5">
               <button
                 type="button"
                 onClick={() => navigate('/forgot-password')}

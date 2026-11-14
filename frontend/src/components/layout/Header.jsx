@@ -1,6 +1,6 @@
 import React from 'react';
 import TaskotelLogo from '../brand/TaskotelLogo';
-import { SearchIcon, MenuIcon, SunIcon, MoonIcon } from '../icons/Icons';
+import { MenuIcon, SunIcon, MoonIcon } from '../icons/Icons';
 import { useTheme } from '../../theme/ThemeContext';
 import { getUsername, getUserRole } from '../../services/api';
 import UserAvatar from '../common/UserAvatar';
@@ -54,19 +54,8 @@ export default function Header({ onMenuClick, onProfileClick, onLogoClick }) {
         </div>
       </div>
 
-      {/* Center: Search Bar */}
-      <div className="flex-1 max-w-sm mx-2 sm:mx-4">
-        <div className="relative w-full">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-            <SearchIcon className="w-4 h-4" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search..."
-            className="w-full pl-9 pr-4 py-2 bg-gray-50 hover:bg-gray-100 focus:bg-white text-sm text-gray-800 placeholder-gray-400 rounded-lg border border-gray-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none transition-all"
-          />
-        </div>
-      </div>
+      {/* Center: free space. The header search box was removed: it searched nothing. Each list (Tasks, Staff, Users) has its own search */}
+      <div className="flex-1" aria-hidden="true" />
 
       {/* Right: theme toggle & current user */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">

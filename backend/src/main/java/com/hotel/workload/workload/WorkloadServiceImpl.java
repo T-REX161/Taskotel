@@ -74,12 +74,22 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
     public List<WorkloadDto> calculateWorkload(DepartmentScope scope) {
         java.util.Objects.requireNonNull(scope, "scope");
         if (scope.isAll()) {
-            return buildGlobalRows(operationalStaff());
+            return buildGlobalRows(operationalStaff(), true);
         }
         if (scope.isDepartment()) {
             return buildDepartmentRows(scope.department());
         }
-        return buildGlobalRows(List.of(ownStaffRecord(SecurityContextHolder.getContext().getAuthentication().getName())));
+        // A Staff member's own row is always returned, whatever their state
+        return buildGlobalRows(List.of(ownStaffRecord(SecurityContextHolder.getContext().getAuthentication().getName())), false);
+    }
+
+    /**
+     * The staff an Admin or Manager list shows: deactivated staff are left out, as on the dashboard's staff counts, since they can take no
+     * work. A deactivated member who somehow still holds active work is kept, so no held work is ever hidden (deactivation normally refuses
+     * a member with active assignments).
+     */
+    private static List<Staff> withoutIdleDeactivated(List<Staff> staff, Map<UUID, List<Assignment>> byStaff) {
+        return staff.stream().filter(member -> member.isActive() || byStaff.containsKey(member.getId())).collect(java.util.stream.Collectors.toList());
     }
 
     /** Managers and administrators are not operational staff, so they have no workload row. */
@@ -102,14 +112,19 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
     private List<WorkloadDto> buildDepartmentRows(Department department) {
         List<Staff> staff = staffRepository.findByDepartmentAndUserRole(department, Role.STAFF);
         List<Assignment> assignments = assignmentRepository.findActiveByTaskAndStaffDepartment(ACTIVE_STATUSES, department);
-        return buildRows(staff, groupByStaff(assignments), Map.of(), Map.of());
+        Map<UUID, List<Assignment>> byStaff = groupByStaff(assignments);
+        return buildRows(withoutIdleDeactivated(staff, byStaff), byStaff, Map.of(), Map.of());
     }
 
-    /** The existing calculation: every active assignment and every active support record, whatever their department. */
-    private List<WorkloadDto> buildGlobalRows(List<Staff> targetStaff) {
+    /**
+     * The existing calculation: every active assignment and every active support record, whatever their department. {@code listing} is true
+     * for the Admin list (deactivated staff without work are left out) and false for a Staff member's own row.
+     */
+    private List<WorkloadDto> buildGlobalRows(List<Staff> targetStaff, boolean listing) {
         // Load all active assignments in a single JOIN FETCH query (no N+1).
         List<Assignment> activeAssignments = assignmentRepository.findAllActiveAssignments(ACTIVE_STATUSES);
         Map<UUID, List<Assignment>> byStaff = groupByStaff(activeAssignments);
+        if (listing) targetStaff = withoutIdleDeactivated(targetStaff, byStaff);
 
         // Staff on temporary cross-department support, and the department they are helping
         Map<UUID, SupportAssignment> supportByStaff = new HashMap<>();

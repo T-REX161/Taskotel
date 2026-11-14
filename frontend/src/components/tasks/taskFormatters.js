@@ -117,6 +117,36 @@ export function formatTime(timeStr) {
  * @param {string|null|undefined} dueDateStr
  * @returns {string|null} Formatted date (e.g. "13/10/2026") or null
  */
+/**
+ * Task counts for the Tasks page summary cards, one per status, so the cards add up to the total:
+ * total = pending + assigned + inProgress + completed + cancelled (a task with an unknown status counts only in the total).
+ */
+export function countTasksByStatus(tasks) {
+  const counts = { total: 0, pending: 0, assigned: 0, inProgress: 0, completed: 0, cancelled: 0 };
+  const keyFor = { PENDING: 'pending', ASSIGNED: 'assigned', IN_PROGRESS: 'inProgress', COMPLETED: 'completed', CANCELLED: 'cancelled' };
+  for (const task of Array.isArray(tasks) ? tasks : []) {
+    counts.total += 1;
+    const key = keyFor[task?.status];
+    if (key) counts[key] += 1;
+  }
+  return counts;
+}
+
+/**
+ * Whether a task is past its due moment: still open (not Completed or Cancelled) and due before today, or due today with a deadline time
+ * that has passed. A task without a due date is never overdue. Uses the browser's local date and time, the same ones the due date is shown in.
+ */
+export function isTaskOverdue(task, now = new Date()) {
+  if (!task || task.status === 'COMPLETED' || task.status === 'CANCELLED') return false;
+  const date = String(task.dueDate || '').split('-').map((part) => parseInt(part, 10));
+  if (date.length !== 3 || date.some(Number.isNaN)) return false;
+  const byDay = date[0] - now.getFullYear() || date[1] - (now.getMonth() + 1) || date[2] - now.getDate();
+  if (byDay !== 0) return byDay < 0;
+  const time = String(task.deadlineTime || '').split(':').map((part) => parseInt(part, 10));
+  if (time.length < 2 || time.some(Number.isNaN)) return false;
+  return time[0] * 60 + time[1] < now.getHours() * 60 + now.getMinutes();
+}
+
 export function formatDate(dueDateStr) {
   if (!dueDateStr) return null;
   const parts = String(dueDateStr).split('-');

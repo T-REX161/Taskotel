@@ -73,15 +73,21 @@ export function getWorkloadProgressBarColor(status) {
 }
 
 /**
+ * One standard shift in minutes (8 hours). Every workload percentage in the app (Dashboard, Workload page, Assign dialog) is a share of
+ * this, so the same person shows the same percentage everywhere.
+ */
+export const SHIFT_MINUTES = 480;
+
+/**
  * Calculates percentage of a standard shift (default 480 min = 8 hours), clamped to 0–100%.
  *
  * @param {number|string|null|undefined} minutes
  * @param {number} [maxMinutes=480]
  * @returns {number}
  */
-export function calculateWorkloadPercentage(minutes, maxMinutes = 480) {
+export function calculateWorkloadPercentage(minutes, maxMinutes = SHIFT_MINUTES) {
   const safeMinutes = Math.max(0, parseInt(minutes, 10) || 0);
-  const safeMax = maxMinutes > 0 ? maxMinutes : 480;
+  const safeMax = maxMinutes > 0 ? maxMinutes : SHIFT_MINUTES;
   return Math.min(100, Math.round((safeMinutes / safeMax) * 100));
 }
 

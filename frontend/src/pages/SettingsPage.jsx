@@ -220,7 +220,7 @@ export function SystemSettingsPage() {
                 </button>
               </div>
               <p className="text-xs text-gray-400">
-                These settings are stored now{saved?.updatedBy ? ` (last saved by ${saved.updatedBy})` : ''}. They take effect on workload balancing, alerts and cross-department assistance in a later update.
+                These settings apply to the whole hotel{saved?.updatedBy ? ` (last saved by ${saved.updatedBy})` : ''}. Saved changes take effect straight away on workload recommendations, capacity alerts and new cross-department support.
               </p>
             </div>
           </>

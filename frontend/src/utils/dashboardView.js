@@ -1,6 +1,7 @@
 // Pure helpers for the dashboard. Everything is derived from what the backend returned; nothing is invented.
 import { formatDate as formatDateValue } from './dateTimeFormat.js';
 import { getPreferences } from './preferences.js';
+import { SHIFT_MINUTES } from './workloadUtils.js';
 
 /** The task statuses the summary reports, in display order. Staff do not receive a cancelled count. */
 export const TASK_STATUSES = [
@@ -72,8 +73,27 @@ export const WORKLOAD_TONES = {
 
 export const workloadTone = (status) => WORKLOAD_TONES[status] || WORKLOAD_TONES.LOW;
 
-/** Bar fill for a duration, full at the At-risk threshold (360 min), the same scale the staff view already used. */
-export const durationPercent = (minutes) => Math.max(0, Math.min(100, ((Number(minutes) || 0) / 360) * 100));
+/**
+ * Bar fill for a duration: its share of one standard shift (480 min), the same scale as the Workload page and the Assign dialog, so a
+ * person shows the same percentage everywhere. The status badge still comes from the backend's bands (At risk above 360 min = 75%).
+ */
+export const durationPercent = (minutes) => Math.max(0, Math.min(100, ((Number(minutes) || 0) / SHIFT_MINUTES) * 100));
+
+/** What the server says to a Manager whose account has no active department (the scope resolver's 403). */
+export const NO_ACTIVE_DEPARTMENT_SERVER_MESSAGE = 'Your account is not assigned to an active department.';
+export const DASHBOARD_LOAD_FAILED_MESSAGE = 'Unable to load dashboard data. Please try again.';
+
+/**
+ * The text of the dashboard's error screen. A refusal (403) is explained with the server's own message, so a Manager without an active
+ * department learns why and what to do; every other failure keeps the existing generic message.
+ */
+export function dashboardLoadErrorMessage(err) {
+  const serverMessage = typeof err?.message === 'string' ? err.message.trim() : '';
+  if (err?.status !== 403 || !serverMessage) return DASHBOARD_LOAD_FAILED_MESSAGE;
+  return serverMessage === NO_ACTIVE_DEPARTMENT_SERVER_MESSAGE
+    ? `${NO_ACTIVE_DEPARTMENT_SERVER_MESSAGE} Ask an Admin to assign you to a department.`
+    : serverMessage;
+}
 
 /** "2h 30m" style text for a duration in minutes. */
 export function formatMinutes(minutes) {
@@ -93,7 +113,7 @@ export function sortByLoad(list) {
 
 export const greetingFor = (hour) => (hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
 
-/** Workload as a share of the 360-minute At-risk threshold, rounded for display ("75%"). */
+/** Workload as a share of one 480-minute shift, rounded for display ("75%"), the same number the Workload page shows. */
 export const loadPercent = (minutes) => Math.round(durationPercent(minutes));
 
 /** "Mon, 29 Sep 2026" */
