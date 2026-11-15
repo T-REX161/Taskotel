@@ -1,6 +1,18 @@
+import { getDepartmentStyle } from '../../utils/departmentStyles.js';
+
 // Visual-only helpers for the Current Staff Assignments card. They choose classes and display text; they hold no data, filtering,
 // pagination or permission logic. Colours are ordinary Tailwind classes, which the theme maps to the charcoal palette in dark mode
 // (src/theme/themePalette.cjs); the few dark: classes are deliberate dark-mode tuning.
+
+/**
+ * The department tile before a task title: the department's own icon and colour from the shared department styles (its stored
+ * iconKey/colorKey, or the built-in defaults), so it matches the Workload and Departments pages. Takes the department CODE from the
+ * assignment's data (resolveAssignmentDepartmentCode), never the title. A missing or unknown department gets the neutral building icon.
+ */
+export function assignmentDepartmentTile(departmentCode) {
+  const { iconKey, classes } = getDepartmentStyle(departmentCode || '');
+  return { iconKey, classes };
+}
 
 /** Status badge colours: a soft tinted pill with a small solid dot. The hues match the Tasks table (getStatusColor). */
 const STATUS_TONES = {

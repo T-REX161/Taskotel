@@ -24,6 +24,7 @@ import {
   getPageNumbers,
   groupAssignmentsByTask,
   isAssignmentTaskFinished,
+  resolveAssignmentDepartmentCode,
   EMPTY_ASSIGNMENT_FILTERS,
   filterAssignments,
   hasActiveAssignmentFilters,
@@ -36,7 +37,8 @@ import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
 import AssignmentFilters from '../components/assignments/AssignmentFilters';
 import AssignmentStatusBadge from '../components/assignments/AssignmentStatusBadge';
 import UserAvatar from '../components/common/UserAvatar';
-import { staffInitials } from '../components/assignments/assignmentTableStyles';
+import { assignmentDepartmentTile, staffInitials } from '../components/assignments/assignmentTableStyles';
+import DepartmentIcon from '../components/common/DepartmentIcon';
 
 const ASSIGN_TASK_BUTTON_CLASS =
   'shrink-0 inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2';
@@ -746,6 +748,8 @@ export default function AssignmentsPage() {
                   const taskTitle = assignment.taskTitle || assignment.task || 'Untitled Task';
                   const staffName = assignment.staffName || assignment.staff || 'Unassigned';
                   const department = resolveAssignmentDepartment(assignment, tasks, workload);
+                  // The department tile uses the assignment's actual department (never the title); unknown or missing -> neutral icon
+                  const departmentTile = assignmentDepartmentTile(resolveAssignmentDepartmentCode(assignment, tasks, workload));
                   const assignedTime = splitAssignedAt(formatAssignedAt(assignment.assignedAt));
                   const statusRaw = assignment.taskStatus || assignment.status;
                   const statusLabel = formatAssignmentStatus(statusRaw);
@@ -753,9 +757,19 @@ export default function AssignmentsPage() {
 
                   return (
                     <tr key={assignment.id} className={`transition-colors duration-150 hover:bg-emerald-50/40 ${isMenuOpen ? 'bg-emerald-50/40' : ''}`}>
-                      {/* Long titles wrap to two lines at most; the full text is in the tooltip */}
+                      {/* Department tile, then the title. Long titles wrap to two lines at most; the full text is in the tooltip */}
                       <td className="px-6 py-4 align-middle">
-                        <p className="max-w-[18rem] font-semibold leading-snug text-gray-900 break-words line-clamp-2" title={taskTitle}>{taskTitle}</p>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${departmentTile.classes}`}
+                            title={department}
+                            aria-hidden="true"
+                            data-testid="assignment-department-icon"
+                          >
+                            <DepartmentIcon iconKey={departmentTile.iconKey} className="w-4 h-4" />
+                          </span>
+                          <p className="min-w-0 max-w-[18rem] font-semibold leading-snug text-gray-900 break-words line-clamp-2" title={taskTitle}>{taskTitle}</p>
+                        </div>
                       </td>
                       <td className="px-6 py-4 align-middle">
                         <div className="flex items-center gap-2.5 min-w-0">
