@@ -9,6 +9,11 @@ import java.util.UUID;
  */
 public class WorkloadDto {
 
+    /**
+     * True when this record is visible to the signed-in Manager only through an Administrator view-only grant for another department:
+     * it may be looked at, never managed (every write is refused by the server for it anyway). False for everyone else.
+     */
+    private boolean viewOnly;
     private UUID staffId;
     private String staffName;
     private String department;
@@ -85,4 +90,7 @@ public class WorkloadDto {
     public void setWorkloadStatus(WorkloadStatus workloadStatus) {
         this.workloadStatus = workloadStatus;
     }
+
+    public boolean isViewOnly() { return viewOnly; }
+    public void setViewOnly(boolean viewOnly) { this.viewOnly = viewOnly; }
 }

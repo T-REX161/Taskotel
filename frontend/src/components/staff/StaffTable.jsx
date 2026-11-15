@@ -6,6 +6,8 @@ import { getUserRole, getUsername } from '../../services/api';
 import { OWN_ACCOUNT_DEACTIVATE_HINT, canOfferDeactivation } from '../../utils/ownAccount';
 import UserAvatar from '../common/UserAvatar';
 import { menuMotion, usePresence } from '../../theme/presence';
+import ViewOnlyBadge from '../common/ViewOnlyBadge';
+import { isViewOnly } from '../../utils/managerViewAccess';
 
 /**
  * Get two-letter initials from full name or username.
@@ -177,12 +179,16 @@ export default function StaffTable({
                           >
                             {displayName}
                           </span>
-                          <span
-                            className="text-xs text-gray-500 truncate block mt-0.5"
-                            title={staff.email || '-'}
-                          >
-                            {staff.email || '-'}
-                          </span>
+                          {isViewOnly(staff) ? (
+                            <ViewOnlyBadge className="mt-1 self-start" />
+                          ) : (
+                            <span
+                              className="text-xs text-gray-500 truncate block mt-0.5"
+                              title={staff.email || '-'}
+                            >
+                              {staff.email || '-'}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -292,6 +298,8 @@ export default function StaffTable({
             <span>View Details</span>
           </button>
 
+          {/* Everything below changes the record: never offered for a member the Manager may only view (the server refuses it anyway) */}
+          {!isViewOnly(shownMenu.staff) && (<>
           {/* Edit Staff */}
           <button
             type="button"
@@ -395,6 +403,7 @@ export default function StaffTable({
               <span>Remove Staff</span>
             </button>
           )}
+          </>)}
         </div>,
         document.body
       )}

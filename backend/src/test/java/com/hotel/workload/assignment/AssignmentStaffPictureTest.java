@@ -33,6 +33,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -168,7 +169,9 @@ public class AssignmentStaffPictureTest {
     void dtoShape() throws Exception {
         Set<String> fields = new TreeSet<>();
         rowFor(list("apic_admin", "ADMIN"), taskWith).fieldNames().forEachRemaining(fields::add);
-        assertEquals(new TreeSet<>(List.of("id", "taskId", "taskTitle", "taskStatus", "staffId", "staffName", "staffProfileImageUrl", "assignedAt")), fields);
+        assertEquals(new TreeSet<>(List.of("id", "taskId", "taskTitle", "taskStatus", "staffId", "staffName", "staffProfileImageUrl", "assignedAt", "viewOnly")), fields);
+        // viewOnly is true only for a Manager reading another department through an Administrator grant; never for an Admin
+        assertFalse(rowFor(list("apic_admin", "ADMIN"), taskWith).get("viewOnly").asBoolean());
 
         Staff orphan = new Staff();
         orphan.setName("No account");

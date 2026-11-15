@@ -229,6 +229,7 @@ const MODALS = {
   'components/tasks/TaskDetailsModal.jsx': ['if (!task) return null;', 'Boolean(props.task)'],
   // the Manager department dialog, named in pieces: managerDepartment.test.js allows its full name in no other file
   [`components/users/${'Manager'}DepartmentModal.jsx`]: ['if (!permitted) return null;', 'Boolean(props.isOpen)'],
+  'components/users/ManagerViewAccessModal.jsx': ['if (!permitted) return null;', 'Boolean(props.isOpen)'],
   'components/tasks/AssignTaskModal.jsx': ['if (!task && !unassignedTasks) return null;', 'Boolean(props.asModal && (props.task || props.unassignedTasks))'],
 };
 
@@ -237,7 +238,7 @@ describe('modals', () => {
     const overlays = sources.filter((s) => /className=[{"`][^\n]*fixed inset-0 z-50/.test(s.text)).map((s) => s.file).sort();
     const animated = sources.filter((s) => s.text.includes('${backdropMotion(closing)}')).map((s) => s.file).sort();
     assert.deepEqual(animated, overlays);
-    assert.equal(overlays.length, 21, '16 self-hiding modals and 5 support dialogs');
+    assert.equal(overlays.length, 22, '17 self-hiding modals and 5 support dialogs');
   });
 
   it('each keeps its own open check, and its wrapper mirrors it, so it mounts and unmounts as before', () => {

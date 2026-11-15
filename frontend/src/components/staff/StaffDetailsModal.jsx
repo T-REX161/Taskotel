@@ -1,4 +1,6 @@
 import React from 'react';
+import ViewOnlyBadge from '../common/ViewOnlyBadge';
+import { isViewOnly } from '../../utils/managerViewAccess';
 import { createPortal } from 'react-dom';
 import { CircleDotIcon, ClockIcon, CloseIcon, DepartmentsIcon, MailIcon, PhoneIcon, UserIcon } from '../icons/Icons';
 import UserAvatar from '../common/UserAvatar';
@@ -62,6 +64,8 @@ function StaffDetailsModal({ staff, onClose, closing = false }) {
   const displayName = staff.fullName || staff.name || staff.username;
   const roleLabel = staff.role || 'STAFF';
   const departmentLabel = formatDepartment(staff.department);
+  // Another department's member, seen through an Administrator's view-only grant: the server sends no contact details or username
+  const viewOnly = isViewOnly(staff);
 
   return createPortal(
     <div
@@ -97,7 +101,11 @@ function StaffDetailsModal({ staff, onClose, closing = false }) {
           <h2 id="staff-details-title" className="mt-3 text-lg font-semibold tracking-tight text-gray-900 break-words">
             {staff.fullName || staff.name || 'Staff Details'}
           </h2>
-          <p className="mt-0.5 text-sm text-gray-500 break-all">@{staff.username || 'staff'}</p>
+          {viewOnly ? (
+            <div className="mt-1.5 flex justify-center"><ViewOnlyBadge /></div>
+          ) : (
+            <p className="mt-0.5 text-sm text-gray-500 break-all">@{staff.username || 'staff'}</p>
+          )}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-2">
             <span className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${roleBadgeClass(normalizeRole(roleLabel))}`}>
               {roleLabel}
@@ -135,6 +143,11 @@ function StaffDetailsModal({ staff, onClose, closing = false }) {
             </dl>
           </section>
 
+          {viewOnly ? (
+            <p data-testid="view-only-contact-note" className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
+              Contact details are not shown for departments you can only view.
+            </p>
+          ) : (
           <section aria-labelledby="staff-details-contact">
             <h3 id="staff-details-contact" className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
               Contact information
@@ -148,6 +161,7 @@ function StaffDetailsModal({ staff, onClose, closing = false }) {
               </DetailRow>
             </dl>
           </section>
+          )}
         </div>
 
         {/* Footer */}

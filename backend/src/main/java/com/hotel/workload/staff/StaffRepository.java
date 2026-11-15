@@ -25,6 +25,11 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     List<Staff> findByDepartmentAndUserRole(@Param("department") Department department,
                                             @Param("role") com.hotel.workload.security.Role role);
 
+    /** As {@link #findByDepartmentAndUserRole}, for the departments a Manager may view (their own and any view-only grants). */
+    @Query("SELECT s FROM Staff s JOIN FETCH s.user u WHERE s.department IN :departments AND u.role = :role")
+    List<Staff> findByDepartmentInAndUserRole(@Param("departments") Collection<Department> departments,
+                                              @Param("role") com.hotel.workload.security.Role role);
+
     /** Locks these staff rows (in id order) until the transaction ends. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Staff s WHERE s.id IN :ids ORDER BY s.id")

@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V21 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V22 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -90,7 +90,8 @@ public class MigrationFilesTest {
                 "V18__allow_multiple_staff_per_task.sql",
                 "V19__staff_department_optional.sql",
                 "V20__manager_department_changes_nullable.sql",
-                "V21__department_constraints_reconcile.sql"), names);
+                "V21__department_constraints_reconcile.sql",
+                "V22__manager_view_access.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -98,7 +99,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21), versions, "Versions must be 1 to 21 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22), versions, "Versions must be 1 to 22 with no gaps or duplicates");
     }
 
     @Test
@@ -167,6 +168,37 @@ public class MigrationFilesTest {
         assertTrue(executable.contains("SET LOCAL lock_timeout"));
         assertTrue(file.contains("ROLLBACK WARNING") && file.contains("ONLY while no audit record has a null"), "the rollback limit is stated");
         assertTrue(file.contains("Not applied automatically"));
+    }
+
+    @Test
+    @DisplayName("V22 only adds the two view-access tables: guarded, lock timeout, cascading foreign keys, rollback stated, not applied automatically")
+    public void testV22AddsViewAccessTables() throws IOException {
+        String file = read(MIGRATIONS.resolve("V22__manager_view_access.sql"));
+        String executable = withoutLineComments(file);
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertTrue(executable.indexOf("to_regclass") >= 0 && executable.indexOf("to_regclass") < executable.indexOf("CREATE TABLE"), "it checks before creating anything");
+        assertEquals(2, Pattern.compile("(?i)CREATE TABLE").matcher(executable).results().count(), "exactly two new tables");
+        assertTrue(executable.contains("CREATE TABLE manager_view_access (") && executable.contains("CREATE TABLE manager_view_access_changes ("));
+        // "ON DELETE CASCADE" on the new foreign keys is the only DELETE allowed (it describes the new rows, it deletes nothing)
+        assertFalse(Pattern.compile("(?i)(?<!ON )\\b(ALTER|DROP|UPDATE|DELETE|INSERT|TRUNCATE)\\b").matcher(executable).find(), "no existing table or row is changed");
+        assertTrue(executable.contains("REFERENCES users (id) ON DELETE CASCADE") && executable.contains("REFERENCES departments (id) ON DELETE CASCADE"));
+        assertTrue(executable.contains("UNIQUE (manager_user_id, department_id)"));
+        assertTrue(file.contains("Not applied automatically") && file.contains("Rollback"));
+    }
+
+    @Test
+    @DisplayName("The production-profile test schema for V22 exists, creates the same tables, and both production tests load it")
+    public void testV22TestSchemaMatches() throws IOException {
+        String h2 = withoutLineComments(read(Path.of("src/test/resources/db/h2-manager-view-access.sql")));
+        String v22 = withoutLineComments(read(MIGRATIONS.resolve("V22__manager_view_access.sql")));
+        for (String column : new String[] {"manager_user_id", "department_id", "granted_by_user_id", "granted_by_username", "granted_at",
+                "manager_username", "department_code", "department_name", "action", "change_source", "changed_by_user_id", "changed_by_username", "changed_at"}) {
+            assertTrue(h2.contains(column) && v22.contains(column), column);
+        }
+        assertTrue(h2.contains("ON DELETE CASCADE") && h2.contains("UNIQUE (manager_user_id, department_id)"));
+        for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
+            assertTrue(read(Path.of("src/test/java/com/hotel/workload/config").resolve(test)).contains("classpath:db/h2-manager-view-access.sql"), test);
+        }
     }
 
     @Test

@@ -300,6 +300,54 @@ Verified by `ManagerDepartmentAssignmentTest` (19 tests), `ManagerDepartmentRoll
 
 Still unresolved (section 26.3): repairing the Manager without a Staff record (15); whether a department may be left without a valid Manager (18); transfers of ordinary Staff are not audited (20); retention of audit records (19).
 
+### 8.3 Manager view-only access to additional departments (IMPLEMENTED)
+
+Implemented in `staff/ManagerViewAccessService.java`, `ManagerViewAccessController.java`, `ManagerViewGrant.java`, `ManagerViewGrantChange.java`, `security/DepartmentScope.java` and `security/CurrentUserScopeResolver.java`; the screen is `ManagerViewAccessModal.jsx` (Users page, "Department View Access" on a Manager row).
+
+**What it is.** An Admin may let a Manager VIEW departments other than their own. The Manager's primary department (from the linked Staff record) is unchanged and always included. A grant gives **no** management right of any kind: no create, edit, assign, reassign, complete, status change, activate, deactivate, delete or email change in the granted department.
+
+**Two separate kinds of access in `DepartmentScope`.** `department()`, `includes()` and `includesCode()` still mean the primary department only; they decide every write and were not widened. View-only departments are held separately (`viewOnlyDepartments()`) and answered only by `canView()`, `viewableDepartments()` and `isViewOnly()`, which only the list endpoints below use. A read path that does not ask for them keeps showing the primary department only, so an omission under-exposes rather than over-exposes. Admin (ALL) and Staff (OWN) scopes cannot carry view-only departments.
+
+**Resolution on every request.** `CurrentUserScopeResolver` reads a valid Manager's grants from the database on every request (after all the existing Manager checks), keeping active departments only and dropping the primary one. Nothing is cached, so a revocation applies to the Manager's next request with the same token. A granted department that becomes inactive shows nothing until it is active again; the grant itself is kept and can still be removed.
+
+| Endpoint | Who | Behaviour |
+|---|---|---|
+| `GET /api/users/{id}/view-departments` | Admin | The Manager's primary department and the departments they may view (code, name, active, granted at, granted by). |
+| `PUT /api/users/{id}/view-departments` | Admin | Body `{"departments": ["<code>", ...]}`. Replaces the whole set (an empty list removes all) and audits each grant and revocation in the same transaction. |
+| `GET /api/users/{id}/view-departments/history` | Admin | The audit records for that Manager, newest first. |
+
+Authorization is enforced twice: the URL rules (Admin only, next to the Manager department rules) and the service (`requireAdmin`). No sign-in: 401. Manager (any target, including themselves) and Staff: 403.
+
+| Condition (all checked before anything changes; a refusal changes and records nothing) | Result |
+|---|---|
+| Target user does not exist | 404 |
+| Target is not a Manager | 400 |
+| Missing list | 400 |
+| Unknown department, or an inactive department not already granted | 400 |
+| The Manager's own department | 400 (it is always included) |
+
+**What a grant shows** (list endpoints only; each granted record is marked `viewOnly: true`):
+
+| Endpoint | With a grant |
+|---|---|
+| `GET /api/tasks` | Also the granted departments' tasks. |
+| `GET /api/staff` | Also the granted departments' STAFF-role members, **without** email, phone, pending email, username or account id. Name, picture, department, availability and status are shown. |
+| `GET /api/assignments` | Also the assignments of the granted departments' tasks. |
+| `GET /api/workload` | Also a row per granted-department STAFF member, calculated exactly as for the Manager's own department. |
+| `GET /api/departments` | The granted departments' full figures (as for the own department), marked view-only. |
+
+**Unchanged by grants (primary department only):** the Dashboard (`GET /api/dashboard/summary` uses `calculateWorkload(scope)`, not the widened list; the page also leaves view-only rows out of its own figures), workload recommendations, Cross-Department Assistance (options, preview, confirm, end, archive and the hotel-wide setting), users, system settings, and every write endpoint. Staff and Admins are unaffected.
+
+**Write refusal.** Every task, staff and assignment write keeps checking the primary department (`includes` / `department()`), so a granted-department id is refused (403 or 404, as for any other department) whatever the page offers. The pages show a "View only" badge on such records and offer View Details only; assignment pickers never list view-only staff or tasks.
+
+**Lifecycle.** Grants are deleted with the account or the department (database ON DELETE CASCADE). When an Admin moves a Manager's primary department to a department they had view access to, that now-redundant grant is removed and audited (`PRIMARY_DEPARTMENT_CHANGE`).
+
+**Audit history** (table `manager_view_access_changes`, append-only, no foreign keys, name snapshots): `managerUserId`, `managerUsername`, `departmentId`, `departmentCode`, `departmentName`, `action` (`GRANTED` or `REVOKED`), `changeSource` (`ADMIN_VIEW_ACCESS` or `PRIMARY_DEPARTMENT_CHANGE`), `changedByUserId`, `changedByUsername`, `changedAt`.
+
+**Schema.** Two new tables, `manager_view_access` (unique per Manager and department, foreign keys with ON DELETE CASCADE) and `manager_view_access_changes`. `db/migration/V22__manager_view_access.sql` is provided in the usual hand-run style (existence guard, lock timeout, rollback note). It has **not** been applied to the real database. With `ddl-auto: update` (development) Hibernate would create the tables on the next restart; with `validate` (production profiles) V22 must be applied first.
+
+Verified by `ManagerViewAccessTest` (15 tests, over HTTP with real JWTs, including every write endpoint with granted-department ids, id and parameter manipulation, and removal of a Manager or a department), `DepartmentScopeViewOnlyTest` (3 tests) and `managerViewAccess.test.js` (18 tests).
+
 ## 9. Department management permissions
 
 See 6.4. Departments are Admin-only to create, edit and delete (IMPLEMENTED: the URL rules in `SecurityConfig`, and since Step 2I `DepartmentServiceImpl` refuses a non-Admin itself, so a direct call to the service cannot bypass the URL rule; Manager and Staff can only view, with the role-dependent detail in section 19.1). Existing safeguards (IMPLEMENTED): built-in departments and departments with staff or tasks cannot be removed (`DepartmentController` comment, 409). Naming and assignment of a department "head" (`departments.head_staff_id`) is part of editing and is Admin-only in the target. A department head is **not** the same as a Manager's department assignment [Decision 16] and must not be used as one without a decision (section 26.3). Several Managers can belong to one department, whereas a department has at most one head record. Deactivating a department makes every Manager of that department invalid at the next request, because a valid assignment requires an active department. [Decisions 17.3, 17.4] Only Admin manages departments, so only Admin can trigger this.

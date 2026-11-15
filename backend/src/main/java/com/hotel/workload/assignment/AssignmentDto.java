@@ -6,6 +6,11 @@ import java.util.UUID;
 
 public class AssignmentDto {
 
+    /**
+     * True when this record is visible to the signed-in Manager only through an Administrator view-only grant for another department:
+     * it may be looked at, never managed (every write is refused by the server for it anyway). False for everyone else.
+     */
+    private boolean viewOnly;
     private UUID id;
     private UUID taskId;
     private String taskTitle;
@@ -100,4 +105,7 @@ public class AssignmentDto {
     public void setAssignedAt(LocalDateTime assignedAt) {
         this.assignedAt = assignedAt;
     }
+
+    public boolean isViewOnly() { return viewOnly; }
+    public void setViewOnly(boolean viewOnly) { this.viewOnly = viewOnly; }
 }

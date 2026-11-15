@@ -136,6 +136,8 @@ export function getUserActions(user, { staff = null, currentUsername = '', isAdm
   const actions = hasStaff ? ['view', 'edit'] : [];
   // Assigning a Manager's department is Admin only (the server refuses everyone else); it works through the Manager's staff record
   if (isAdmin && hasStaff && normalizeRole(user?.role) === 'MANAGER') actions.push('department');
+  // Granting view-only access to other departments is Admin only too (the server refuses everyone else)
+  if (isAdmin && hasStaff && normalizeRole(user?.role) === 'MANAGER') actions.push('viewAccess');
   if (active) {
     if (!own) actions.push('deactivate');
   } else {

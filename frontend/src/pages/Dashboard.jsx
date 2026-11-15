@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardSummary, getUserRole, getUsername, getWorkload, getWorkloadRecommendations, getTasks } from '../services/api';
+import { withoutViewOnly } from '../utils/managerViewAccess';
 import { describeUser } from '../components/layout/Header';
 import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
 import { preferredName } from '../utils/displayName';
@@ -60,7 +61,8 @@ export default function Dashboard() {
 
   const loadStaffWorkload = async () => {
     try {
-      const next = { status: 'ready', data: await getWorkload() };
+      // A Manager's dashboard is about their own department only: rows they may merely view (Administrator grant) are left out
+      const next = { status: 'ready', data: withoutViewOnly(await getWorkload()) };
       setStaffWorkload((prev) => keepIfSame(prev, next));
     } catch {
       setStaffWorkload(failed);
@@ -80,7 +82,7 @@ export default function Dashboard() {
 
   const loadTasks = async () => {
     try {
-      const next = { status: 'ready', data: await getTasks() };
+      const next = { status: 'ready', data: withoutViewOnly(await getTasks()) };
       setTasks((prev) => keepIfSame(prev, next));
     } catch {
       setTasks(failed);

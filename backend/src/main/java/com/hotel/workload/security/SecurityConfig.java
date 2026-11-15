@@ -110,9 +110,10 @@ public class SecurityConfig {
                 "/api/profile/email-change/confirm").hasAnyRole(ADMIN, MANAGER, STAFF);
         authz.requestMatchers(HttpMethod.DELETE, "/api/profile/picture").hasAnyRole(ADMIN, MANAGER, STAFF);
 
-        // ── Users and Manager departments: Admin only ─────────────────────────────────────────────────────────────────────────
-        allowGet(authz, new String[]{"/api/users", "/api/users/*/manager-department", "/api/users/*/manager-department/history"}, ADMIN);
-        authz.requestMatchers(HttpMethod.PUT, "/api/users/*/manager-department").hasRole(ADMIN);
+        // ── Users, Manager departments and Manager view access: Admin only ─────────────────────────────────────────────────────────────────────────
+        allowGet(authz, new String[]{"/api/users", "/api/users/*/manager-department", "/api/users/*/manager-department/history",
+                "/api/users/*/view-departments", "/api/users/*/view-departments/history"}, ADMIN);
+        authz.requestMatchers(HttpMethod.PUT, "/api/users/*/manager-department", "/api/users/*/view-departments").hasRole(ADMIN);
         authz.requestMatchers(HttpMethod.PATCH, "/api/users/*/deactivate", "/api/users/*/activate").hasRole(ADMIN);
         authz.requestMatchers(HttpMethod.DELETE, "/api/users/*").hasRole(ADMIN);
 

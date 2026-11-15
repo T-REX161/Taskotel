@@ -443,6 +443,15 @@ export const assignManagerDepartment = (userId, departmentCode) => apiFetch(`/ap
 });
 export const getManagerDepartmentHistory = (userId) => apiFetch(`/api/users/${userId}/manager-department/history`);
 
+/** Admin only: the departments a Manager may VIEW in addition to their own (never manage). */
+export const getManagerViewAccess = (userId) => apiFetch(`/api/users/${userId}/view-departments`);
+/** Admin only: replaces the whole set; an empty list removes all additional access. */
+export const updateManagerViewAccess = (userId, departmentCodes) => apiFetch(`/api/users/${userId}/view-departments`, {
+  method: 'PUT',
+  body: JSON.stringify({ departments: departmentCodes }),
+});
+export const getManagerViewAccessHistory = (userId) => apiFetch(`/api/users/${userId}/view-departments/history`);
+
 /**
  * Activate a staff member.
  */

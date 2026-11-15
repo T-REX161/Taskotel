@@ -25,6 +25,7 @@ import DeleteTaskModal from '../components/tasks/DeleteTaskModal';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import { staffStatusSuccessMessage } from '../utils/taskStatus';
 import { canChangeTaskDepartment } from '../utils/taskDepartment';
+import { isViewOnly } from '../utils/managerViewAccess';
 import { assigneeMatchesSearch, groupAssignmentsByTask } from '../utils/assignmentUtils';
 import { assignmentSuccessMessage, buildAssignmentRequest, submittableStaffIds, toggleStaffSelection } from '../utils/staffSelection';
 import { STAFF_LOAD_ERROR_MESSAGE, createLatestRequest } from '../utils/loadState';
@@ -289,7 +290,10 @@ export default function TasksPage() {
   };
 
   // Open Edit Modal
+  // A view-only task (another department, through an Administrator grant) is never opened for a change; the menu does not offer it
+  // and the server refuses it anyway
   const handleOpenEditModal = (task) => {
+    if (isViewOnly(task)) return;
     setEditModalTask(task);
     setEditFormData({
       title: task.title || '',
@@ -366,6 +370,7 @@ export default function TasksPage() {
 
   // Open Delete Modal
   const handleOpenDeleteModal = (task) => {
+    if (isViewOnly(task)) return;
     setDeleteModalTask(task);
     setDeleteModalError('');
   };
@@ -392,6 +397,7 @@ export default function TasksPage() {
 
   // Open Assign / Reassign Modal
   const handleOpenAssignModal = (task) => {
+    if (isViewOnly(task)) return;
     setAssignModalTask(task);
     setSelectedStaffIds([]);
     setAssignModalError('');

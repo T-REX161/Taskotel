@@ -37,6 +37,12 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByDepartment(com.hotel.workload.staff.Department department);
 
     /**
+     * Every task of these departments: the departments a Manager may view (their own and any view-only grants). The filter is part of
+     * the query, so no other department is loaded, and tasks with no department are never returned.
+     */
+    List<Task> findByDepartmentIn(Collection<com.hotel.workload.staff.Department> departments);
+
+    /**
      * Locks one task of the department until the transaction ends, or returns nothing when the task does not exist, belongs to another
      * department or has no department. A task outside the department is therefore never locked. PostgreSQL re-checks the department once
      * it has the row lock, so a department change committed meanwhile is seen.

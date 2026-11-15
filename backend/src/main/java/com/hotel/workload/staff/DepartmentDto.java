@@ -3,6 +3,8 @@ package com.hotel.workload.staff;
 import java.util.UUID;
 
 public class DepartmentDto {
+    /** True when the signed-in Manager sees this department in full only through an Administrator view-only grant. */
+    private boolean viewOnly;
     private UUID id;
     private String code;
     private String name;
@@ -59,4 +61,7 @@ public class DepartmentDto {
 
     public String getSupervisor() { return supervisor; }
     public void setSupervisor(String supervisor) { this.supervisor = supervisor; }
+
+    public boolean isViewOnly() { return viewOnly; }
+    public void setViewOnly(boolean viewOnly) { this.viewOnly = viewOnly; }
 }

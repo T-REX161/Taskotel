@@ -33,6 +33,7 @@ import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
 import ManagerDepartmentModal from '../components/users/ManagerDepartmentModal';
+import ManagerViewAccessModal from '../components/users/ManagerViewAccessModal';
 import { toastMotion, usePresence } from '../theme/presence';
 import { UsersPageSkeleton } from '../components/common/PageSkeletons';
 
@@ -106,6 +107,7 @@ export default function UsersPage() {
   const [isRemoving, setIsRemoving] = useState(false);
   const [removeError, setRemoveError] = useState('');
   const [assigningDepartment, setAssigningDepartment] = useState(null); // the Manager account row (Admin only)
+  const [grantingViewAccess, setGrantingViewAccess] = useState(null); // the Manager account row (Admin only)
 
   // Users from /api/users; staff records (with workload, as on the Staff page) to manage the linked accounts
   const fetchUsers = useCallback(async (showLoading = true) => {
@@ -201,6 +203,11 @@ export default function UsersPage() {
   // Accounts with a staff record are managed through it (same dialogs and rules as the Staff page); accounts without one are
   // managed directly by user id. Either way the server enforces the rules.
   const handleAction = async (action, user, staff) => {
+    if (action === 'viewAccess') {
+      // Admin only (the server refuses anyone else too); kept on the Manager's account
+      if (isAdmin) setGrantingViewAccess(user);
+      return;
+    }
     if (!staff && !['activate', 'deactivate', 'remove'].includes(action)) return; // view and edit need a staff record
     const own = isCurrentUser(user, currentUsername);
     setActionError('');
@@ -478,6 +485,12 @@ export default function UsersPage() {
         user={assigningDepartment}
         onClose={() => setAssigningDepartment(null)}
         onChanged={handleManagerDepartmentChanged}
+      />
+
+      <ManagerViewAccessModal
+        isOpen={isAdmin && Boolean(grantingViewAccess)}
+        user={grantingViewAccess}
+        onClose={() => setGrantingViewAccess(null)}
       />
 
       <DeactivateStaffModal

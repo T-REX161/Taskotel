@@ -75,6 +75,9 @@ public class SecurityConfigEndpointCoverageTest {
         // Users and Manager departments: Admin only
         allow(A, "GET", "/api/users", "/api/users/{}/manager-department", "/api/users/{}/manager-department/history");
         allow(A, "PUT", "/api/users/{}/manager-department");
+        // Manager view-only department access: Admin only
+        allow(A, "GET", "/api/users/{}/view-departments", "/api/users/{}/view-departments/history");
+        allow(A, "PUT", "/api/users/{}/view-departments");
         allow(A, "PATCH", "/api/users/{}/deactivate", "/api/users/{}/activate");
         allow(A, "DELETE", "/api/users/{}");
         // Staff

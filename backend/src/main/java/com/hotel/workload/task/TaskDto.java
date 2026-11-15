@@ -6,6 +6,11 @@ import java.time.LocalTime;
 import java.util.UUID;
 
 public class TaskDto {
+    /**
+     * True when this record is visible to the signed-in Manager only through an Administrator view-only grant for another department:
+     * it may be looked at, never managed (every write is refused by the server for it anyway). False for everyone else.
+     */
+    private boolean viewOnly;
     private UUID id;
     private String title;
     private String description;
@@ -48,4 +53,7 @@ public class TaskDto {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public boolean isViewOnly() { return viewOnly; }
+    public void setViewOnly(boolean viewOnly) { this.viewOnly = viewOnly; }
 }

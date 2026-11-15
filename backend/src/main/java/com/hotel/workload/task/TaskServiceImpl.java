@@ -64,6 +64,17 @@ public class TaskServiceImpl implements TaskService {
                     .map(this::mapToDto)
                     .collect(Collectors.toList());
         }
+        if (scope.isDepartment() && !scope.viewOnlyDepartments().isEmpty()) {
+            // A Manager with view-only access to other departments: those tasks too, marked view-only. Every task write still checks the
+            // primary department only (scope.includes / scope.department()), so none of them can be changed through this.
+            return taskRepository.findByDepartmentIn(scope.viewableDepartments()).stream()
+                    .map(task -> {
+                        TaskDto dto = mapToDto(task);
+                        dto.setViewOnly(scope.isViewOnly(task.getDepartment()));
+                        return dto;
+                    })
+                    .collect(Collectors.toList());
+        }
         if (scope.isDepartment()) {
             // A Manager: the department is part of the query. Tasks with no department are never returned.
             return taskRepository.findByDepartment(scope.department()).stream()

@@ -48,10 +48,21 @@ public class DepartmentServiceImpl implements DepartmentService {
         // Who is asking decides how much of each department is returned (no sign-in is 401, an invalid Manager 403):
         // an Admin gets everything; a Manager gets the full details of their own department only; everyone else, and every
         // other department, gets the basic identity a selector needs. The figures for a department that is not shown in full
-        // are never computed, so they cannot leak.
+        // are never computed, so they cannot leak. A department an Administrator lets the Manager VIEW is shown in full as well, marked
+        // view-only (department changes are Admin-only anyway).
         DepartmentScope scope = scopeResolver.resolve();
         return departmentRepository.findAllByOrderByCreatedAtAscNameAsc().stream()
-                .map(department -> scope.isAll() || (scope.isDepartment() && scope.includes(department)) ? toDto(department) : toBasicDto(department))
+                .map(department -> {
+                    if (scope.isAll() || (scope.isDepartment() && scope.includes(department))) {
+                        return toDto(department);
+                    }
+                    if (scope.isDepartment() && scope.isViewOnly(department)) {
+                        DepartmentDto dto = toDto(department);
+                        dto.setViewOnly(true);
+                        return dto;
+                    }
+                    return toBasicDto(department);
+                })
                 .collect(Collectors.toList());
     }
 

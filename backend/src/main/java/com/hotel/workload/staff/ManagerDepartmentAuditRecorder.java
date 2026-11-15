@@ -26,6 +26,14 @@ public class ManagerDepartmentAuditRecorder {
         this.userRepository = userRepository;
     }
 
+    /** View-only grants, tidied when the primary department changes. Optional (setter) so a hand-built recorder in a unit test has none. */
+    private ManagerViewAccessService viewAccessService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setViewAccessService(ManagerViewAccessService viewAccessService) {
+        this.viewAccessService = viewAccessService;
+    }
+
     /** True when this staff record belongs to a Manager account (the only accounts whose department changes are audited). */
     static boolean isManagerRecord(Staff staff) {
         return staff.getUser() != null && staff.getUser().getRole() == Role.MANAGER;
@@ -66,6 +74,11 @@ public class ManagerDepartmentAuditRecorder {
         change.setChangedByUserId(admin.getId());
         change.setChangedByUsername(admin.getUsername());
         change.setChangeSource(source);
-        return repository.saveAndFlush(change);
+        ManagerDepartmentChange saved = repository.saveAndFlush(change);
+        if (next != null && viewAccessService != null) {
+            // A view-only grant for the department that is now the primary one is redundant: removed (and audited) in this transaction
+            viewAccessService.primaryDepartmentChanged(staff.getUser(), next);
+        }
+        return saved;
     }
 }

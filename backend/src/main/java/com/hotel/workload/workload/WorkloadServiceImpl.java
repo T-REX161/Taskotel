@@ -65,7 +65,21 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
     @Override
     @Transactional(readOnly = true)
     public List<WorkloadDto> calculateWorkload() {
-        return calculateWorkload(scopeResolver.resolve());
+        DepartmentScope scope = scopeResolver.resolve();
+        List<WorkloadDto> rows = calculateWorkload(scope);
+        if (!scope.isDepartment() || scope.viewOnlyDepartments().isEmpty()) {
+            return rows;
+        }
+        // The Workload page only: the departments an Administrator lets this Manager VIEW, each calculated exactly like a Manager's own
+        // department and marked view-only. calculateWorkload(scope), which the Dashboard uses, stays the primary department only.
+        List<WorkloadDto> withViewOnly = new ArrayList<>(rows);
+        for (Department department : scope.viewOnlyDepartments()) {
+            for (WorkloadDto row : buildDepartmentRows(department)) {
+                row.setViewOnly(true);
+                withViewOnly.add(row);
+            }
+        }
+        return withViewOnly;
     }
 
     /** The same calculation for a scope the caller already resolved from the resolver (see {@link ScopedWorkloadCalculator}); never resolves again. */

@@ -1,10 +1,12 @@
 package com.hotel.workload.security;
 
 import com.hotel.workload.staff.Department;
+import com.hotel.workload.staff.ManagerViewGrantRepository;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -27,6 +30,10 @@ import java.util.stream.Collectors;
  *       database on every call: the account exists, is active and is a MANAGER; a linked Staff record exists and is active; and that
  *       Staff record has a department that is active. If any of them fails the call is refused with HTTP 403 (fail closed), with one
  *       generic message that does not say which check failed.</li>
+ *   <li>A valid Manager may also hold <b>view-only</b> access to other active departments, granted by an Administrator
+ *       ({@link ManagerViewGrantRepository}). It is read from the database on every call too, so a revocation applies to the next
+ *       request; it is kept apart from the primary department ({@link DepartmentScope#viewOnlyDepartments()}) and never widens
+ *       {@link DepartmentScope#department()} or {@link DepartmentScope#includes}, which decide every write.</li>
  *   <li><b>STAFF</b> gets {@link DepartmentScope#own()}: no department-level access. Existing Staff behaviour is unchanged.</li>
  *   <li>No authenticated user: HTTP 401. Any other or missing role: HTTP 403.</li>
  * </ul>
@@ -52,6 +59,14 @@ public class CurrentUserScopeResolver {
     public CurrentUserScopeResolver(UserRepository userRepository, StaffRepository staffRepository) {
         this.userRepository = userRepository;
         this.staffRepository = staffRepository;
+    }
+
+    /** View-only grants. Optional (setter) so a hand-built resolver in a unit test simply has none. */
+    private ManagerViewGrantRepository viewGrantRepository;
+
+    @Autowired(required = false)
+    void setViewGrantRepository(ManagerViewGrantRepository viewGrantRepository) {
+        this.viewGrantRepository = viewGrantRepository;
     }
 
     /** The scope of the user authenticated in the current Spring Security context. */
@@ -146,7 +161,13 @@ public class CurrentUserScopeResolver {
         if (!department.isActive()) {
             return refuse("department inactive");
         }
-        return DepartmentScope.department(department);
+        DepartmentScope scope = DepartmentScope.department(department);
+        if (viewGrantRepository == null) {
+            return scope;
+        }
+        // Active granted departments only; the primary one is dropped by withViewOnly. Never cached: read again on every request.
+        List<Department> viewOnly = viewGrantRepository.findActiveGrantedDepartments(account.get().getId());
+        return viewOnly.isEmpty() ? scope : scope.withViewOnly(viewOnly);
     }
 
     /** Always throws 403. The reason goes to the log only (no username, no personal data), never to the caller. */

@@ -1,5 +1,7 @@
 /**
  * Filter staff members eligible to receive a task:
+ * 0a. Never a staff member the signed-in Manager may only view (another department, through an Administrator grant): they can
+ *     never be assigned by this Manager (the backend refuses it too).
  * 0. Must be an operational Staff account: the linked user's role (StaffDto.role) must be exactly STAFF. ADMIN and MANAGER accounts can have
  *    Staff records, but are never assignment targets (the backend refuses them too), and a missing or unknown role is not trusted.
  * 1. Must match the specified department.
@@ -56,6 +58,7 @@ export function filterEligibleStaff({
 
   return (Array.isArray(allStaff) ? allStaff : []).filter((s) => {
     if (!s) return false;
+    if (s.viewOnly === true) return false;
 
     // 0. Role: only operational Staff (the backend already refuses ADMIN and MANAGER targets; this keeps them out of the picker)
     const isOperationalStaff = s.role === 'STAFF';

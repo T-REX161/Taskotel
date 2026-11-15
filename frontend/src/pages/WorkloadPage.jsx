@@ -28,6 +28,8 @@ import UtilizationMeter from '../components/workload/UtilizationMeter';
 import CrossDepartmentSupportPanel from '../components/workload/CrossDepartmentSupportPanel';
 import PageSizeToggle from '../components/common/PageSizeToggle';
 import UserAvatar from '../components/common/UserAvatar';
+import ViewOnlyBadge from '../components/common/ViewOnlyBadge';
+import { isViewOnly } from '../utils/managerViewAccess';
 import LoadError from '../components/common/LoadError';
 import { WorkloadPageSkeleton } from '../components/common/PageSkeletons';
 import { loadCrossDepartmentStatus, peekCrossDepartmentStatus } from '../utils/crossDepartmentStatus';
@@ -200,6 +202,7 @@ export default function WorkloadPage() {
         role: 'STAFF',
         email: '',
         phone: '',
+        viewOnly: isViewOnly(item),
       });
     }
   };
@@ -552,6 +555,7 @@ export default function WorkloadPage() {
                             <span className={`text-[11px] text-gray-400 truncate block leading-tight mt-0.5 ${staffMatch?.role ? 'uppercase tracking-wider font-medium' : ''}`}>
                               {staffMatch?.role || `@${(item.staffName || '').toLowerCase().replace(/\s+/g, '.')}`}
                             </span>
+                            {isViewOnly(item) && <ViewOnlyBadge className="mt-1" />}
                           </div>
                         </div>
                       </td>
@@ -667,6 +671,7 @@ export default function WorkloadPage() {
                         <span className="text-2xs text-gray-400 block truncate">
                           {staffMatch?.role || `@${(item.staffName || '').toLowerCase().replace(/\s+/g, '.')}`}
                         </span>
+                        {isViewOnly(item) && <ViewOnlyBadge className="mt-1" />}
                       </div>
                     </div>
                     <span

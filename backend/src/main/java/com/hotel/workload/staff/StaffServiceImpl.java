@@ -112,6 +112,13 @@ public class StaffServiceImpl implements StaffService {
         DepartmentScope scope = requireStaffManagementScope();
         // An administrator sees every record. A Manager sees ordinary (STAFF-role) staff of their own department only: the department and
         // the role are part of the database query, so other departments' staff, and manager or admin accounts, are never loaded.
+        if (scope.isDepartment() && !scope.viewOnlyDepartments().isEmpty()) {
+            // Also the STAFF-role staff of the departments an Administrator lets this Manager VIEW: listed without contact details and
+            // marked view-only. Every staff write still checks the primary department only (scope.includes), so none of them can be changed.
+            return staffRepository.findByDepartmentInAndUserRole(scope.viewableDepartments(), Role.STAFF).stream()
+                    .map(staff -> scope.isViewOnly(staff.getDepartment()) ? StaffDto.viewOnlyFromEntity(staff) : StaffDto.fromEntity(staff))
+                    .collect(Collectors.toList());
+        }
         List<Staff> visible = scope.isAll()
                 ? staffRepository.findAll()
                 : staffRepository.findByDepartmentAndUserRole(scope.department(), Role.STAFF);
