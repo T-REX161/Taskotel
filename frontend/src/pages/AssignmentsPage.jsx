@@ -40,8 +40,8 @@ import UserAvatar from '../components/common/UserAvatar';
 import { assignmentDepartmentTile, staffInitials } from '../components/assignments/assignmentTableStyles';
 import DepartmentIcon from '../components/common/DepartmentIcon';
 import { menuMotion, toastMotion, usePresence } from '../theme/presence';
-import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
+import { AssignmentsPageSkeleton } from '../components/common/PageSkeletons';
 import {
   STAFF_LOAD_ERROR_MESSAGE,
   SUPPORTING_SOURCES,
@@ -74,6 +74,7 @@ export default function AssignmentsPage() {
   const [workload, setWorkload] = useState([]);
   const [allStaff, setAllStaff] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false); // after the first successful load, reloads keep the page on screen
   const [error, setError] = useState('');
   const [successBanner, setSuccessBanner] = useState('');
   // The success notice, kept for its 120ms exit after it is dismissed (none with reduced motion); see theme/presence.js
@@ -125,6 +126,7 @@ export default function AssignmentsPage() {
       }
 
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+      setHasLoaded(true);
     } catch (err) {
       if (err.message && err.message.includes('Redirecting to login')) {
         navigate('/login');
@@ -530,34 +532,31 @@ export default function AssignmentsPage() {
     </div>
   );
 
-  if (isLoading) {
+  // The page's own header: shown while the first load runs (above a skeleton of the page) and once loaded
+  const pageHeader = (
+    <div className="flex items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Assignments</h1>
+        <p className="mt-1 text-sm text-gray-500">Manage task assignments and staff distributions.</p>
+      </div>
+      {canManageAssignments && (
+        <button
+          type="button"
+          onClick={handleOpenAssignModal}
+          className={ASSIGN_TASK_BUTTON_CLASS}
+        >
+          Assign Task
+        </button>
+      )}
+    </div>
+  );
+
+  // Only the first load shows the skeleton; a later reload keeps the loaded page on screen
+  if (isLoading && !hasLoaded) {
     return (
       <div className="w-full space-y-6">
-        {/* Header */}
-        <div className="flex items-end justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Assignments</h1>
-            <p className="mt-1 text-sm text-gray-500">Manage task assignments and staff distributions.</p>
-          </div>
-          {canManageAssignments && (
-            <button
-              onClick={handleOpenAssignModal}
-              className={ASSIGN_TASK_BUTTON_CLASS}
-            >
-              Assign Task
-            </button>
-          )}
-        </div>
-
-        {/* Loading Spinner */}
-        <div className="flex items-center justify-center p-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div role="status" className="flex flex-col items-center gap-3">
-            <Spinner size="lg" className="text-emerald-600" />
-            <p className="text-sm font-medium text-gray-500">
-              Loading assignments...
-            </p>
-          </div>
-        </div>
+        {pageHeader}
+        <AssignmentsPageSkeleton label="Loading assignments..." />
       </div>
     );
   }
@@ -636,21 +635,7 @@ export default function AssignmentsPage() {
   return (
     <div className="w-full space-y-6">
       {/* Header */}
-      <div className="flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-gray-900">Assignments</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage task assignments and staff distributions.</p>
-        </div>
-        {canManageAssignments && (
-          <button
-            type="button"
-            onClick={handleOpenAssignModal}
-            className={ASSIGN_TASK_BUTTON_CLASS}
-          >
-            Assign Task
-          </button>
-        )}
-      </div>
+      {pageHeader}
 
       {/* Success Notification Banner */}
       {notice.present && (

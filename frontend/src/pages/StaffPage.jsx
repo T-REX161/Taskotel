@@ -26,7 +26,7 @@ import EditStaffModal from '../components/staff/EditStaffModal';
 import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
 import { toastMotion, usePresence } from '../theme/presence';
-import Spinner from '../components/common/Spinner';
+import { StaffPageSkeleton } from '../components/common/PageSkeletons';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -338,27 +338,33 @@ export default function StaffPage() {
     }
   };
 
+  // The page's own header: shown while the first load runs (above a skeleton of the page) and once loaded
+  const pageHeader = (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+          Staff Management
+        </h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Manage hotel staff members, their roles, departments, and workload.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={handleOpenAddModal}
+        className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg font-medium text-sm transition-colors cursor-pointer shadow-sm whitespace-nowrap self-start sm:self-auto"
+      >
+        <PlusIcon className="w-4 h-4" />
+        <span>Add Staff</span>
+      </button>
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <div className="w-full space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
-              Staff Management
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-              Manage hotel staff, departments, availability and workload.
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center justify-center p-14 bg-white rounded-xl border border-slate-200/80 shadow-xs">
-          <div role="status" className="flex flex-col items-center gap-3">
-            <Spinner size="md" className="text-emerald-600" />
-            <p className="text-xs sm:text-sm font-medium text-slate-500">
-              Loading staff directory and workload...
-            </p>
-          </div>
-        </div>
+      <div className="w-full space-y-6">
+        {pageHeader}
+        <StaffPageSkeleton label="Loading staff directory and workload..." />
       </div>
     );
   }
@@ -411,24 +417,7 @@ export default function StaffPage() {
       )}
 
       {/* Staff Management Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-            Staff Management
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage hotel staff members, their roles, departments, and workload.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={handleOpenAddModal}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg font-medium text-sm transition-colors cursor-pointer shadow-sm whitespace-nowrap self-start sm:self-auto"
-        >
-          <PlusIcon className="w-4 h-4" />
-          <span>Add Staff</span>
-        </button>
-      </div>
+      {pageHeader}
 
       {/* Single horizontal filter row beneath the header */}
       <StaffFilters

@@ -292,6 +292,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     @Transactional(readOnly = true)
     public Options getOptions(String receivingDepartmentCode) {
         String managerDepartment = readerDepartmentCode();
+        // Planning options (who could be lent, which tasks) belong to NEW support: unavailable to every role while the switch is off
+        requireCrossDepartmentAssistanceEnabled();
         String requested = receivingDepartmentCode == null ? "" : receivingDepartmentCode.trim();
         if (managerDepartment != null && !managerDepartment.equals(requested)) {
             // Another department's options are refused exactly like a department that does not exist

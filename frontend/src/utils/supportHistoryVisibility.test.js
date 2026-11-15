@@ -119,16 +119,18 @@ describe('the history area and the unchanged parts', () => {
   it('renders the main section only for the section view, and a collapsed Support history area only for the history view', () => {
     assert.ok(panel.includes("{historyView === 'section' && ("));
     assert.ok(panel.includes("{historyView === 'history' && ("));
-    assert.equal(panel.split('<SupportHistory').length - 1, 2, 'one main section, one history area');
-    const area = panel.slice(panel.indexOf("{historyView === 'history' && ("), panel.indexOf("{['reviewing', 'submitting', 'error']"));
+    // plus, since cross-department assistance can be switched off, the compact list of arrangements still in progress (activeOnly)
+    assert.equal(panel.split('<SupportHistory').length - 1, 3, 'one main section, one history area, one list of active support while switched off');
+    const areaStart = panel.indexOf("{historyView === 'history' && (");
+    const area = panel.slice(areaStart, panel.indexOf('{endDialog}', areaStart)); // up to the dialogs that follow it
     assert.ok(area.includes('<details') && !area.includes('<details open') && area.includes('Support history ({history.data.length})'), 'collapsed by default');
     assert.ok(area.includes('historyOnly') && !area.includes('onEnd='), 'ended records have no End Support (only the remove action is passed)');
   });
 
   it('the history-only list has no Confirmed support heading, no tabs and no "no one is on support" message', () => {
     assert.ok(history.includes('historyOnly = false') && history.includes("useState(historyOnly ? 'ended' : 'active')"));
-    assert.ok(history.includes('{!historyOnly && ('), 'the heading and tabs are skipped');
-    assert.ok(history.includes("aria-label={historyOnly ? 'Support history' : 'Support assignments'}"));
+    assert.ok(history.includes('{!historyOnly && !activeOnly && ('), 'the heading and tabs are skipped');
+    assert.ok(history.includes("aria-label={historyOnly ? 'Support history' : activeOnly ? 'Active support assignments' : 'Support assignments'}"));
   });
 
   it('keeps the Active and Completed & ended tabs and End Support in the main section', () => {

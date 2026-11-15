@@ -37,7 +37,7 @@ test('no infinite decorative motion: status dots are static; only real loading k
   assert.deepEqual(filesWith(/animate-pulse\b/), ['components/workload/support/SupportHistory.jsx']);
   assert.ok(read('components/workload/support/SupportHistory.jsx').includes("archivingId === row.id ? 'animate-pulse' : ''"), 'only while in progress');
   assert.ok(readFileSync(join(SRC, 'components/common/Skeleton.js'), 'utf8').includes("['animate-pulse',"), 'the shared skeleton pulses');
-  assert.ok(read('pages/UsersPage.jsx').includes('<Skeleton className="h-80 rounded-xl" />'), 'loading skeleton kept');
+  assert.ok(read('pages/UsersPage.jsx').includes('<UsersPageSkeleton label="Loading users…" />'), 'loading skeleton kept (the shared page layout since Stage 5D)');
   assert.equal((read('pages/SettingsPage.jsx').match(/<Skeleton /g) || []).length, 3, 'system settings skeleton kept');
   for (const file of ['pages/AssignmentsPage.jsx', 'pages/CreateTaskPage.jsx', 'pages/TasksPage.jsx', 'pages/StaffPage.jsx', 'components/common/DashboardPlaceholder.jsx']) {
     assert.match(read(file), /rounded-full bg-emerald-500" \/>/, `${file}: static status dot`);
@@ -48,12 +48,14 @@ test('spinners still animate while an operation is in progress', () => {
   // Before Stage 5C: 29 spinner SVGs (11 local Spinner functions, 14 inline spinners, 3 on the sign-in pages, 1 refresh icon).
   // The 11 functions (15 uses) and 14 inline spinners now use the shared components/common/Spinner.js (which carries animate-spin);
   // what is left in .jsx: the three sign-in pages' button spinners and the support panel's spinning refresh icon (a different graphic).
+  // Stage 5D: the page loaders of Tasks, Staff, Assignments, Workload and Departments became page skeletons (6 → 1 page spinner: the
+  // Dashboard's, reserved for Stage 5E), so 24 shared spinner uses remain: that one, and buttons, dialogs and inline messages.
   assert.equal(count(/animate-spin\b/g), 4, 'every loading spinner kept');
-  assert.equal(count(/<Spinner\b/g), 29, 'shared spinner uses: 15 former local-function calls and 14 former inline spinners');
+  assert.equal(count(/<Spinner\b/g), 24, 'shared spinner uses: 15 former local-function calls and 9 former inline spinners');
   assert.deepEqual(filesWith(/function Spinner|const Spinner =/), [], 'no local copies left');
   assert.ok(readFileSync(join(SRC, 'components/common/Spinner.js'), 'utf8').includes("['animate-spin',"), 'the shared spinner spins');
   assert.ok(read('pages/LoginPage.jsx').includes('animate-spin'));
-  assert.ok(read('pages/TasksPage.jsx').includes('<Spinner size="lg" className="text-emerald-600" />'));
+  assert.ok(read('pages/Dashboard.jsx').includes('<Spinner size="lg" className="text-emerald-600" />'), 'the Dashboard loader is unchanged until Stage 5E');
 });
 
 test('no misleading hover motion on things that cannot be clicked; real controls keep their feedback', () => {

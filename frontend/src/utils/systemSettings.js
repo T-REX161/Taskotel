@@ -110,15 +110,13 @@ export async function saveSystemSettings(form, { send = updateSystemSettings } =
   return settings;
 }
 
-/** Shown at the top of the Cross-Department Support panel while the setting is off. */
-export const CROSS_DEPARTMENT_DISABLED_NOTICE =
-  'Cross-department assistance is currently disabled. Existing support arrangements remain active and can still be managed.';
-
 /**
- * True only when the server's answer (GET /api/support/cross-department-status: { crossDepartmentAssistanceEnabled }) says, with a real boolean,
- * that cross-department assistance is off. Anything else (no answer, a failed read, an unreadable or non-boolean answer) is "not known to
- * be off", so the notice is never shown on a guess. The server still refuses new plans either way.
+ * The cross-department setting from the server's answer (GET /api/support/cross-department-status: { crossDepartmentAssistanceEnabled }):
+ * 'on' or 'off' only for a real boolean; anything else (no answer, a failed read, junk) is 'unknown', and nothing is decided on a guess.
  */
-export function crossDepartmentAssistanceOff(response) {
-  return Boolean(response) && typeof response === 'object' && response.crossDepartmentAssistanceEnabled === false;
+export function crossDepartmentAssistanceState(response) {
+  if (response && typeof response === 'object' && typeof response.crossDepartmentAssistanceEnabled === 'boolean') {
+    return response.crossDepartmentAssistanceEnabled ? 'on' : 'off';
+  }
+  return 'unknown';
 }

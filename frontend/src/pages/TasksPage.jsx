@@ -29,8 +29,8 @@ import { assigneeMatchesSearch, groupAssignmentsByTask } from '../utils/assignme
 import { assignmentSuccessMessage, buildAssignmentRequest, submittableStaffIds, toggleStaffSelection } from '../utils/staffSelection';
 import { STAFF_LOAD_ERROR_MESSAGE, createLatestRequest } from '../utils/loadState';
 import { toastMotion, usePresence } from '../theme/presence';
-import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
+import { TasksPageSkeleton } from '../components/common/PageSkeletons';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -447,21 +447,31 @@ export default function TasksPage() {
     }
   };
 
+  // The page's own header: shown while the first load runs (above a skeleton of the page) and once loaded
+  const pageHeader = (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tasks</h1>
+        <p className="text-sm text-gray-500 mt-1">Create, manage and track hotel operational tasks.</p>
+      </div>
+      {canManageTasks && (
+        <button
+          type="button"
+          onClick={() => navigate('/tasks/create')}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg font-medium text-sm transition-colors cursor-pointer shadow-sm whitespace-nowrap self-start sm:self-auto"
+        >
+          <PlusIcon className="w-4 h-4" />
+          <span>Create Task</span>
+        </button>
+      )}
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="w-full space-y-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-            <p className="text-gray-500 mt-1">Create, manage and track hotel operational tasks.</p>
-          </div>
-        </div>
-        <div className="flex items-center justify-center p-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div role="status" className="flex flex-col items-center gap-3">
-            <Spinner size="lg" className="text-emerald-600" />
-            <p className="text-sm font-medium text-gray-500">Loading tasks and assignments...</p>
-          </div>
-        </div>
+        {pageHeader}
+        <TasksPageSkeleton label="Loading tasks and assignments..." />
       </div>
     );
   }
@@ -483,22 +493,7 @@ export default function TasksPage() {
   return (
     <div className="w-full space-y-6">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tasks</h1>
-          <p className="text-sm text-gray-500 mt-1">Create, manage and track hotel operational tasks.</p>
-        </div>
-        {canManageTasks && (
-          <button
-            type="button"
-            onClick={() => navigate('/tasks/create')}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-lg font-medium text-sm transition-colors cursor-pointer shadow-sm whitespace-nowrap self-start sm:self-auto"
-          >
-            <PlusIcon className="w-4 h-4" />
-            <span>Create Task</span>
-          </button>
-        )}
-      </div>
+      {pageHeader}
 
       {/* Success Notification Banner */}
       {notice.present && (

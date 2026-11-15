@@ -61,9 +61,8 @@ describe('Skeleton', () => {
 
   it('the pages that had hand-made placeholders use it, inside a region that says what is loading', () => {
     const users = read('pages/UsersPage.jsx');
-    assert.ok(users.includes('<div className="w-full space-y-6" aria-busy="true">'));
-    assert.equal((users.match(/<Skeleton className="h-11 rounded-xl/g) || []).length, 3);
-    assert.ok(users.includes('<Skeleton className="h-80 rounded-xl" />') && users.includes('<p role="status" className="sr-only">Loading users…</p>'));
+    // Stage 5D: the Users placeholder is now the shared page layout (same filters, a table in place of the single block); see pageSkeletons.test.js
+    assert.ok(users.includes('<UsersPageSkeleton label="Loading users…" />'));
     const settings = read('pages/SettingsPage.jsx');
     assert.ok(settings.includes('<Skeleton className="h-3.5 w-40 rounded" /><Skeleton tone="soft" className="h-3 w-3/4 rounded" />'));
     assert.ok(settings.includes('<Skeleton className="h-6 w-11 rounded-full" />'));
@@ -122,11 +121,10 @@ describe('where they are used', () => {
     for (const [file, line] of Object.entries(PAGE_ERRORS)) assert.ok(read(file).includes(line), file);
   });
 
-  it('page loaders: the spinner beside its text, now one status region (no visual change)', () => {
-    for (const file of ['pages/TasksPage.jsx', 'pages/AssignmentsPage.jsx', 'pages/WorkloadPage.jsx', 'pages/DepartmentsPage.jsx', 'pages/Dashboard.jsx']) {
+  it('page loaders: the Dashboard keeps its spinner beside its text, in one status region (the other pages use skeletons since Stage 5D)', () => {
+    for (const file of ['pages/Dashboard.jsx']) {
       assert.match(read(file), /<div role="status" className="flex flex-col items-center gap-3">\s*<Spinner size="lg" className="text-emerald-600" \/>/, file);
     }
-    assert.match(read('pages/StaffPage.jsx'), /<div role="status" className="flex flex-col items-center gap-3">\s*<Spinner size="md" className="text-emerald-600" \/>/);
   });
 
   it('error UIs that look or behave differently are left as they were (no forced reuse)', () => {

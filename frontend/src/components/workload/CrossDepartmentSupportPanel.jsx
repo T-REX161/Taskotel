@@ -6,12 +6,12 @@ import {
   getSupportAssignments,
   getUserRole,
   getSupportOptions,
-  getCrossDepartmentStatus,
   getWorkloadRecommendations,
   previewSupportPlan,
 } from '../../services/api';
 import { getSeverityLabel, getSeverityTone, normalizeRecommendations, recommendationsTurnedOff } from '../../utils/supportRecommendations';
-import { CROSS_DEPARTMENT_DISABLED_NOTICE, crossDepartmentAssistanceOff } from '../../utils/systemSettings';
+import { loadCrossDepartmentStatus } from '../../utils/crossDepartmentStatus';
+import { CROSS_DEPARTMENT_REFRESH_MS, canCreateSupport, supportPanelMode } from '../../utils/crossDepartmentVisibility';
 import { departmentLabel } from '../../utils/departmentRegistry';
 import {
   SUPPORT_STAGES,
@@ -86,7 +86,7 @@ function SupportPanelContent({ onChanged }) {
   const [needs, setNeeds] = useState({ status: 'loading', data: null, error: '' });
   const [options, setOptions] = useState({ status: 'idle', data: null, error: '' });
   const [history, setHistory] = useState({ status: 'loading', data: [], error: '' });
-  const requestCounters = useRef({ needs: 0, options: 0, history: 0, preview: 0 });
+  const requestCounters = useRef({ needs: 0, options: 0, history: 0, preview: 0, setting: 0 });
   // Names of everyone ever offered, so a plan row still reads well after that person stops being offered
   const knownStaff = useRef(new Map());
   const mounted = useRef(true);
@@ -130,25 +130,55 @@ function SupportPanelContent({ onChanged }) {
     }
   }, []);
 
-  // Whether new cross-department support is switched off in System Settings, from the narrow status route that Admin and Manager may both read
-  // (the settings themselves stay Admin-only). When the read fails nothing is shown on a guess: the server still refuses a new plan with its own message.
-  const [crossDepartmentOff, setCrossDepartmentOff] = useState(false);
-  const loadCrossDepartmentSetting = useCallback(async () => {
+  // The Cross-Department Assistance switch in System Settings ('loading' | 'on' | 'off' | 'unknown'), from the narrow status route that Admin
+  // and Manager may both read (the settings themselves stay Admin-only). A failed first read is 'unknown' (the full panel, as before: the server
+  // still refuses a new plan on its own); a failed re-read keeps what was known, so a passing network error never flips the panel.
+  const [assistance, setAssistance] = useState('loading');
+  // The first read reuses the answer the Workload page already asked for (utils/crossDepartmentStatus); every later one is fresh.
+  const loadCrossDepartmentSetting = useCallback(async ({ force = true } = {}) => {
+    const id = ++requestCounters.current.setting;
     try {
-      const off = crossDepartmentAssistanceOff(await getCrossDepartmentStatus());
-      if (mounted.current) setCrossDepartmentOff(off);
+      const next = await loadCrossDepartmentStatus({ force });
+      if (mounted.current && id === requestCounters.current.setting) setAssistance((prev) => (next === 'unknown' && prev !== 'loading' ? prev : next));
     } catch {
-      if (mounted.current) setCrossDepartmentOff(false);
+      if (mounted.current && id === requestCounters.current.setting) setAssistance((prev) => (prev === 'loading' ? 'unknown' : prev));
     }
   }, []);
 
-  useEffect(() => { loadNeeds(); loadHistory(); loadCrossDepartmentSetting(); }, [loadNeeds, loadHistory, loadCrossDepartmentSetting]);
+  useEffect(() => { loadNeeds(); loadHistory(); loadCrossDepartmentSetting({ force: false }); }, [loadNeeds, loadHistory, loadCrossDepartmentSetting]);
+
+  // The switch can change while the page is open (an Admin in another tab or on another computer): read it again every 30 seconds while
+  // the page is visible, and as soon as it becomes visible again.
+  useEffect(() => {
+    const readIfVisible = () => { if (document.visibilityState === 'visible') loadCrossDepartmentSetting(); };
+    const timer = setInterval(readIfVisible, CROSS_DEPARTMENT_REFRESH_MS);
+    document.addEventListener('visibilitychange', readIfVisible);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', readIfVisible); };
+  }, [loadCrossDepartmentSetting]);
+
+  // While it is off, the arrangements still in progress are followed too, so the section goes away once the last one is completed
+  useEffect(() => {
+    if (assistance !== 'off') return undefined;
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') loadHistory(); }, CROSS_DEPARTMENT_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [assistance, loadHistory]);
+
+  // When the switch changes, what the panel shows is read again (the first answer needs nothing extra: everything is already loading)
+  const previousAssistance = useRef('loading');
+  useEffect(() => {
+    const previous = previousAssistance.current;
+    previousAssistance.current = assistance;
+    if (previous === 'loading' || previous === assistance) return;
+    loadHistory();
+    if (canCreateSupport(assistance)) loadNeeds();
+  }, [assistance, loadHistory, loadNeeds]);
   useEffect(() => { loadOptions(state.department); }, [state.department, loadOptions]);
 
   // Live preview: recalculated shortly after the plan stops changing; an answer for an older plan is ignored
   const signature = planSignature(state.department, state.plan);
   useEffect(() => {
-    if (state.preview.status !== 'loading' || state.plan.length === 0) return undefined;
+    // No new arrangement is previewed while cross-department assistance is off (the server would refuse it too)
+    if (state.preview.status !== 'loading' || state.plan.length === 0 || !canCreateSupport(assistance)) return undefined;
     const id = ++requestCounters.current.preview;
     const timer = setTimeout(async () => {
       try {
@@ -160,7 +190,7 @@ function SupportPanelContent({ onChanged }) {
     }, PREVIEW_DEBOUNCE_MS);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature, state.preview.status]);
+  }, [signature, state.preview.status, assistance]);
 
   const departments = useMemo(() => {
     if (!needs.data) return [];
@@ -188,8 +218,9 @@ function SupportPanelContent({ onChanged }) {
   }, [loadNeeds, loadHistory, loadCrossDepartmentSetting, loadOptions, state.department]);
 
   const handleConfirm = async () => {
-    // Confirmation is Admin-only: a Manager never sends it (the server would refuse it with 403 anyway)
-    if (!permissions.canConfirm) return;
+    // Confirmation is Admin-only: a Manager never sends it (the server would refuse it with 403 anyway). Nothing new is confirmed while
+    // cross-department assistance is off (the server would refuse it with 409 anyway).
+    if (!permissions.canConfirm || !canCreateSupport(assistance)) return;
     dispatch({ type: 'CONFIRM_START' });
     try {
       const created = await confirmSupportPlan(buildPlanRequest(state, state.preview.data?.fingerprint));
@@ -255,6 +286,78 @@ function SupportPanelContent({ onChanged }) {
   const confirming = state.confirm.status === 'reviewing' || state.confirm.status === 'submitting';
   const receiving = options.data?.receiving;
 
+  // What to show for the System Settings switch (utils/crossDepartmentVisibility): the whole panel, only the arrangements still in progress,
+  // or nothing. An end-of-support message keeps the section on screen until it is dismissed, even after the last arrangement ended.
+  const mode = supportPanelMode({ assistance, history, keepOutcome: endState.status !== 'idle' });
+
+  const refreshButton = (
+    <button
+      type="button"
+      onClick={refreshAll}
+      disabled={needs.status === 'loading'}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer disabled:cursor-wait focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1"
+    >
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-3.5 h-3.5 ${needs.status === 'loading' ? 'animate-spin' : ''}`}>
+        <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
+      </svg>
+      Refresh
+    </button>
+  );
+  const endOutcome = endState.status === 'done' && (
+    <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 flex flex-wrap items-start justify-between gap-2">
+      <p>{describeEndOutcome(endState.result, departmentNames, recordView(endState.result, role))}</p>
+      <button type="button" onClick={() => endDispatch({ type: 'END_DISMISS' })} className="text-xs underline cursor-pointer">Dismiss</button>
+    </div>
+  );
+  const endDialog = (
+    <Presence>
+      {['reviewing', 'submitting', 'error'].includes(endState.status) && endState.row && (
+        <SupportEndDialog
+          row={endState.row}
+          departmentName={departmentNames}
+          view={recordView(endState.row, role)}
+          status={endState.status}
+          error={endState.error}
+          stale={endState.stale}
+          onConfirm={handleEnd}
+          onCancel={() => endDispatch({ type: 'END_CANCEL' })}
+        />
+      )}
+    </Presence>
+  );
+
+  if (mode === 'pending' || mode === 'hidden') return null;
+
+  // Switched off with support still in progress: only those arrangements, to follow them and end them. Nothing new can be planned here.
+  if (mode === 'manage') {
+    return (
+      <section
+        data-testid="cross-department-manage"
+        className="min-w-0 bg-white rounded-2xl shadow-2xs border border-gray-100 px-4 pt-4 pb-5 sm:px-6 sm:pt-5 sm:pb-6 space-y-4"
+        aria-label="Active cross-department support"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-bold text-gray-900">Active Cross-Department Support</h2>
+            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Staff still helping another department. Follow each arrangement here until it is completed or ended.</p>
+          </div>
+          {refreshButton}
+        </div>
+        {endOutcome}
+        <SupportHistory
+          history={history}
+          departmentName={departmentNames}
+          role={role}
+          activeOnly
+          canEnd={canEnd}
+          onEnd={(row) => endDispatch({ type: 'END_OPEN', row })}
+          endingId={endState.status === 'submitting' ? endState.row?.id : null}
+        />
+        {endDialog}
+      </section>
+    );
+  }
+
   return (
     <section
       className="min-w-0 bg-white rounded-2xl shadow-2xs border border-gray-100 px-4 pt-4 pb-5 sm:px-6 sm:pt-5 sm:pb-6 space-y-6"
@@ -271,24 +374,8 @@ function SupportPanelContent({ onChanged }) {
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={refreshAll}
-          disabled={needs.status === 'loading'}
-          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer disabled:cursor-wait focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1"
-        >
-          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-3.5 h-3.5 ${needs.status === 'loading' ? 'animate-spin' : ''}`}>
-            <path d="M21 12a9 9 0 1 1-2.64-6.36" /><path d="M21 3v6h-6" />
-          </svg>
-          Refresh
-        </button>
+        {refreshButton}
       </div>
-
-      {crossDepartmentOff && (
-        <p role="status" data-testid="cross-department-disabled-notice" className="-mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs sm:text-sm text-gray-700">
-          {CROSS_DEPARTMENT_DISABLED_NOTICE}
-        </p>
-      )}
 
       {/* What the labels mean, and what is not taken into account: one compact disclosure instead of a legend */}
       <details className="text-xs text-gray-500 -mt-2">
@@ -328,12 +415,7 @@ function SupportPanelContent({ onChanged }) {
           <button type="button" onClick={() => dispatch({ type: 'DISMISS_RESULT' })} className="text-xs underline cursor-pointer">Dismiss</button>
         </div>
       )}
-      {endState.status === 'done' && (
-        <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 flex flex-wrap items-start justify-between gap-2">
-          <p>{describeEndOutcome(endState.result, departmentNames, recordView(endState.result, role))}</p>
-          <button type="button" onClick={() => endDispatch({ type: 'END_DISMISS' })} className="text-xs underline cursor-pointer">Dismiss</button>
-        </div>
-      )}
+      {endOutcome}
       {archiveState.status === 'done' && (
         <div role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900 flex flex-wrap items-start justify-between gap-2">
           <p>{describeArchiveOutcome(archiveState.row, recordView(archiveState.row, role))}</p>
@@ -496,20 +578,7 @@ function SupportPanelContent({ onChanged }) {
         </details>
       )}
 
-      <Presence>
-        {['reviewing', 'submitting', 'error'].includes(endState.status) && endState.row && (
-          <SupportEndDialog
-            row={endState.row}
-            departmentName={departmentNames}
-            view={recordView(endState.row, role)}
-            status={endState.status}
-            error={endState.error}
-            stale={endState.stale}
-            onConfirm={handleEnd}
-            onCancel={() => endDispatch({ type: 'END_CANCEL' })}
-          />
-        )}
-      </Presence>
+      {endDialog}
 
       <Presence>
         {['reviewing', 'submitting', 'error'].includes(archiveState.status) && archiveState.row && (

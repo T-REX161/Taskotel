@@ -128,7 +128,7 @@ describe('confirmation controls', () => {
     const panel = read('components', 'workload', 'CrossDepartmentSupportPanel.jsx');
     const preview = read('components', 'workload', 'support', 'SupportImpactPreview.jsx');
     assert.ok(panel.includes('canConfirm={permissions.canConfirm}') && panel.includes("type: 'OPEN_REVIEW', canConfirm: permissions.canConfirm"));
-    assert.ok(panel.includes('if (!permissions.canConfirm) return;'), 'handleConfirm refuses for a Manager');
+    assert.ok(panel.includes('if (!permissions.canConfirm || !canCreateSupport(assistance)) return;'), 'handleConfirm refuses for a Manager (and while cross-department assistance is off)');
     assert.ok(panel.includes('{confirming && state.preview.data && permissions.canConfirm && ('), 'the confirm dialog is Admin-only');
     assert.ok(preview.includes('const button = canConfirm ? (') && preview.includes('{CONFIRM_ADMIN_ONLY}'), 'the button is replaced by the explanation');
     assert.ok(preview.includes('data.canOverrideReserve === true && canConfirm'), 'no staffing-risk acknowledgement for a viewer who cannot confirm');
@@ -330,7 +330,7 @@ describe('history: the projection the server sent decides what is shown', () => 
     assert.ok(archive.includes("view === 'donor' ?") && archive.includes('shown.taskRestricted'));
     const panel = read('components', 'workload', 'CrossDepartmentSupportPanel.jsx');
     assert.ok(panel.includes('view={recordView(endState.row, role)}') && panel.includes('view={recordView(archiveState.row, role)}'));
-    assert.equal(panel.split('role={role}').length - 1, 2, 'both history lists know the viewer role');
+    assert.equal(panel.split('role={role}').length - 1, 3, 'every history list (main, history, active-only) knows the viewer role');
   });
 
   it('end and archive outcomes for a donor Manager name no task or receiving department', () => {

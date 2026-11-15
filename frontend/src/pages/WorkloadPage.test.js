@@ -490,7 +490,7 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
 
   describe('Loading, Error, Retry, and Empty States', () => {
     it('renders loading state with spinner and descriptive message', () => {
-      assert.ok(pageSource.includes('<Spinner size="lg" className="text-emerald-600" />'), 'Loading state must show spinner'); // shared spinner (Stage 5C)
+      assert.ok(pageSource.includes('<WorkloadPageSkeleton label="Loading staff workload data..."'), 'Loading state must show a loading indicator'); // page skeleton (Stage 5D)
       assert.ok(
         pageSource.includes('Loading staff workload data...'),
         'Loading state must show descriptive message'

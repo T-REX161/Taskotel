@@ -109,7 +109,8 @@ describe('AssignmentsPage Component Integration', () => {
     it('renders a loading state with spinner and "Loading assignments..." message', () => {
       assert.ok(pageSource.includes('isLoading'), 'Component must track isLoading state');
       // Stage 5C: the shared spinner (components/common/Spinner, which animates with animate-spin)
-      assert.ok(pageSource.includes('<Spinner size="lg" className="text-emerald-600" />'), 'Loading state must include spinner animation');
+      // Stage 5D: a skeleton of the page (components/common/PageSkeletons) under the real header, with this status message
+      assert.ok(pageSource.includes('<AssignmentsPageSkeleton label="Loading assignments..." />'), 'Loading state must include a loading indicator');
       assert.ok(pageSource.includes('Loading assignments...'), 'Loading state must display "Loading assignments..."');
     });
 

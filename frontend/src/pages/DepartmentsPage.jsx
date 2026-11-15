@@ -8,8 +8,8 @@ import DepartmentFormModal from '../components/departments/DepartmentFormModal';
 import RemoveDepartmentModal from '../components/departments/RemoveDepartmentModal';
 import { getDepartmentStyle } from '../utils/departmentStyles';
 import { menuMotion, toastMotion, usePresence } from '../theme/presence';
-import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
+import { DepartmentsPageSkeleton } from '../components/common/PageSkeletons';
 
 const SUCCESS_MESSAGE_MS = 6000;
 
@@ -141,12 +141,7 @@ export default function DepartmentsPage() {
     return (
       <div className="w-full space-y-6">
         {header}
-        <div className="flex items-center justify-center p-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div role="status" className="flex flex-col items-center gap-3">
-            <Spinner size="lg" className="text-emerald-600" />
-            <p className="text-sm font-medium text-gray-500">Loading departments...</p>
-          </div>
-        </div>
+        <DepartmentsPageSkeleton label="Loading departments..." />
       </div>
     );
   }

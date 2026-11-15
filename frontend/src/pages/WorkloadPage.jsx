@@ -28,8 +28,9 @@ import UtilizationMeter from '../components/workload/UtilizationMeter';
 import CrossDepartmentSupportPanel from '../components/workload/CrossDepartmentSupportPanel';
 import PageSizeToggle from '../components/common/PageSizeToggle';
 import UserAvatar from '../components/common/UserAvatar';
-import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
+import { WorkloadPageSkeleton } from '../components/common/PageSkeletons';
+import { loadCrossDepartmentStatus, peekCrossDepartmentStatus } from '../utils/crossDepartmentStatus';
 
 // Staff rows per page by default (this list has always shown 5); the toggle offers 5, 10 or 15
 const ITEMS_PER_PAGE = 5;
@@ -44,6 +45,20 @@ export default function WorkloadPage() {
   const [departments, setDepartments] = useState([]);
   const [allStaff, setAllStaff] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Cross-Department Assistance (Admin and Manager only): read as the page opens, alongside the workload, so the loading skeleton
+  // reserves room for the support panel only when it will be shown. The panel reuses this same answer when it mounts (no second
+  // request). Until it arrives the last value known in this session is used; with none, no room is reserved (nothing to collapse later).
+  const canSeeSupport = ['ADMIN', 'MANAGER'].includes(getUserRole());
+  const [supportSetting, setSupportSetting] = useState(() => (canSeeSupport ? peekCrossDepartmentStatus() || 'loading' : 'not-needed'));
+  useEffect(() => {
+    if (!canSeeSupport) return undefined;
+    let active = true;
+    loadCrossDepartmentStatus({ force: true })
+      .then((state) => { if (active) setSupportSetting(state); })
+      // a failed read: the panel then shows in full (as it does itself), so the skeleton keeps room for it
+      .catch(() => { if (active) setSupportSetting((prev) => (prev === 'loading' ? 'unknown' : prev)); });
+    return () => { active = false; };
+  }, [canSeeSupport]);
   const [error, setError] = useState('');
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -246,24 +261,23 @@ export default function WorkloadPage() {
   ];
 
   // Loading state
+  // The page's own header: shown while the first load runs (above a skeleton of the page) and once loaded
+  const pageHeader = (
+    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+      <div>
+        <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Staff Workload</h1>
+        <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+          Monitor staff workload and active task distribution.
+        </p>
+      </div>
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="w-full space-y-4">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Staff Workload</h1>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-              Monitor staff workload and active task distribution.
-            </p>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-2xl p-12 border border-gray-100 shadow-2xs flex items-center justify-center">
-          <div role="status" className="flex flex-col items-center gap-3">
-            <Spinner size="lg" className="text-emerald-600" />
-            <p className="text-sm font-medium text-gray-500">Loading staff workload data...</p>
-          </div>
-        </div>
+        {pageHeader}
+        <WorkloadPageSkeleton label="Loading staff workload data..." showSupport={supportSetting === 'on' || supportSetting === 'unknown'} />
       </div>
     );
   }
@@ -289,14 +303,7 @@ export default function WorkloadPage() {
   return (
     <div className="w-full space-y-4">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Staff Workload</h1>
-          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-            Monitor staff workload and active task distribution.
-          </p>
-        </div>
-      </div>
+      {pageHeader}
 
       {/* 1. Workload Summary: one full-width container holding the summary cards and the staff total */}
       <section className="bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload summary">

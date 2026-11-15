@@ -34,7 +34,7 @@ import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
 import ManagerDepartmentModal from '../components/users/ManagerDepartmentModal';
 import { toastMotion, usePresence } from '../theme/presence';
-import Skeleton from '../components/common/Skeleton';
+import { UsersPageSkeleton } from '../components/common/PageSkeletons';
 
 const SUCCESS_MESSAGE_MS = 6000;
 
@@ -81,6 +81,7 @@ export default function UsersPage() {
   const [staffList, setStaffList] = useState([]);
   const [staffUnavailable, setStaffUnavailable] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   // The success notice, kept for its 120ms exit after it is dismissed (none with reduced motion); see theme/presence.js
@@ -129,6 +130,7 @@ export default function UsersPage() {
         };
       });
       setUsers(Array.isArray(userData) ? userData : []);
+      setHasLoaded(true);
       setStaffList(staffWithWorkload);
       setStaffUnavailable(staffData === null);
     } catch (err) {
@@ -330,19 +332,12 @@ export default function UsersPage() {
     </div>
   );
 
-  if (loading) {
+  // Only the first load shows the skeleton; a later reload (for example retrying the staff details) keeps the loaded page on screen
+  if (loading && !hasLoaded) {
     return (
-      <div className="w-full space-y-6" aria-busy="true">
+      <div className="w-full space-y-6">
         {header}
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:gap-4">
-            <Skeleton className="h-11 rounded-xl sm:col-span-2 lg:col-span-1" />
-            <Skeleton className="h-11 rounded-xl" />
-            <Skeleton className="h-11 rounded-xl" />
-          </div>
-          <Skeleton className="h-80 rounded-xl" />
-        </div>
-        <p role="status" className="sr-only">Loading users…</p>
+        <UsersPageSkeleton label="Loading users…" />
       </div>
     );
   }

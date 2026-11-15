@@ -36,9 +36,11 @@ const Cell = ({ label, children, className = '' }) => (
  * projection (no approver) or, where their department only lent the person, the donor projection (name, own department,
  * status and dates). Only what the server sent is shown; withheld details are labelled, never filled in.
  */
-export default function SupportHistory({ history, departmentName, canEnd = false, onEnd, endingId = null, historyOnly = false, onArchive, archivingId = null, role = 'ADMIN' }) {
+export default function SupportHistory({ history, departmentName, canEnd = false, onEnd, endingId = null, historyOnly = false, activeOnly = false, onArchive, archivingId = null, role = 'ADMIN' }) {
   // historyOnly: just the completed and ended records, with no heading, tabs or "no one is on support" message. The panel
   // uses it inside a collapsed "Support history" area when nobody is on active support.
+  // activeOnly: just the arrangements still in progress, with no heading or tabs. The panel uses it while cross-department
+  // assistance is switched off, so existing support can be followed and ended without showing the rest of the feature.
   const [tab, setTab] = useState(historyOnly ? 'ended' : 'active');
   const { status, data, error } = history;
   const rows = (data || []).filter((row) => (tab === 'active' ? row.status === 'ACTIVE' : row.status !== 'ACTIVE'));
@@ -46,8 +48,8 @@ export default function SupportHistory({ history, departmentName, canEnd = false
   const endedCount = (data || []).length - activeCount;
 
   return (
-    <section aria-label={historyOnly ? 'Support history' : 'Support assignments'} className="space-y-3">
-      {!historyOnly && (
+    <section aria-label={historyOnly ? 'Support history' : activeOnly ? 'Active support assignments' : 'Support assignments'} className="space-y-3">
+      {!historyOnly && !activeOnly && (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-sm font-semibold text-gray-900">Confirmed support</h4>
         <div role="tablist" aria-label="Support status" className="inline-flex rounded-lg bg-gray-100 p-0.5 text-xs">

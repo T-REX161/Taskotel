@@ -63,12 +63,18 @@ public class WorkloadRecommendationServiceImpl implements WorkloadRecommendation
         this.systemSettings = systemSettings;
     }
 
-    static final String TURNED_OFF_NOTE = "Workload recommendations are turned off in System Settings (Auto-Balancing Trigger). No suggestions are being made.";
+    static final String CROSS_DEPARTMENT_OFF_NOTE = "Cross-department assistance is turned off in System Settings, so no support suggestions are being made.";
+
+    static final String TURNED_OFF_NOTE ="Workload recommendations are turned off in System Settings (Auto-Balancing Trigger). No suggestions are being made.";
 
     @Override
     @Transactional(readOnly = true)
     public WorkloadRecommendationsDto getRecommendations() {
         DepartmentScope scope = scopeResolver.resolve();
+        if ((scope.isAll() || scope.isDepartment()) && systemSettings != null && !systemSettings.current().crossDepartmentAssistanceEnabled()) {
+            // These are suggestions for cross-department support: while that is switched off hotel-wide, none are made for anyone
+            return new WorkloadRecommendationsDto(LocalDateTime.now(), List.of(), List.of(), List.of(CROSS_DEPARTMENT_OFF_NOTE));
+        }
         if ((scope.isAll() || scope.isDepartment()) && systemSettings != null && !systemSettings.current().autoBalancingEnabled()) {
             // Suggestions only: switching this off hides them. Nothing is stored, assigned or moved either way.
             return new WorkloadRecommendationsDto(LocalDateTime.now(), List.of(), List.of(), List.of(TURNED_OFF_NOTE));
