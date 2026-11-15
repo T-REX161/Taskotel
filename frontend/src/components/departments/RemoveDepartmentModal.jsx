@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CloseIcon, TrashIcon } from '../icons/Icons';
 import { deleteDepartment } from '../../services/api';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
+import Spinner from '../common/Spinner';
 
 /**
  * Confirms and removes a department through the department API; nothing is simulated.
@@ -14,7 +16,7 @@ import { deleteDepartment } from '../../services/api';
  *  - onClose(): close without changes
  *  - onRemoved(department): called after the server removed it
  */
-export default function RemoveDepartmentModal({ department, onClose, onRemoved }) {
+function RemoveDepartmentModal({ department, onClose, onRemoved, closing = false }) {
   const navigate = useNavigate();
   const isOpen = department !== null;
   const [isRemoving, setIsRemoving] = useState(false);
@@ -80,7 +82,8 @@ export default function RemoveDepartmentModal({ department, onClose, onRemoved }
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 animate-fadeIn"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 ${backdropMotion(closing)}`}
+      inert={closing}
       onClick={handleClose}
     >
       <div
@@ -88,7 +91,7 @@ export default function RemoveDepartmentModal({ department, onClose, onRemoved }
         aria-modal="true"
         aria-labelledby="remove-department-title"
         aria-describedby="remove-department-message"
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100"
+        className={`bg-white rounded-2xl shadow-2xl w-full max-w-md border border-gray-100 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 sm:px-6 pt-5 pb-4 flex items-start gap-3.5">
@@ -146,14 +149,7 @@ export default function RemoveDepartmentModal({ department, onClose, onRemoved }
           >
             {isRemoving ? (
               <>
-                <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
+                <Spinner className="text-white" />
                 <span>Removing...</span>
               </>
             ) : (
@@ -169,3 +165,6 @@ export default function RemoveDepartmentModal({ department, onClose, onRemoved }
     document.body
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(RemoveDepartmentModal, (props) => props.department != null);

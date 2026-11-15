@@ -198,3 +198,33 @@ html {
   .clock-roll-in, .clock-fade-in { animation: none; }
   .clock-roll-out { display: none; }
 }
+
+/* ── Motion: reduced-motion strategy for the shared tokens (src/theme/motion.cjs) ──────────────────────────
+   With prefers-reduced-motion: reduce
+   - the shared entrance and exit animations (animate-fade-in/-out, -dialog-in/-out, -menu-in/-out, -toast-in/-out) do
+     not play: the element simply appears or disappears. Exits are also skipped in script (src/theme/presence.js): a
+     closing modal, menu or notice is unmounted at once rather than kept for an animation that will not run;
+   - transitions finish almost at once, so hovers, slides and fades become immediate state changes. 1ms rather than
+     0s so that any transitionend listener still runs;
+   - functional loading animations are NOT touched: nothing here sets `animation` on other elements, so animate-spin
+     and the loading skeletons' animate-pulse keep running while an operation is in progress;
+   - the theme switch, dashboard clock and chart keep their own reduced-motion rules (above, and in their components). */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-fade-out,
+  .animate-dialog-in,
+  .animate-menu-in,
+  .animate-toast-in,
+  .animate-dialog-out,
+  .animate-menu-out,
+  .animate-toast-out {
+    animation: none;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    transition-delay: 0s !important;
+  }
+}

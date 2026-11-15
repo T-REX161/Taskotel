@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import useCurrentUserProfile from '../../hooks/useCurrentUserProfile';
+import { profileLoadState, retryCurrentProfile } from '../../utils/currentUserProfile';
 import { useTheme } from '../../theme/ThemeContext';
 import { formatDateTimeParts } from '../../utils/dateTimeFormat';
 import { PREFERENCE_MESSAGES, normalizePreferences, savePreferences } from '../../utils/preferences';
+import Spinner from '../common/Spinner';
 
 export const APPEARANCE_OPTIONS = [
   { value: 'LIGHT', label: 'Light' },
@@ -19,14 +21,6 @@ export const TIME_FORMAT_OPTIONS = [
   { value: 'H24', label: '24-hour' },
 ];
 
-function Spinner() {
-  return (
-    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-    </svg>
-  );
-}
 
 function SlidersIcon({ className }) {
   return (
@@ -87,11 +81,13 @@ function PreferenceRow({ title, hint, children }) {
  * disabled; while one change is saved the controls are locked so choices cannot cross; a failed save puts the previous choice back.
  */
 export default function PersonalPreferencesCard() {
-  const { profile } = useCurrentUserProfile();
+  const { profile, loading: profileLoading, error: profileError } = useCurrentUserProfile();
   const { setPreference } = useTheme();
   const [status, setStatus] = useState({ phase: 'idle', message: '' }); // idle | saving | saved | error
 
-  const loaded = Boolean(profile);
+  // ready | loading | error: a failed profile request shows an error with a Retry, never an endless "Loading…"
+  const profileState = profileLoadState({ profile, loading: profileLoading, error: profileError });
+  const loaded = profileState === 'ready';
   const saving = status.phase === 'saving';
   const prefs = normalizePreferences(profile?.preferences);
   const locked = !loaded || saving;
@@ -146,7 +142,15 @@ export default function PersonalPreferencesCard() {
             Example: <span className="font-semibold text-gray-800">{formatDateTimeParts(2026, 11, 2, 17, 30, prefs)}</span>
           </p>
           <div className="min-h-[2.25rem] flex items-center">
-            {!loaded && <p className="text-sm text-gray-500">{PREFERENCE_MESSAGES.loading}</p>}
+            {profileState === 'loading' && <p role="status" className="text-sm text-gray-500">{PREFERENCE_MESSAGES.loading}</p>}
+            {profileState === 'error' && (
+              <div role="alert" data-testid="preferences-load-error" className="flex flex-wrap items-center gap-3 text-sm font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+                <span>{PREFERENCE_MESSAGES.loadFailed}</span>
+                <button type="button" onClick={retryCurrentProfile} className="font-semibold underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400 rounded">
+                  Retry
+                </button>
+              </div>
+            )}
             {loaded && status.phase === 'saving' && (
               <p role="status" aria-live="polite" className="flex items-center gap-2 text-sm font-medium text-gray-600">
                 <Spinner />

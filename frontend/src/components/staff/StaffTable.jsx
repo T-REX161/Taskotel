@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { formatDepartment, isAvailable, isActive } from './staffFormatters';
 import { DotsVerticalIcon, EyeIcon } from '../icons/Icons';
 import { getUserRole, getUsername } from '../../services/api';
 import { OWN_ACCOUNT_DEACTIVATE_HINT, canOfferDeactivation } from '../../utils/ownAccount';
 import UserAvatar from '../common/UserAvatar';
+import { menuMotion, usePresence } from '../../theme/presence';
 
 /**
  * Get two-letter initials from full name or username.
@@ -43,6 +44,9 @@ export default function StaffTable({
 }) {
   const [activeMenu, setActiveMenu] = useState(null); // { staff, buttonEl }
   const [menuPosition, setMenuPosition] = useState(null);
+  // The open menu, kept for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+  const menuPresence = usePresence(useMemo(() => (activeMenu && menuPosition ? { activeMenu, menuPosition } : null), [activeMenu, menuPosition]));
+  const { activeMenu: shownMenu, menuPosition: shownPosition } = menuPresence.value || {};
   const menuRef = useRef(null);
 
   const role = currentUserRole !== undefined ? currentUserRole : getUserRole();
@@ -259,25 +263,26 @@ export default function StaffTable({
       </div>
 
       {/* Floating Action Menu rendered outside overflow containers via Portal */}
-      {activeMenu && menuPosition && createPortal(
+      {menuPresence.present && createPortal(
         <div
           ref={menuRef}
           style={{
             position: 'fixed',
-            ...(menuPosition.openUpward
-              ? { bottom: `${menuPosition.bottom}px` }
-              : { top: `${menuPosition.top}px` }),
-            right: `${menuPosition.right}px`,
+            ...(shownPosition.openUpward
+              ? { bottom: `${shownPosition.bottom}px` }
+              : { top: `${shownPosition.top}px` }),
+            right: `${shownPosition.right}px`,
             zIndex: 9999,
           }}
-          className="w-38 rounded-lg bg-white shadow-lg border border-gray-200 py-1 select-none animate-fadeIn"
+          className={`w-38 rounded-lg bg-white shadow-lg border border-gray-200 py-1 select-none ${menuMotion(menuPresence.closing)}`}
+          inert={menuPresence.closing}
           onClick={(e) => e.stopPropagation()}
         >
           {/* View Details */}
           <button
             type="button"
             onClick={() => {
-              const staff = activeMenu.staff;
+              const staff = shownMenu.staff;
               setActiveMenu(null);
               onView && onView(staff);
             }}
@@ -291,7 +296,7 @@ export default function StaffTable({
           <button
             type="button"
             onClick={() => {
-              const staff = activeMenu.staff;
+              const staff = shownMenu.staff;
               setActiveMenu(null);
               onEdit && onEdit(staff);
             }}
@@ -313,13 +318,13 @@ export default function StaffTable({
           <div className="my-1 border-t border-gray-100" />
 
           {/* Deactivate / Activate */}
-          {isActive(activeMenu.staff.active) ? (
+          {isActive(shownMenu.staff.active) ? (
             <button
               type="button"
-              disabled={!canOfferDeactivation(activeMenu.staff, signedInUsername)}
-              title={canOfferDeactivation(activeMenu.staff, signedInUsername) ? undefined : OWN_ACCOUNT_DEACTIVATE_HINT}
+              disabled={!canOfferDeactivation(shownMenu.staff, signedInUsername)}
+              title={canOfferDeactivation(shownMenu.staff, signedInUsername) ? undefined : OWN_ACCOUNT_DEACTIVATE_HINT}
               onClick={() => {
-                const staff = activeMenu.staff;
+                const staff = shownMenu.staff;
                 if (!canOfferDeactivation(staff, signedInUsername)) return;
                 setActiveMenu(null);
                 onDeactivate && onDeactivate(staff);
@@ -342,7 +347,7 @@ export default function StaffTable({
             <button
               type="button"
               onClick={() => {
-                const staff = activeMenu.staff;
+                const staff = shownMenu.staff;
                 setActiveMenu(null);
                 onActivate && onActivate(staff);
               }}
@@ -362,11 +367,11 @@ export default function StaffTable({
           )}
 
           {/* Remove Staff — Only for Admin and Inactive staff */}
-          {isAdmin && !isActive(activeMenu.staff.active) && (
+          {isAdmin && !isActive(shownMenu.staff.active) && (
             <button
               type="button"
               onClick={() => {
-                const staff = activeMenu.staff;
+                const staff = shownMenu.staff;
                 setActiveMenu(null);
                 onRemove && onRemove(staff);
               }}

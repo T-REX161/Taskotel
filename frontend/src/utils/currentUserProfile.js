@@ -9,6 +9,8 @@ const EMPTY = Object.freeze({ username: null, profile: null, loading: false, err
 
 let snapshot = EMPTY;
 let inFlight = null;
+// The newest request: an older one's answer is not applied, so it can never overwrite a later retry, an upload's result or a sign-out
+let latest = 0;
 const listeners = new Set();
 
 function emit(next) {
@@ -39,15 +41,17 @@ export function loadCurrentProfile({ force = false, username = getUsername(), fe
   if (!force && snapshot.username === username && snapshot.profile) return Promise.resolve(snapshot.profile);
   if (inFlight && inFlight.username === username) return inFlight.promise;
 
+  const request = ++latest;
+  const isCurrent = () => request === latest && snapshot.username === username;
   emit({ username, profile: profileFor(snapshot, username), loading: true, error: null });
   const promise = Promise.resolve()
     .then(() => fetchProfile())
     .then((profile) => {
-      if (snapshot.username === username) emit({ username, profile, loading: false, error: null });
+      if (isCurrent()) emit({ username, profile, loading: false, error: null });
       return profile;
     })
     .catch((error) => {
-      if (snapshot.username === username) emit({ username, profile: snapshot.profile, loading: false, error });
+      if (isCurrent()) emit({ username, profile: snapshot.profile, loading: false, error });
       return null;
     })
     .finally(() => {
@@ -60,10 +64,31 @@ export function loadCurrentProfile({ force = false, username = getUsername(), fe
 /** Replaces the cached profile with the one an upload or removal returned. */
 export function setCurrentProfile(profile) {
   if (!profile) return;
+  // A load that started before this change would bring back older data: it is dropped, and the next load starts afresh
+  latest += 1;
+  inFlight = null;
   emit({ username: profile.username || snapshot.username, profile, loading: false, error: null });
 }
 
 export function resetCurrentProfile() {
+  latest += 1;
   inFlight = null;
   emit(EMPTY);
 }
+
+// ── what a page shows for the profile (Stage 5B) ────────────────────────────────────────────────────────────────
+
+export const PROFILE_LOAD_ERROR_MESSAGE = 'Your profile could not be loaded. Check your connection and try again.';
+
+/**
+ * 'ready' | 'loading' | 'error'. A loaded profile is always shown (a failed background refresh keeps it); without one, a failed
+ * request is an error (never an endless "Loading…"), and anything else, including the moment before the first request, is loading.
+ */
+export function profileLoadState({ profile, loading, error }) {
+  if (profile) return 'ready';
+  if (error && !loading) return 'error';
+  return 'loading';
+}
+
+/** Retry: load the profile again through the shared flow (a request already running is reused, not duplicated). */
+export const retryCurrentProfile = () => loadCurrentProfile({ force: true });

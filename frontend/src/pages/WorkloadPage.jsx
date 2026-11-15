@@ -28,6 +28,8 @@ import UtilizationMeter from '../components/workload/UtilizationMeter';
 import CrossDepartmentSupportPanel from '../components/workload/CrossDepartmentSupportPanel';
 import PageSizeToggle from '../components/common/PageSizeToggle';
 import UserAvatar from '../components/common/UserAvatar';
+import Spinner from '../components/common/Spinner';
+import LoadError from '../components/common/LoadError';
 
 // Staff rows per page by default (this list has always shown 5); the toggle offers 5, 10 or 15
 const ITEMS_PER_PAGE = 5;
@@ -246,7 +248,7 @@ export default function WorkloadPage() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="w-full space-y-4 animate-fadeIn">
+      <div className="w-full space-y-4">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Staff Workload</h1>
@@ -257,27 +259,8 @@ export default function WorkloadPage() {
         </div>
 
         <div className="bg-white rounded-2xl p-12 border border-gray-100 shadow-2xs flex items-center justify-center">
-          <div className="flex flex-col items-center gap-3">
-            <svg
-              className="animate-spin h-8 w-8 text-emerald-600"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
+          <div role="status" className="flex flex-col items-center gap-3">
+            <Spinner size="lg" className="text-emerald-600" />
             <p className="text-sm font-medium text-gray-500">Loading staff workload data...</p>
           </div>
         </div>
@@ -298,17 +281,7 @@ export default function WorkloadPage() {
           </div>
         </div>
 
-        <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-red-800 space-y-3" role="alert">
-          <h3 className="font-bold text-base">Failed to load staff workload</h3>
-          <p className="text-sm">{error}</p>
-          <button
-            type="button"
-            onClick={() => fetchData()}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
-          >
-            Try Again
-          </button>
-        </div>
+        <LoadError title="Failed to load staff workload" message={error} onRetry={() => fetchData()} retryLabel="Try Again" />
       </div>
     );
   }
@@ -420,7 +393,7 @@ export default function WorkloadPage() {
                 {/* Proportional Progress Bar */}
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+                    className={`h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${barColor}`}
                     style={{ width: `${Math.min(dept.percentage, 100)}%` }}
                   />
                 </div>
@@ -744,7 +717,7 @@ export default function WorkloadPage() {
                     </div>
                     <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-300 ${getWorkloadProgressBarColor(
+                        className={`h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${getWorkloadProgressBarColor(
                           status
                         )}`}
                         style={{ width: `${Math.min(percentage, 100)}%` }}
@@ -758,13 +731,12 @@ export default function WorkloadPage() {
         </div>
       </div>
 
-      {/* Staff Details Modal */}
-      {selectedStaff && (
-        <StaffDetailsModal
-          staff={selectedStaff}
-          onClose={() => setSelectedStaff(null)}
-        />
-      )}
+      {/* Staff Details Modal: always rendered (it hides itself without a staff member) so it can play its exit */}
+      <StaffDetailsModal
+        staff={selectedStaff}
+        onClose={() => setSelectedStaff(null)}
+      />
+
     </div>
   );
 }

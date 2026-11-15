@@ -4,17 +4,11 @@ import { EyeIcon, EyeOffIcon, LockIcon } from '../icons/Icons';
 import PasswordRequirements from '../common/PasswordRequirements';
 import { evaluatePasswordRules } from '../../utils/passwordPolicy';
 import { PASSWORD_MESSAGES, passwordErrorMessage, submitPasswordChange } from '../../utils/passwordChange';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
+import Spinner from '../common/Spinner';
 
 const EMPTY = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
-function Spinner() {
-  return (
-    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-    </svg>
-  );
-}
 
 /** One password input with a lock icon, a show/hide button and its own error line. */
 function PasswordField({ id, label, value, error, onChange, disabled, autoComplete, inputRef }) {
@@ -38,7 +32,7 @@ function PasswordField({ id, label, value, error, onChange, disabled, autoComple
           aria-invalid={error ? 'true' : undefined}
           aria-describedby={error ? `${id}-error` : undefined}
           placeholder="••••••••"
-          className={`w-full pl-10 pr-11 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 rounded-xl border text-sm transition-all outline-none disabled:opacity-60 ${
+          className={`w-full pl-10 pr-11 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 rounded-xl border text-sm transition-[color,background-color,border-color,box-shadow,opacity] outline-none disabled:opacity-60 ${
             error ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' : 'border-gray-200/90 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10'
           }`}
         />
@@ -64,7 +58,7 @@ function PasswordField({ id, label, value, error, onChange, disabled, autoComple
  * those work while a change is being sent, and a second click is ignored. onChanged(message) tells the page, which shows the
  * success message and refreshes the Last Password Change time.
  */
-export default function ChangePasswordDialog({ isOpen, onClose, onChanged }) {
+function ChangePasswordDialog({ isOpen, onClose, onChanged, closing = false }) {
   const [values, setValues] = useState(EMPTY);
   const [errors, setErrors] = useState({});
   const [status, setStatus] = useState({ phase: 'idle', message: '' }); // idle | saving | error
@@ -131,7 +125,7 @@ export default function ChangePasswordDialog({ isOpen, onClose, onChanged }) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn" onClick={dismiss}>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs ${backdropMotion(closing)}`} inert={closing} onClick={dismiss}>
       <form
         role="dialog"
         aria-modal="true"
@@ -140,7 +134,7 @@ export default function ChangePasswordDialog({ isOpen, onClose, onChanged }) {
         noValidate
         onSubmit={submit}
         onClick={(event) => event.stopPropagation()}
-        className="flex flex-col w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden"
+        className={`flex flex-col w-full max-w-2xl max-h-[90vh] bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden ${dialogMotion(closing)}`}
       >
         <div className="shrink-0 px-5 sm:px-6 py-5 border-b border-gray-200">
           <h3 id="change-password-title" className="text-lg font-bold text-gray-900 leading-tight">Change Password</h3>
@@ -189,3 +183,6 @@ export default function ChangePasswordDialog({ isOpen, onClose, onChanged }) {
     document.body
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(ChangePasswordDialog, (props) => Boolean(props.isOpen));

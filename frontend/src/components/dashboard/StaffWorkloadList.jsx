@@ -79,7 +79,7 @@ export default function StaffWorkloadList({ staff }) {
                 aria-valuemax={SHIFT_MINUTES}
                 aria-valuenow={Math.min(SHIFT_MINUTES, row.totalEstimatedDuration || 0)}
               >
-                <div className={`h-full rounded-full transition-[width] duration-500 ease-out ${tone.bar}`} style={{ width: `${durationPercent(row.totalEstimatedDuration)}%` }} />
+                <div className={`h-full rounded-full transition-[width] duration-slow ease-standard ${tone.bar}`} style={{ width: `${durationPercent(row.totalEstimatedDuration)}%` }} />
               </div>
               <span className="w-11 shrink-0 text-right text-sm tabular-nums text-gray-600">{loadPercent(row.totalEstimatedDuration)}%</span>
               <span className={`w-[4.5rem] shrink-0 inline-flex justify-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide ring-1 ring-inset ${tone.badge}`}>

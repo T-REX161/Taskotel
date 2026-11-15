@@ -34,8 +34,8 @@ describe('canOfferDeactivation: your own account is never offered', () => {
 describe('the Staff screens use it (the server enforces the rule either way)', () => {
   it('the Staff table disables and blocks Deactivate on your own row, with the explanation', () => {
     const table = read('components', 'staff', 'StaffTable.jsx');
-    assert.match(table, /disabled=\{!canOfferDeactivation\(activeMenu\.staff, signedInUsername\)\}/);
-    assert.match(table, /title=\{canOfferDeactivation\(activeMenu\.staff, signedInUsername\) \? undefined : OWN_ACCOUNT_DEACTIVATE_HINT\}/);
+    assert.match(table, /disabled=\{!canOfferDeactivation\(shownMenu\.staff, signedInUsername\)\}/);
+    assert.match(table, /title=\{canOfferDeactivation\(shownMenu\.staff, signedInUsername\) \? undefined : OWN_ACCOUNT_DEACTIVATE_HINT\}/);
     assert.match(table, /if \(!canOfferDeactivation\(staff, signedInUsername\)\) return;\n\s+setActiveMenu\(null\);\n\s+onDeactivate && onDeactivate\(staff\);/);
     assert.match(table, /currentUsername !== undefined \? currentUsername : getUsername\(\)/);
   });

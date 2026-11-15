@@ -39,7 +39,7 @@ export default function UtilizationMeter({ percentage, status, minutes, baseline
         aria-label={`Shift utilization ${percentage}%`}
       >
         <div
-          className={`h-full rounded-full transition-all duration-300 ${getWorkloadProgressBarColor(status)}`}
+          className={`h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${getWorkloadProgressBarColor(status)}`}
           style={{ width: `${fill}%` }}
         />
       </div>

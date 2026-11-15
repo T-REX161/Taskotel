@@ -27,6 +27,10 @@ import { staffStatusSuccessMessage } from '../utils/taskStatus';
 import { canChangeTaskDepartment } from '../utils/taskDepartment';
 import { assigneeMatchesSearch, groupAssignmentsByTask } from '../utils/assignmentUtils';
 import { assignmentSuccessMessage, buildAssignmentRequest, submittableStaffIds, toggleStaffSelection } from '../utils/staffSelection';
+import { STAFF_LOAD_ERROR_MESSAGE, createLatestRequest } from '../utils/loadState';
+import { toastMotion, usePresence } from '../theme/presence';
+import Spinner from '../components/common/Spinner';
+import LoadError from '../components/common/LoadError';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -49,6 +53,8 @@ export default function TasksPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successBanner, setSuccessBanner] = useState('');
+  // The success notice, kept for its 120ms exit after it is dismissed (none with reduced motion); see theme/presence.js
+  const notice = usePresence(successBanner);
   // Staff status updates: which task is being updated, and the error from the last attempt
   const isStaff = userRole === 'STAFF';
   const [statusBusyTaskId, setStatusBusyTaskId] = useState(null);
@@ -67,6 +73,8 @@ export default function TasksPage() {
   // Staff state for assignment (loaded dynamically from backend)
   const [allStaff, setAllStaff] = useState([]);
   const [isLoadingStaff, setIsLoadingStaff] = useState(false);
+  const [staffLoadError, setStaffLoadError] = useState('');
+  const [staffRequest] = useState(createLatestRequest);
 
   // Modals state
   const [viewModalTask, setViewModalTask] = useState(null);
@@ -121,17 +129,23 @@ export default function TasksPage() {
     }
   };
 
+  // A failure is kept as an error (shown in the dialog with a Retry), never as an empty staff list; only the newest request applies
   const fetchEligibleStaff = async () => {
+    const request = staffRequest.next();
     setIsLoadingStaff(true);
+    setStaffLoadError('');
     try {
       const data = await getStaff();
+      if (!staffRequest.isCurrent(request)) return;
       if (Array.isArray(data)) {
         setAllStaff(data);
       }
     } catch (err) {
+      if (!staffRequest.isCurrent(request)) return;
       console.error('Failed to load eligible staff members:', err);
+      setStaffLoadError(STAFF_LOAD_ERROR_MESSAGE);
     } finally {
-      setIsLoadingStaff(false);
+      if (staffRequest.isCurrent(request)) setIsLoadingStaff(false);
     }
   };
 
@@ -443,11 +457,8 @@ export default function TasksPage() {
           </div>
         </div>
         <div className="flex items-center justify-center p-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex flex-col items-center gap-3">
-            <svg className="animate-spin h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
+          <div role="status" className="flex flex-col items-center gap-3">
+            <Spinner size="lg" className="text-emerald-600" />
             <p className="text-sm font-medium text-gray-500">Loading tasks and assignments...</p>
           </div>
         </div>
@@ -464,17 +475,7 @@ export default function TasksPage() {
             <p className="text-gray-500 mt-1">Create, manage and track hotel operational tasks.</p>
           </div>
         </div>
-        <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-red-800 space-y-3">
-          <h3 className="font-bold text-base">Failed to load tasks</h3>
-          <p className="text-sm">{error}</p>
-          <button
-            type="button"
-            onClick={() => fetchTasksData(true)}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
-          >
-            Retry
-          </button>
-        </div>
+        <LoadError title="Failed to load tasks" message={error} onRetry={() => fetchTasksData(true)} retryLabel="Retry" />
       </div>
     );
   }
@@ -500,11 +501,11 @@ export default function TasksPage() {
       </div>
 
       {/* Success Notification Banner */}
-      {successBanner && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+      {notice.present && (
+        <div inert={notice.closing} className={`p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs ${toastMotion(notice.closing)}`}>
           <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold">{successBanner}</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span className="font-semibold">{notice.value}</span>
           </div>
           <button
             type="button"
@@ -662,6 +663,8 @@ export default function TasksPage() {
             assignedStaffIds={assignModalTask ? (assignmentsByTaskId.get(assignModalTask.id) || []).map((a) => a.staffId) : []}
             eligibleStaff={eligibleStaff}
             isLoadingStaff={isLoadingStaff}
+            staffError={staffLoadError}
+            onRetryStaff={fetchEligibleStaff}
             workloadList={workloadList}
             isLoadingWorkload={isLoadingWorkload}
             workloadError={workloadError}

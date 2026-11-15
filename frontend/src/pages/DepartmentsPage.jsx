@@ -7,6 +7,9 @@ import DepartmentIcon from '../components/common/DepartmentIcon';
 import DepartmentFormModal from '../components/departments/DepartmentFormModal';
 import RemoveDepartmentModal from '../components/departments/RemoveDepartmentModal';
 import { getDepartmentStyle } from '../utils/departmentStyles';
+import { menuMotion, toastMotion, usePresence } from '../theme/presence';
+import Spinner from '../components/common/Spinner';
+import LoadError from '../components/common/LoadError';
 
 const SUCCESS_MESSAGE_MS = 6000;
 
@@ -20,6 +23,9 @@ export default function DepartmentsPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [openMenuCode, setOpenMenuCode] = useState(null);
   const [removingDepartment, setRemovingDepartment] = useState(null);
+  // The open card menu and the success notice, each kept for its 120ms exit (none with reduced motion); see theme/presence.js
+  const menuPresence = usePresence(openMenuCode);
+  const notice = usePresence(successMessage);
   const menuRef = useRef(null);
 
   // Only ADMIN may create, edit or remove departments; MANAGER and STAFF can only view them. This only hides the controls:
@@ -136,11 +142,8 @@ export default function DepartmentsPage() {
       <div className="w-full space-y-6">
         {header}
         <div className="flex items-center justify-center p-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex flex-col items-center gap-3">
-            <svg className="animate-spin h-8 w-8 text-emerald-600" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
+          <div role="status" className="flex flex-col items-center gap-3">
+            <Spinner size="lg" className="text-emerald-600" />
             <p className="text-sm font-medium text-gray-500">Loading departments...</p>
           </div>
         </div>
@@ -152,17 +155,7 @@ export default function DepartmentsPage() {
     return (
       <div className="w-full space-y-6">
         {header}
-        <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-red-800 space-y-3">
-          <h3 className="font-bold text-base">Failed to load departments</h3>
-          <p className="text-sm">{error}</p>
-          <button
-            type="button"
-            onClick={() => fetchDepartments()}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
-          >
-            Retry
-          </button>
-        </div>
+        <LoadError title="Failed to load departments" message={error} onRetry={() => fetchDepartments()} retryLabel="Retry" />
       </div>
     );
   }
@@ -184,9 +177,9 @@ export default function DepartmentsPage() {
     <div className="w-full space-y-6">
       {header}
 
-      {successMessage && (
-        <div role="status" className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between gap-3 animate-fadeIn">
-          <span>{successMessage}</span>
+      {notice.present && (
+        <div role="status" inert={notice.closing} className={`p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between gap-3 ${toastMotion(notice.closing)}`}>
+          <span>{notice.value}</span>
           <button
             type="button"
             onClick={() => setSuccessMessage('')}
@@ -230,7 +223,7 @@ export default function DepartmentsPage() {
             return (
               <div
                 key={dept.code || dept.name}
-                className={`min-w-0 bg-white rounded-2xl border border-gray-200/80 shadow-sm hover:shadow-md transition-shadow ${isInactive ? 'opacity-75' : ''}`}
+                className={`min-w-0 bg-white rounded-2xl border border-gray-200/80 shadow-sm ${isInactive ? 'opacity-75' : ''}`}
               >
                 <div className="flex items-center gap-4 px-5 pt-5 pb-4">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${classes}`}>
@@ -254,8 +247,8 @@ export default function DepartmentsPage() {
                       >
                         <DotsVerticalIcon className="w-5 h-5" />
                       </button>
-                      {openMenuCode === dept.code && (
-                        <div role="menu" className="absolute right-0 top-full mt-1 z-20 w-52 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+                      {menuPresence.value === dept.code && (
+                        <div role="menu" inert={menuPresence.closing} className={`absolute right-0 top-full mt-1 z-20 w-52 bg-white border border-gray-200 rounded-xl shadow-lg py-1 ${menuMotion(menuPresence.closing)}`}>
                           <button
                             type="button"
                             role="menuitem"

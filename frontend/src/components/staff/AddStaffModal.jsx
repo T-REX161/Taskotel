@@ -27,6 +27,8 @@ import useUsernameAvailability from '../../hooks/useUsernameAvailability';
 import { generateUsername, validateUsername, USERNAME_INVALID_MESSAGES } from '../../utils/username';
 import { generateTemporaryPassword, copyText } from '../../utils/passwordGenerator';
 import UsernameFeedback from './UsernameFeedback';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
+import Spinner from '../common/Spinner';
 
 const initialFormState = {
   fullName: '',
@@ -106,13 +108,14 @@ function Field({ label, htmlFor, icon: Icon, labelExtra, footer, children }) {
  *   onSuccess – callback(newStaff, fullName) after successful creation
  */
 // title / description / submitLabel: optional, so the same form can be opened as "Add User" from the Users page
-export default function AddStaffModal({
+function AddStaffModal({
   isOpen,
   onClose,
   onSuccess,
   title = 'Add New Staff',
   description = 'Add staff member to your hotel team',
   submitLabel = 'Add Staff',
+  closing = false,
 }) {
   const { departments, activeDepartments } = useDepartments();
   const navigate = useNavigate();
@@ -327,11 +330,12 @@ export default function AddStaffModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 animate-fadeIn"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 ${backdropMotion(closing)}`}
+      inert={closing}
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col overflow-hidden border border-gray-100"
+        className={`bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] supports-[height:100dvh]:max-h-[90dvh] flex flex-col overflow-hidden border border-gray-100 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -617,25 +621,7 @@ export default function AddStaffModal({
             >
               {isSubmitting ? (
                 <>
-                  <svg
-                    className="animate-spin h-4 w-4 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
+                  <Spinner className="text-white" />
                   <span>{submitLabel === 'Add Staff' ? 'Adding Staff...' : 'Adding...'}</span>
                 </>
               ) : (
@@ -649,3 +635,6 @@ export default function AddStaffModal({
     document.body
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(AddStaffModal, (props) => Boolean(props.isOpen));

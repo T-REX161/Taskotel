@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { formatDate, formatTime } from '../../../utils/dateTimeFormat';
 import { getPreferences } from '../../../utils/preferences';
 import { supportRecordDisplay } from '../../../utils/supportPlan';
+import { backdropMotion, dialogMotion } from '../../../theme/presence';
 
 const FOCUSABLE = 'button:not([disabled])';
 
@@ -25,7 +26,7 @@ const Detail = ({ label, children }) => (
  * "Remove" is pressed; Escape and Cancel close it without changes (but not while the request is running). A failure keeps
  * it open and says why.
  */
-export default function SupportArchiveDialog({ row, departmentName, status, error, stale, onConfirm, onCancel, view = 'full' }) {
+export default function SupportArchiveDialog({ row, departmentName, status, error, stale, onConfirm, onCancel, view = 'full', closing = false }) {
   const dialogRef = useRef(null);
   const cancelRef = useRef(null);
   const previousFocus = useRef(null);
@@ -61,14 +62,14 @@ export default function SupportArchiveDialog({ row, departmentName, status, erro
   const reason = shown.endReason;
   const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1';
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" onClick={() => !submitting && onCancel()}>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 ${backdropMotion(closing)}`} inert={closing} onClick={() => !submitting && onCancel()}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="support-archive-title"
         aria-describedby="support-archive-body"
-        className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-100 shadow-xl p-4 sm:p-5 space-y-4"
+        className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-100 shadow-xl p-4 sm:p-5 space-y-4 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div>

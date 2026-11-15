@@ -109,7 +109,7 @@ export default function StaffWorkloadTable({ data, isStaff }) {
                 <div className="flex items-center space-x-3">
                   <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden min-w-[80px]">
                     <div
-                      className="h-full rounded-full bg-emerald-500 transition-all duration-300"
+                      className="h-full rounded-full bg-emerald-500 transition-[width] duration-slow ease-standard"
                       style={{
                         width: `${Math.min(
                           100,
@@ -138,7 +138,7 @@ export default function StaffWorkloadTable({ data, isStaff }) {
                 <div className="flex items-center space-x-3">
                   <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden min-w-[80px]">
                     <div
-                      className="h-full rounded-full bg-blue-500 transition-all duration-300"
+                      className="h-full rounded-full bg-blue-500 transition-[width] duration-slow ease-standard"
                       style={{
                         width: `${Math.min(
                           100,
@@ -167,7 +167,7 @@ export default function StaffWorkloadTable({ data, isStaff }) {
                 <div className="flex items-center space-x-3">
                   <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden min-w-[80px]">
                     <div
-                      className="h-full rounded-full bg-orange-500 transition-all duration-300"
+                      className="h-full rounded-full bg-orange-500 transition-[width] duration-slow ease-standard"
                       style={{
                         width: `${Math.min(
                           100,
@@ -196,7 +196,7 @@ export default function StaffWorkloadTable({ data, isStaff }) {
                 <div className="flex items-center space-x-3">
                   <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden min-w-[80px]">
                     <div
-                      className="h-full rounded-full bg-red-500 transition-all duration-300"
+                      className="h-full rounded-full bg-red-500 transition-[width] duration-slow ease-standard"
                       style={{
                         width: `${Math.min(
                           100,

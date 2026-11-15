@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { TasksIcon, DotsVerticalIcon, EyeIcon } from '../icons/Icons';
 import { staffStatusAction } from '../../utils/taskStatus';
 import { formatAssignees } from '../../utils/assignmentUtils';
+import { menuMotion, usePresence } from '../../theme/presence';
 import {
   getPriorityColor,
   formatPriority,
@@ -42,6 +43,9 @@ export default function TasksTable({
 }) {
   const [activeMenu, setActiveMenu] = useState(null); // { task, buttonEl }
   const [menuPosition, setMenuPosition] = useState(null);
+  // The open menu, kept for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+  const menuPresence = usePresence(useMemo(() => (activeMenu && menuPosition ? { activeMenu, menuPosition } : null), [activeMenu, menuPosition]));
+  const { activeMenu: shownMenu, menuPosition: shownPosition } = menuPresence.value || {};
   const menuRef = useRef(null);
 
   const updatePosition = useCallback(() => {
@@ -294,25 +298,26 @@ export default function TasksTable({
       </div>
 
       {/* Floating Action Menu rendered outside overflow containers via Portal */}
-      {activeMenu && menuPosition && createPortal(
+      {menuPresence.present && createPortal(
         <div
           ref={menuRef}
           style={{
             position: 'fixed',
-            ...(menuPosition.openUpward
-              ? { bottom: `${menuPosition.bottom}px` }
-              : { top: `${menuPosition.top}px` }),
-            right: `${menuPosition.right}px`,
+            ...(shownPosition.openUpward
+              ? { bottom: `${shownPosition.bottom}px` }
+              : { top: `${shownPosition.top}px` }),
+            right: `${shownPosition.right}px`,
             zIndex: 9999,
           }}
-          className="w-40 rounded-lg bg-white shadow-lg border border-gray-200 py-1 select-none animate-fadeIn"
+          className={`w-40 rounded-lg bg-white shadow-lg border border-gray-200 py-1 select-none ${menuMotion(menuPresence.closing)}`}
+          inert={menuPresence.closing}
           onClick={(e) => e.stopPropagation()}
         >
           {/* View Details */}
           <button
             type="button"
             onClick={() => {
-              const task = activeMenu.task;
+              const task = shownMenu.task;
               setActiveMenu(null);
               onView && onView(task);
             }}
@@ -324,7 +329,7 @@ export default function TasksTable({
 
           {/* Staff: the next step for their own task (Start task / Mark as completed). Never shown to Admin or Manager. */}
           {!canManageTasks && onStatusChange && (() => {
-            const task = activeMenu.task;
+            const task = shownMenu.task;
             const action = staffStatusAction(task.status);
             if (!action) return null;
             const busy = busyTaskId === task.id;
@@ -351,7 +356,7 @@ export default function TasksTable({
             <button
               type="button"
               onClick={() => {
-                const task = activeMenu.task;
+                const task = shownMenu.task;
                 setActiveMenu(null);
                 onEdit && onEdit(task);
               }}
@@ -374,7 +379,7 @@ export default function TasksTable({
           {/* Assign / Reassign Task (if canManageTasks) */}
           {canManageTasks && (
             (() => {
-              const task = activeMenu.task;
+              const task = shownMenu.task;
               const taskAssignments = assignmentsByTaskId.get(task.id) || [];
               const isTaskAssigned = taskAssignments.length > 0;
               // With several assignees a reassignment is made one assignee at a time, from the Assignments page
@@ -451,7 +456,7 @@ export default function TasksTable({
               <button
                 type="button"
                 onClick={() => {
-                  const task = activeMenu.task;
+                  const task = shownMenu.task;
                   setActiveMenu(null);
                   onDelete && onDelete(task);
                 }}

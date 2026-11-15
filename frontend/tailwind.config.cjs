@@ -3,6 +3,7 @@
 // dev server silently kept the old config after an edit. As CommonJS, edits here and in themePalette.cjs reload.
 const plugin = require('tailwindcss/plugin');
 const { PROPERTIES, paletteFor, surfaceColors, themeVariables } = require('./src/theme/themePalette.cjs');
+const motion = require('./src/theme/motion.cjs');
 
 // Dark mode: the `dark` class on <html> (set by ThemeProvider, and before first paint by index.html).
 // Colours that look different in dark mode read CSS variables; see src/theme/themePalette.cjs.
@@ -23,6 +24,12 @@ module.exports = {
       colors: {
         surface: surfaceColors(),
       },
+      // Motion tokens (src/theme/motion.cjs): duration-fast|base|moderate|slow, ease-enter|exit|standard and
+      // animate-fade-in|fade-out|dialog-in|menu-in|toast-in. Reduced motion for these is handled in src/index.css.
+      transitionDuration: motion.DURATIONS,
+      transitionTimingFunction: motion.EASINGS,
+      keyframes: motion.KEYFRAMES,
+      animation: motion.ANIMATIONS,
       fontFamily: {
         sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', '-apple-system', 'sans-serif'],
       },
@@ -31,7 +38,7 @@ module.exports = {
   plugins: [
     plugin(({ addBase, theme }) => {
       const { light, dark } = themeVariables(theme('colors'));
-      addBase({ ':root': light, 'html.dark': dark });
+      addBase({ ':root': { ...light, ...motion.motionVariables() }, 'html.dark': dark });
     }),
   ],
 }

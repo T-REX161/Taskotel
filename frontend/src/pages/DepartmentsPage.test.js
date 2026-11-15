@@ -107,7 +107,7 @@ describe('DepartmentFormModal', () => {
     for (const status of ['409', '403', '404', '400']) {
       assert.ok(modalSource.includes(`err.status === ${status}`), `Handles ${status}`);
     }
-    assert.ok(modalSource.includes('isSubmitting') && modalSource.includes('animate-spin'), 'Loading state');
+    assert.ok(modalSource.includes('isSubmitting') && modalSource.includes('<Spinner className="text-white" />'), 'Loading state'); // the shared spinner (Stage 5C)
     assert.ok(modalSource.includes("'Adding Department...'"));
     assert.ok(modalSource.includes('onSaved(saved, isEdit ? \'edit\' : \'create\')'));
   });
@@ -148,7 +148,7 @@ describe('Remove Department', () => {
   });
 
   it('shows progress, reports the server explanation on failure, and refreshes after success', () => {
-    assert.ok(removeSource.includes('Removing...') && removeSource.includes('animate-spin'));
+    assert.ok(removeSource.includes('Removing...') && removeSource.includes('<Spinner className="text-white" />')); // the shared spinner (Stage 5C)
     assert.ok(removeSource.includes('err.status === 409') && removeSource.includes('setError(err.message'), 'In-use / built-in explanation from the server');
     assert.ok(/await deleteDepartment\(department\.code\);\s*inFlight\.current = false;\s*onRemoved\(department\);/.test(removeSource), 'Success only after the server confirms');
     assert.ok(/const handleRemoved = \(removed\) => \{[\s\S]*?was removed\.[\s\S]*?fetchDepartments\(true\);/.test(pageSource), 'Cards and counts refresh from the API');

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { DotsVerticalIcon, EyeIcon, TrashIcon } from '../icons/Icons';
 import { roleBadgeClass, normalizeRole, statusBadge, formatCreatedDate, isCurrentUser, getUserActions } from './userListUtils';
 import UserAvatar from '../common/UserAvatar';
 import { avatarInitials } from '../../utils/profilePicture';
+import { menuMotion, usePresence } from '../../theme/presence';
 
 const MENU_LABELS = {
   view: 'View Details',
@@ -66,6 +67,9 @@ const MENU_ITEM_CLASS = {
 export default function UsersTable({ users, staffByUserId, currentUsername, isAdmin, onAction, emptyState, footer = null }) {
   const [activeMenu, setActiveMenu] = useState(null); // { user, buttonEl }
   const [menuPosition, setMenuPosition] = useState(null);
+  // The open menu, kept for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+  const menuPresence = usePresence(useMemo(() => (activeMenu && menuPosition ? { activeMenu, menuPosition } : null), [activeMenu, menuPosition]));
+  const { activeMenu: shownMenu, menuPosition: shownPosition } = menuPresence.value || {};
   const menuRef = useRef(null);
 
   const updatePosition = useCallback(() => {
@@ -118,7 +122,7 @@ export default function UsersTable({ users, staffByUserId, currentUsername, isAd
     setActiveMenu((current) => (current?.user?.id === user.id ? null : { user, buttonEl }));
   };
 
-  const menuUser = activeMenu?.user;
+  const menuUser = shownMenu?.user;
   const menuStaff = menuUser ? staffByUserId.get(String(menuUser.id)) || null : null;
   const menu = menuUser ? getUserActions(menuUser, { staff: menuStaff, currentUsername, isAdmin }) : null;
 
@@ -217,18 +221,19 @@ export default function UsersTable({ users, staffByUserId, currentUsername, isAd
 
       {footer}
 
-      {activeMenu && menuPosition && menu && createPortal(
+      {menuPresence.present && menu && createPortal(
         <div
           ref={menuRef}
           role="menu"
           aria-label={`Actions for ${menuUser.username}`}
           style={{
             position: 'fixed',
-            ...(menuPosition.openUpward ? { bottom: `${menuPosition.bottom}px` } : { top: `${menuPosition.top}px` }),
-            right: `${menuPosition.right}px`,
+            ...(shownPosition.openUpward ? { bottom: `${shownPosition.bottom}px` } : { top: `${shownPosition.top}px` }),
+            right: `${shownPosition.right}px`,
             zIndex: 9999,
           }}
-          className="w-56 rounded-xl bg-white shadow-lg border border-gray-200 py-1 select-none animate-fadeIn"
+          className={`w-56 rounded-xl bg-white shadow-lg border border-gray-200 py-1 select-none ${menuMotion(menuPresence.closing)}`}
+          inert={menuPresence.closing}
           onClick={(event) => event.stopPropagation()}
         >
           {menu.actions.map((action, index) => {
@@ -241,7 +246,7 @@ export default function UsersTable({ users, staffByUserId, currentUsername, isAd
                   type="button"
                   role="menuitem"
                   onClick={() => {
-                    const user = activeMenu.user;
+                    const user = shownMenu.user;
                     setActiveMenu(null);
                     onAction(action, user, menuStaff);
                   }}

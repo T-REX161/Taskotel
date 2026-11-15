@@ -1,10 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { formatMinutes } from '../../../utils/supportPlan';
+import { backdropMotion, dialogMotion } from '../../../theme/presence';
 
 /**
  * Step 6: nothing is created until the manager explicitly confirms here. Escape and Cancel close it without changes.
  */
-export default function SupportConfirmDialog({ preview, receivingName, submitting, onConfirm, onCancel }) {
+export default function SupportConfirmDialog({ preview, receivingName, submitting, onConfirm, onCancel, closing = false }) {
   const cancelRef = useRef(null);
   const previousFocus = useRef(null);
 
@@ -23,12 +24,12 @@ export default function SupportConfirmDialog({ preview, receivingName, submittin
 
   const items = preview.items;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" onClick={() => !submitting && onCancel()}>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 ${backdropMotion(closing)}`} inert={closing} onClick={() => !submitting && onCancel()}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="support-confirm-title"
-        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-100 shadow-xl p-5 space-y-3"
+        className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-100 shadow-xl p-5 space-y-3 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="support-confirm-title" className="text-base font-bold text-gray-900">Confirm temporary support for {receivingName}</h3>

@@ -54,8 +54,8 @@ describe('Staff Activation and Deactivation Frontend Functionality', () => {
     });
 
     it('conditionally renders Deactivate for active staff and Activate for inactive staff', () => {
-      const conditionMatch = staffTableSource.includes('isActive(activeMenu.staff.active)');
-      assert.ok(conditionMatch, 'StaffTable must check isActive(activeMenu.staff.active) for toggling between Deactivate and Activate');
+      const conditionMatch = staffTableSource.includes('isActive(shownMenu.staff.active)');
+      assert.ok(conditionMatch, 'StaffTable must check isActive(shownMenu.staff.active) for toggling between Deactivate and Activate');
     });
 
     it('preserves all existing actions', () => {

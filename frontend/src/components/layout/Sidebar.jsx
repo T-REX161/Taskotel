@@ -72,7 +72,7 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
 
       {/* Sidebar container */}
       <aside
-        className={`fixed lg:sticky top-0 lg:top-16 z-40 lg:z-10 h-full lg:h-[calc(100vh-4rem)] w-60 bg-surface-chrome border-r border-gray-200 flex flex-col justify-between transition-transform duration-200 ease-in-out shrink-0 select-none ${
+        className={`fixed lg:sticky top-0 lg:top-16 z-40 lg:z-10 h-full lg:h-[calc(100vh-4rem)] w-60 bg-surface-chrome border-r border-gray-200 flex flex-col justify-between transition-transform duration-moderate ease-in-out shrink-0 select-none ${
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >

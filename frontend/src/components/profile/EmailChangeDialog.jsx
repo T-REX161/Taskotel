@@ -1,18 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
+import Spinner from '../common/Spinner';
 import {
   EMAIL_CHANGE_MESSAGES, emailChangeErrorMessage, formatCountdown, isCompleteCode, onlyDigits, secondsLeft,
   sendEmailChangeCode, startingStep, validateNewEmail, verifyEmailChangeCode,
 } from '../../utils/emailChange';
 
-function Spinner() {
-  return (
-    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-    </svg>
-  );
-}
 
 const INPUT_CLASS = 'w-full h-11 px-4 rounded-xl border text-sm font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60';
 
@@ -25,7 +19,7 @@ const INPUT_CLASS = 'w-full h-11 px-4 rounded-xl border text-sm font-medium text
  * With a `pending` change ({ maskedEmail, expiresAt }), for example one an administrator or manager started for this account, it opens
  * straight on the code step: no new address, no password, and nothing is requested. The code goes to the same confirmation as always.
  */
-export default function EmailChangeDialog({ isOpen, currentEmail, onClose, onChanged, pending = null }) {
+function EmailChangeDialog({ isOpen, currentEmail, onClose, onChanged, pending = null, closing = false }) {
   const [step, setStep] = useState('enter'); // enter | verify
   const [newEmail, setNewEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState(''); // re-authentication; lives only in this component, never in browser storage
@@ -123,12 +117,12 @@ export default function EmailChangeDialog({ isOpen, currentEmail, onClose, onCha
   const dismiss = () => { if (!sending.current) onClose(); };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn" onClick={dismiss}>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs ${backdropMotion(closing)}`} inert={closing} onClick={dismiss}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="email-change-title"
-        className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100 max-h-[85vh] overflow-y-auto space-y-5"
+        className={`bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-gray-100 max-h-[85vh] overflow-y-auto space-y-5 ${dialogMotion(closing)}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div>
@@ -261,3 +255,6 @@ export default function EmailChangeDialog({ isOpen, currentEmail, onClose, onCha
     document.body
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(EmailChangeDialog, (props) => Boolean(props.isOpen));

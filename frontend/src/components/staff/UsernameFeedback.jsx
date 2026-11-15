@@ -1,12 +1,7 @@
 import React from 'react';
 import { USERNAME_INVALID_MESSAGES } from '../../utils/username';
+import Spinner from '../common/Spinner';
 
-const Spinner = () => (
-  <svg className="animate-spin w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-  </svg>
-);
 
 const StatusIcon = ({ path }) => (
   <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
@@ -24,7 +19,7 @@ export default function UsernameFeedback({ check, onPickSuggestion, disabled }) 
   if (status === 'idle') return null;
 
   let tone = 'text-gray-500';
-  let icon = <Spinner />;
+  let icon = <Spinner size="xs" className="shrink-0" />;
   let text = 'Checking availability…';
   if (status === 'available') {
     tone = 'text-emerald-600';

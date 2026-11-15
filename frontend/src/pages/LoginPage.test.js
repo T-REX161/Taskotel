@@ -99,7 +99,7 @@ describe('LoginPage result indicators', () => {
       assert.ok(successBanner.includes('Signed in successfully! Redirecting to dashboard...'), 'Message must be unchanged');
       assert.ok(successBanner.includes('role="status"'), 'Success must be announced as a status');
       assert.ok(
-        successBanner.includes('className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn"'),
+        successBanner.includes('className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fade-in"'),
         'Alert container styling must be unchanged (icon vertically centered via items-center)'
       );
     });
@@ -127,7 +127,7 @@ describe('LoginPage result indicators', () => {
 
     it('uses red-tinted alert styling matching the success alert and is announced assertively', () => {
       assert.ok(
-        errorBanner.includes('className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2.5 animate-fadeIn"'),
+        errorBanner.includes('className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2.5 animate-fade-in"'),
         'Error alert must mirror the success alert layout in red'
       );
       assert.ok(errorBanner.includes('role="alert"'), 'Errors must be announced as alerts');

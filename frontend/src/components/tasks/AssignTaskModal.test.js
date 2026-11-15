@@ -212,11 +212,12 @@ describe('AssignTaskModal component and task details rendering', () => {
 
     it('renders informative message when no staff member can be selected', () => {
       assert.ok(
-        source.includes('!isLoadingStaff && task && selectableStaffCount === 0 &&'),
+        // Stage 5A: and only when the staff list actually loaded (a failed request shows its error and a Retry instead)
+        source.includes('!isLoadingStaff && !staffError && task && selectableStaffCount === 0 &&'),
         'Empty message must show whenever no staff card is selectable, including when only the current assignee is listed'
       );
       assert.ok(
-        source.includes('!isLoadingStaff && eligibleStaff.length > 0 &&'),
+        source.includes('!isLoadingStaff && !staffError && eligibleStaff.length > 0 &&'),
         'Staff cards (including the disabled current assignee) must still render when eligibleStaff is non-empty'
       );
       assert.ok(

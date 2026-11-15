@@ -4,6 +4,8 @@ import PersonalPreferencesCard from '../components/settings/PersonalPreferencesC
 import NotificationPreferencesCard from '../components/settings/NotificationPreferencesCard';
 import { getUserRole } from '../services/api';
 import { canAccess } from '../utils/accessPolicy';
+import Spinner from '../components/common/Spinner';
+import Skeleton from '../components/common/Skeleton';
 import {
   SYSTEM_SETTINGS_MESSAGES, THRESHOLD_MAX, THRESHOLD_MIN, buildRequest, isDirty, loadSystemSettings, parseThreshold, saveSystemSettings,
   systemSettingsErrorMessage, toForm,
@@ -124,9 +126,9 @@ export function SystemSettingsPage() {
             {loading && (
               <div className="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-hidden="true">
                 {[0, 1, 2, 3].map((n) => (
-                  <div key={n} className="flex items-center justify-between gap-6 rounded-xl border border-gray-200 p-5 animate-pulse">
-                    <div className="space-y-2 flex-1"><div className="h-3.5 w-40 rounded bg-gray-200" /><div className="h-3 w-3/4 rounded bg-gray-100" /></div>
-                    <div className="h-6 w-11 rounded-full bg-gray-200" />
+                  <div key={n} className="flex items-center justify-between gap-6 rounded-xl border border-gray-200 p-5">
+                    <div className="space-y-2 flex-1"><Skeleton className="h-3.5 w-40 rounded" /><Skeleton tone="soft" className="h-3 w-3/4 rounded" /></div>
+                    <Skeleton className="h-6 w-11 rounded-full" />
                   </div>
                 ))}
               </div>
@@ -266,14 +268,6 @@ const GaugeIcon = ({ className }) => (<IconFrame className={className}><path d="
 const UsersIcon = ({ className }) => (<IconFrame className={className}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></IconFrame>);
 const CheckIcon = ({ className }) => (<IconFrame className={className}><polyline points="20 6 9 17 4 12" /></IconFrame>);
 
-function Spinner() {
-  return (
-    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-    </svg>
-  );
-}
 
 /** An on/off switch (a button with role="switch", as in Notification Preferences). The knob stays white in both themes. */
 function SettingSwitch({ checked, disabled, label, onChange }) {

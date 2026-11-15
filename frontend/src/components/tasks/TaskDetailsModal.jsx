@@ -1,6 +1,7 @@
 import React from 'react';
 import { assigneeNames } from '../../utils/assignmentUtils';
 import { CloseIcon } from '../icons/Icons';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import {
   getPriorityColor,
   formatPriority,
@@ -20,18 +21,19 @@ import {
  *   assignmentsByTaskId – Map<taskId, assignment[]> (every assignee of the task) from the page
  *   onClose           – callback to dismiss the modal
  */
-export default function TaskDetailsModal({ task, assignmentsByTaskId, onClose }) {
+function TaskDetailsModal({ task, assignmentsByTaskId, onClose, closing = false }) {
   if (!task) return null;
 
   const assigneeNameList = assigneeNames(assignmentsByTaskId.get(task.id));
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs ${backdropMotion(closing)}`}
+      inert={closing}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-xl border border-gray-100 max-h-[85vh] overflow-y-auto space-y-6"
+        className={`bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-xl border border-gray-100 max-h-[85vh] overflow-y-auto space-y-6 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -133,3 +135,6 @@ export default function TaskDetailsModal({ task, assignmentsByTaskId, onClose })
     </div>
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(TaskDetailsModal, (props) => Boolean(props.task));

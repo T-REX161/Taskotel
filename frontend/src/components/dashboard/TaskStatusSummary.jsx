@@ -82,7 +82,7 @@ export default function TaskStatusSummary({ data, isStaff }) {
                 r={RADIUS}
                 fill="none"
                 strokeWidth={THICKNESS}
-                className={`${arc.stroke} transition-opacity duration-200 ${active && active !== arc.key ? 'opacity-30' : 'opacity-100'}`}
+                className={`${arc.stroke} transition-opacity duration-moderate ${active && active !== arc.key ? 'opacity-30' : 'opacity-100'}`}
                 strokeDasharray={`${arc.length} ${arc.gap}`}
                 strokeDashoffset={arc.offset}
               />

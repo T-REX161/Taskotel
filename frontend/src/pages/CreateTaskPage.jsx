@@ -6,6 +6,7 @@ import CreateTaskForm from '../components/tasks/CreateTaskForm';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import useDepartments from '../hooks/useDepartments';
 import { loadCurrentProfile } from '../utils/currentUserProfile';
+import { STAFF_LOAD_ERROR_MESSAGE, createLatestRequest } from '../utils/loadState';
 import {
   MANAGER_DEPARTMENT_LOAD_FAILED_MESSAGE,
   MANAGER_NO_DEPARTMENT_MESSAGE,
@@ -46,6 +47,8 @@ export default function CreateTaskPage() {
   const [tasks, setTasks] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [isLoadingStaff, setIsLoadingStaff] = useState(true);
+  const [staffLoadError, setStaffLoadError] = useState('');
+  const [formDataRequest] = useState(createLatestRequest);
   const [createdTaskRecord, setCreatedTaskRecord] = useState(null);
 
   // If the default department cannot take new tasks (for example it is inactive), start on the first one that can. Not for a Manager:
@@ -80,48 +83,48 @@ export default function CreateTaskPage() {
     };
   }, [isManager, loadManagerDepartment]);
 
+  // The form's lists: staff, and the tasks and assignments that decide who is available. A failure is shown as an error with a retry,
+  // never as an empty list; only the newest request may update the form (a retry, or an answer after the page has gone, is ignored).
+  const loadFormData = React.useCallback(async () => {
+    const request = formDataRequest.next();
+    setIsLoadingStaff(true);
+    setStaffLoadError('');
+    try {
+      const [staffData, tasksData, assignmentsData] = await Promise.all([
+        getStaff(),
+        getTasks(),
+        getAssignments(),
+      ]);
+      if (!formDataRequest.isCurrent(request)) return;
+      setAllStaff(Array.isArray(staffData) ? staffData : []);
+      setTasks(Array.isArray(tasksData) ? tasksData : []);
+      setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
+    } catch (err) {
+      if (!formDataRequest.isCurrent(request)) return;
+      console.error('Failed to load staff and assignment data:', err);
+      setStaffLoadError(STAFF_LOAD_ERROR_MESSAGE);
+    } finally {
+      if (formDataRequest.isCurrent(request)) setIsLoadingStaff(false);
+    }
+  }, [formDataRequest]);
+
   useEffect(() => {
     if (!formDataNeeded) return undefined;
-    let isMounted = true;
-    const loadFormData = async () => {
-      setIsLoadingStaff(true);
-      try {
-        const [staffData, tasksData, assignmentsData] = await Promise.all([
-          getStaff(),
-          getTasks(),
-          getAssignments(),
-        ]);
-        if (isMounted) {
-          setAllStaff(Array.isArray(staffData) ? staffData : []);
-          setTasks(Array.isArray(tasksData) ? tasksData : []);
-          setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error('Failed to load staff and assignment data:', err);
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoadingStaff(false);
-        }
-      }
-    };
-
     loadFormData();
-    return () => {
-      isMounted = false;
-    };
-  }, [formDataNeeded]);
+    return formDataRequest.invalidate;
+  }, [formDataNeeded, loadFormData, formDataRequest]);
 
-  // Filter staff by selected department, active status, availability, and active assignment status
+  // Filter staff by selected department, active status, availability, and active assignment status. Nobody is offered while the
+  // lists could not be loaded: who is available is unknown, not "no one".
   const eligibleStaff = React.useMemo(() => {
+    if (staffLoadError) return [];
     return filterEligibleStaff({
       allStaff,
       tasks,
       assignments,
       department: formData.department,
     });
-  }, [allStaff, tasks, assignments, formData.department]);
+  }, [allStaff, tasks, assignments, formData.department, staffLoadError]);
 
   // If currently selected staff is no longer in eligible list, clear assignment
   useEffect(() => {
@@ -287,9 +290,9 @@ export default function CreateTaskPage() {
 
       {/* Success Notification Banner */}
       {successMessage && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs animate-toast-in">
           <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
             <span className="font-semibold">{successMessage}</span>
             <span className="text-xs text-emerald-600 ml-2">Redirecting to tasks list...</span>
           </div>
@@ -337,6 +340,8 @@ export default function CreateTaskPage() {
           departments={departments}
           lockedDepartment={departmentAccess === 'locked' ? { code: managerDepartment.code, name: managerDepartment.name } : null}
           isLoadingStaff={isLoadingStaff}
+          staffLoadError={staffLoadError}
+          onRetryStaff={loadFormData}
           isSubmitting={isSubmitting}
           createdTaskRecord={createdTaskRecord}
           formError={formError}

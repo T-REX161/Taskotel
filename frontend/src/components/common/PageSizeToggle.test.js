@@ -13,7 +13,9 @@ describe('PageSizeToggle', () => {
     assert.ok(source.includes('const [open, setOpen] = useState(false);'), 'Hidden by default');
     assert.ok(source.includes('<span>{value} rows</span>') && source.includes('<SlidersIcon'));
     assert.ok(source.includes('onClick={() => setOpen((current) => !current)}'), 'Clicking again hides the options');
-    assert.ok(source.includes('{open && position && createPortal('), 'The options exist only while open');
+    // the options exist only while open, plus their 120ms exit (theme/presence.js), during which they take no input
+    assert.ok(source.includes('const listPresence = usePresence(open && position ? position : null);'), 'The options exist only while open');
+    assert.ok(source.includes('{listPresence.present && createPortal(') && source.includes('inert={listPresence.closing}'));
   });
 
   it('offers 5, 10 and 15 by default and marks the selected one', () => {

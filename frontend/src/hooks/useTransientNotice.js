@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePresence } from '../theme/presence.js';
 
 /** How long a success notice stays on screen. */
 export const NOTICE_DURATION_MS = 3000;
@@ -10,7 +11,9 @@ export const NOTICE_DURATION_MS = 3000;
  * update before the first notice has gone gets a full new duration. `clear()` removes it at once. The timer is cancelled whenever
  * the notice changes, is cleared, or the component unmounts (leaving the page), so no stale timer can fire later.
  *
- * Returns { notice, show, clear }; `notice` is the message text, or '' when nothing is showing.
+ * Returns { notice, show, clear, shown, closing }; `notice` is the message text, or '' when nothing is showing. To render it,
+ * use `shown`: the same text, kept for the notice's short exit animation after it is dismissed (`closing` is true meanwhile,
+ * and nothing is kept with reduced motion). The dismiss timing itself is unchanged: the exit starts when the duration ends.
  */
 export default function useTransientNotice(duration = NOTICE_DURATION_MS) {
   const [state, setState] = useState(null); // { message, id }; a new id every time, so the effect below always restarts
@@ -28,5 +31,7 @@ export default function useTransientNotice(duration = NOTICE_DURATION_MS) {
     return () => clearTimeout(timer);
   }, [state, duration]);
 
-  return { notice: state ? state.message : '', show, clear };
+  const notice = state ? state.message : '';
+  const presence = usePresence(notice);
+  return { notice, show, clear, shown: presence.value || '', closing: presence.closing };
 }

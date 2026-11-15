@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { menuMotion, usePresence } from '../../theme/presence';
 
 // Room the list needs (max height plus margin); if the scrolling form area has less below the button, open upward
 const PANEL_SPACE = 224;
@@ -8,6 +9,7 @@ const PANEL_SPACE = 224;
 export default function PickerDropdown({ id, labelId, disabled, trigger, panelClass, children }) {
   const [open, setOpen] = useState(false);
   const [dropUp, setDropUp] = useState(false);
+  const list = usePresence(open); // kept for its 120ms exit after closing (none with reduced motion); see theme/presence.js
   const wrapperRef = useRef(null);
   const triggerRef = useRef(null);
 
@@ -63,8 +65,8 @@ export default function PickerDropdown({ id, labelId, disabled, trigger, panelCl
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
-      {open && (
-        <div role="listbox" aria-labelledby={labelId} className={`absolute left-0 z-30 p-2 bg-white border border-gray-200 rounded-xl shadow-lg ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} ${panelClass}`}>
+      {list.present && (
+        <div role="listbox" aria-labelledby={labelId} inert={list.closing} className={`absolute left-0 z-30 p-2 bg-white border border-gray-200 rounded-xl shadow-lg ${dropUp ? 'bottom-full mb-1.5' : 'top-full mt-1.5'} ${panelClass} ${menuMotion(list.closing)}`}>
           {children(select)}
         </div>
       )}

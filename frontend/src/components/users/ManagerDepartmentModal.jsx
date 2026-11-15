@@ -9,6 +9,7 @@ import {
 } from '../../services/api';
 import { formatDate, formatTime } from '../../utils/dateTimeFormat';
 import { getPreferences } from '../../utils/preferences';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import {
   canManageManagerDepartment,
   canSubmit,
@@ -36,7 +37,7 @@ const formatWhen = (value) => {
  *
  * Props: isOpen, user (the Manager account row), onClose, onChanged(updatedDepartment) after a successful change.
  */
-export default function ManagerDepartmentModal({ isOpen, user, onClose, onChanged }) {
+function ManagerDepartmentModal({ isOpen, user, onClose, onChanged, closing = false }) {
   const permitted = isOpen && canManageManagerDepartment(getUserRole(), user);
   const showHistory = canViewManagerDepartmentHistory(getUserRole());
 
@@ -138,13 +139,13 @@ export default function ManagerDepartmentModal({ isOpen, user, onClose, onChange
   const note = validityNote(info);
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn" onClick={() => !submitting && onClose()}>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs ${backdropMotion(closing)}`} inert={closing} onClick={() => !submitting && onClose()}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="manager-department-title"
-        className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-100 max-h-[85vh] overflow-y-auto space-y-5"
+        className={`bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-gray-100 max-h-[85vh] overflow-y-auto space-y-5 ${dialogMotion(closing)}`}
         onClick={(event) => event.stopPropagation()}
       >
         <div>
@@ -235,3 +236,6 @@ export default function ManagerDepartmentModal({ isOpen, user, onClose, onChange
     document.body
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(ManagerDepartmentModal, (props) => Boolean(props.isOpen));

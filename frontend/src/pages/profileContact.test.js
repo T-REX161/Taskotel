@@ -69,14 +69,16 @@ describe('profile page: Contact Information', () => {
     assert.ok(contact.includes('emailAddress') === false && page.includes('const email = emailAddress(profile)') && page.includes('const phone = phoneNumber(profile)'));
     assert.ok(contact.includes('{email}') && contact.includes('{phone}'));
     assert.ok(contact.includes("'Not added'"), 'missing phone is "Not added"');
-    assert.ok(contact.includes("profile ? 'Not added' : 'Loading…'"), 'not claimed before the profile has loaded');
+    // not claimed before the profile has loaded; Stage 5B: "Unavailable" (not an endless "Loading…") after a failed request
+    assert.ok(contact.includes("{missingValue('Not added')}"), 'not claimed before the profile has loaded');
+    assert.ok(page.includes("const missingValue = (whenLoaded) => (profile ? whenLoaded : profileUnavailable ? 'Unavailable' : 'Loading…');"));
     assert.ok(!/\+?\d[\d\s-]{6,}\d/.test(contact), 'no hardcoded phone number');
     assert.ok(!/@[a-z0-9-]+\.[a-z]{2,}/i.test(contact), 'no hardcoded email address');
   });
 
   it('marks the email verified only when the backend confirms it', () => {
     assert.ok(contact.includes('<StatusBadge state={verification.state} label={verification.label} offTone="warning" />'));
-    assert.ok(page.includes('const verification = emailVerification(profile)'));
+    assert.ok(page.includes('const verification = profileUnavailable ? unavailableFlag : emailVerification(profile)'), 'Stage 5B: "Unavailable" after a failed load');
   });
 
   it('Email Edit and the phone Edit/Add both open their own dialog; nothing is a "coming soon" placeholder any more', () => {
@@ -89,14 +91,14 @@ describe('profile page: Contact Information', () => {
     assert.ok(page.includes('<EmailChangeDialog') && page.includes('currentEmail={email}'));
     const wiring = page.slice(page.indexOf('<EmailChangeDialog'));
     assert.ok(wiring.includes('setCurrentProfile(updated)') && wiring.includes('emailNotice.show(EMAIL_CHANGE_MESSAGES.changed)') && wiring.includes('setEmailDialogOpen(false)'));
-    assert.ok(contact.includes('{emailNotice.notice}') && contact.includes('role="status"'));
+    assert.ok(contact.includes('{emailNotice.shown}') && contact.includes('role="status"'));
   });
 
   it('the phone dialog is wired to the shared profile, shows a success message, and never calls the number verified', () => {
     assert.ok(page.includes('<PhoneChangeDialog') && page.includes('currentPhone={phone}'));
     const wiring = page.slice(page.indexOf('<PhoneChangeDialog'));
     assert.ok(wiring.includes('setCurrentProfile(updated)') && wiring.includes('phoneNotice.show(PHONE_MESSAGES.changed)') && wiring.includes('setPhoneDialogOpen(false)'));
-    assert.ok(contact.includes('{phoneNotice.notice}') && contact.includes('role="status"'));
+    assert.ok(contact.includes('{phoneNotice.shown}') && contact.includes('role="status"'));
     assert.ok(!contact.includes('<input') && !contact.includes('<form'), 'the form lives in the dialog');
     for (const forbidden of ['sendOtp', 'sms', 'phoneVerified', 'verifyPhone']) assert.ok(!page.toLowerCase().includes(forbidden.toLowerCase()), forbidden);
   });

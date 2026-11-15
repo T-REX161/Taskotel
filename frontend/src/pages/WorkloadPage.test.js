@@ -490,7 +490,7 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
 
   describe('Loading, Error, Retry, and Empty States', () => {
     it('renders loading state with spinner and descriptive message', () => {
-      assert.ok(pageSource.includes('animate-spin'), 'Loading state must show spinner');
+      assert.ok(pageSource.includes('<Spinner size="lg" className="text-emerald-600" />'), 'Loading state must show spinner'); // shared spinner (Stage 5C)
       assert.ok(
         pageSource.includes('Loading staff workload data...'),
         'Loading state must show descriptive message'
@@ -498,8 +498,9 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
     });
 
     it('renders error state with alert banner and Try Again retry button', () => {
-      assert.ok(pageSource.includes('role="alert"'), 'Error state must use role="alert"');
-      assert.ok(pageSource.includes('Try Again'), 'Error state must provide Try Again button');
+      // Stage 5C: the shared LoadError renders a role="alert" panel (checked in components/common/loadingPrimitives.test.js)
+      assert.ok(pageSource.includes('<LoadError title="Failed to load staff workload" message={error} onRetry={() => fetchData()} retryLabel="Try Again" />'), 'Error state must use role="alert"');
+      assert.ok(pageSource.includes('retryLabel="Try Again"'), 'Error state must provide Try Again button');
     });
 
     it('renders empty state when workload list is empty', () => {

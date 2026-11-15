@@ -5,6 +5,7 @@ import UserAvatar from '../common/UserAvatar';
 import { UNASSIGNED_MANAGER_NOTICE, isUnassignedManager } from '../../utils/staffDepartment';
 import { avatarInitials } from '../../utils/profilePicture';
 import { normalizeRole, roleBadgeClass } from '../users/userListUtils';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import {
   formatDepartment,
   isAvailable,
@@ -53,7 +54,7 @@ function StatusPill({ className, children }) {
  *   staff   – staff object to display (or null)
  *   onClose – callback to dismiss modal
  */
-export default function StaffDetailsModal({ staff, onClose }) {
+function StaffDetailsModal({ staff, onClose, closing = false }) {
   if (!staff) return null;
 
   const available = isAvailable(staff.availability);
@@ -64,14 +65,15 @@ export default function StaffDetailsModal({ staff, onClose }) {
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 animate-fadeIn"
+      className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4 ${backdropMotion(closing)}`}
+      inert={closing}
       onClick={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="staff-details-title"
-        className="relative flex w-full sm:max-w-md max-h-[92vh] sm:max-h-[88vh] flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl border border-gray-100 bg-white shadow-xl"
+        className={`relative flex w-full sm:max-w-md max-h-[92vh] sm:max-h-[88vh] flex-col overflow-hidden rounded-t-2xl sm:rounded-2xl border border-gray-100 bg-white shadow-xl ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         <button
@@ -163,3 +165,6 @@ export default function StaffDetailsModal({ staff, onClose }) {
     document.body
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(StaffDetailsModal, (props) => Boolean(props.staff));

@@ -5,7 +5,8 @@ import { normalizeRole } from '../utils/accessPolicy';
 import { DISPLAY_NAME_MAX, DISPLAY_NAME_MESSAGES, shownName, validateDisplayName } from '../utils/displayName';
 import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
 import useTransientNotice from '../hooks/useTransientNotice';
-import { loadCurrentProfile, setCurrentProfile } from '../utils/currentUserProfile';
+import { toastMotion } from '../theme/presence';
+import { PROFILE_LOAD_ERROR_MESSAGE, loadCurrentProfile, profileLoadState, retryCurrentProfile, setCurrentProfile } from '../utils/currentUserProfile';
 import UserAvatar from '../components/common/UserAvatar';
 import EmailChangeDialog from '../components/profile/EmailChangeDialog';
 import PhoneChangeDialog from '../components/profile/PhoneChangeDialog';
@@ -15,15 +16,9 @@ import { EMAIL_CHANGE_MESSAGES, pendingEmailChange } from '../utils/emailChange'
 import { describeActivity } from '../utils/accountActivity';
 import { accessScopeFor, accountStatus, emailAddress, emailVerification, phoneNumber } from '../utils/profileView';
 import ProfilePictureEditor from '../components/profile/ProfilePictureEditor';
+import Spinner from '../components/common/Spinner';
+import LoadError from '../components/common/LoadError';
 
-function Spinner({ className = 'h-4 w-4 text-white' }) {
-  return (
-    <svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24" aria-hidden="true">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-    </svg>
-  );
-}
 
 function Icon({ className = 'w-5 h-5', children }) {
   return (
@@ -129,11 +124,14 @@ export default function ProfilePage() {
   const username = getUsername() || '';
   // A missing or unknown stored role is shown as unavailable, never as a default such as ADMIN (presentation only: the backend decides access)
   const role = normalizeRole(getUserRole());
-  const { profile } = useCurrentUserProfile();
+  const { profile, loading: profileLoading, error: profileError } = useCurrentUserProfile();
+  // ready | loading | error: a failed request shows an error with a Retry, never an endless "Loading…"; editing waits for a profile
+  const profileState = profileLoadState({ profile, loading: profileLoading, error: profileError });
+  const profileUnavailable = profileState === 'error';
   const savedImageUrl = profile?.profileImageUrl || null;
 
   const [editorOpen, setEditorOpen] = useState(false);
-  const { notice: noticeMessage, show: showNotice, clear: clearNotice } = useTransientNotice(); // a success message that dismisses itself
+  const { shown: noticeMessage, closing: noticeClosing, show: showNotice, clear: clearNotice } = useTransientNotice(); // a success message that dismisses itself
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [continuePending, setContinuePending] = useState(null); // the pending change the dialog was opened to finish (null: the ordinary first step)
@@ -200,10 +198,12 @@ export default function ProfilePage() {
     setEditorOpen(false);
   };
 
-  // Account activity comes from the same shared profile as everything else on this page (no request of its own)
-  const created = describeActivity(profile, 'createdAt', 'Unavailable');
-  const lastLogin = describeActivity(profile, 'lastLoginAt');
-  const passwordChanged = describeActivity(profile, 'passwordChangedAt');
+  // Account activity comes from the same shared profile as everything else on this page (no request of its own). The helpers say
+  // "Loading…" without a profile; after a failed request each value reads "Unavailable" instead.
+  const unavailableActivity = { text: 'Unavailable', known: false };
+  const created = profileUnavailable ? unavailableActivity : describeActivity(profile, 'createdAt', 'Unavailable');
+  const lastLogin = profileUnavailable ? unavailableActivity : describeActivity(profile, 'lastLoginAt');
+  const passwordChanged = profileUnavailable ? unavailableActivity : describeActivity(profile, 'passwordChangedAt');
 
   const handlePasswordChanged = (message) => {
     setPasswordDialogOpen(false);
@@ -211,8 +211,10 @@ export default function ProfilePage() {
     loadCurrentProfile({ force: true }); // the server has just recorded a new Last Password Change time; fetch it so it shows at once
   };
 
-  const status = accountStatus(profile);
-  const verification = emailVerification(profile);
+  const unavailableFlag = { state: 'unknown', label: 'Unavailable' };
+  const status = profileUnavailable ? unavailableFlag : accountStatus(profile);
+  const verification = profileUnavailable ? unavailableFlag : emailVerification(profile);
+  const missingValue = (whenLoaded) => (profile ? whenLoaded : profileUnavailable ? 'Unavailable' : 'Loading…');
   const email = emailAddress(profile);
   const pendingChange = pendingEmailChange(profile);
   const phone = phoneNumber(profile);
@@ -236,6 +238,11 @@ export default function ProfilePage() {
         </nav>
       </div>
 
+      {/* The profile request failed: say so and offer a retry (the values below read "Unavailable", and editing stays off) */}
+      {profileUnavailable && (
+        <LoadError variant="banner" testId="profile-load-error" message={PROFILE_LOAD_ERROR_MESSAGE} onRetry={retryCurrentProfile} />
+      )}
+
       {/* Profile header: picture, name, username, role and status */}
       <section className="bg-white rounded-2xl border border-gray-200 shadow-sm" aria-label="Profile summary">
         <div className="flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-8 px-5 sm:px-6 py-6 sm:py-[30px]">
@@ -246,18 +253,19 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={() => { clearNotice(); setEditorOpen(true); }}
+              disabled={!profile}
               title="Edit profile picture"
               aria-label="Edit profile picture"
-              className="group relative block w-full h-full rounded-full cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
+              className="group relative block w-full h-full rounded-full cursor-pointer disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2"
             >
               <UserAvatar
                 imageUrl={savedImageUrl}
                 initials={username.slice(0, 2).toUpperCase()}
                 name={username}
-                className="w-full h-full rounded-full border-2 border-emerald-500 transition-all duration-200 group-hover:brightness-90 group-hover:shadow-md"
+                className="w-full h-full rounded-full border-2 border-emerald-500 transition-[filter,box-shadow] duration-moderate group-hover:brightness-90 group-hover:shadow-md"
                 fallbackClassName="bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-400 text-white text-3xl font-bold"
               />
-              <span className="absolute bottom-0.5 right-0.5 w-8 h-8 rounded-full bg-emerald-600 text-white border-2 border-white flex items-center justify-center shadow-md opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100 transition-all duration-200" aria-hidden="true">
+              <span className="absolute bottom-0.5 right-0.5 w-8 h-8 rounded-full bg-emerald-600 text-white border-2 border-white flex items-center justify-center shadow-md opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 group-focus-visible:opacity-100 group-focus-visible:scale-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:scale-100 transition-[opacity,transform] duration-moderate" aria-hidden="true">
                 <CameraIcon className="w-4 h-4" />
               </span>
             </button>
@@ -315,7 +323,7 @@ export default function ProfilePage() {
 
         {noticeMessage && (
           <div className="px-5 sm:px-6 pb-5 -mt-1">
-            <p role="status" aria-live="polite" className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+            <p role="status" aria-live="polite" inert={noticeClosing} className={`text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 ${toastMotion(noticeClosing)}`}>
               {noticeMessage}
             </p>
           </div>
@@ -330,7 +338,8 @@ export default function ProfilePage() {
               <button
                 type="button"
                 onClick={startEditingName}
-                className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer"
+                disabled={!profile}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700 hover:text-emerald-800 cursor-pointer disabled:text-gray-400 disabled:cursor-not-allowed"
               >
                 <PencilIcon className="w-3.5 h-3.5" />
                 Edit
@@ -367,7 +376,7 @@ export default function ProfilePage() {
                       >
                         {savingName ? (
                           <>
-                            <Spinner />
+                            <Spinner className="text-white" />
                             Saving…
                           </>
                         ) : (
@@ -394,9 +403,9 @@ export default function ProfilePage() {
               ) : (
                 <>
                   <span id="display-name" className="block truncate text-sm font-semibold text-gray-900" title={displayName}>{displayName}</span>
-                  {nameNotice.notice && (
-                    <p role="status" aria-live="polite" className="mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                      {nameNotice.notice}
+                  {nameNotice.shown && (
+                    <p role="status" aria-live="polite" inert={nameNotice.closing} className={`mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 ${toastMotion(nameNotice.closing)}`}>
+                      {nameNotice.shown}
                     </p>
                   )}
                 </>
@@ -425,7 +434,7 @@ export default function ProfilePage() {
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 min-w-0">
                 {email
                   ? <span className="min-w-0 truncate text-sm font-semibold text-gray-900" title={email}>{email}</span>
-                  : <span className="text-sm text-gray-500">{profile ? 'Not available' : 'Loading…'}</span>}
+                  : <span className="text-sm text-gray-500">{missingValue('Not available')}</span>}
                 <span className="sr-only">Email verification:</span>
                 <StatusBadge state={verification.state} label={verification.label} offTone="warning" />
               </div>
@@ -444,9 +453,9 @@ export default function ProfilePage() {
                   </button>
                 </div>
               )}
-              {emailNotice.notice && (
-                <p role="status" aria-live="polite" className="mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                  {emailNotice.notice}
+              {emailNotice.shown && (
+                <p role="status" aria-live="polite" inert={emailNotice.closing} className={`mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 ${toastMotion(emailNotice.closing)}`}>
+                  {emailNotice.shown}
                 </p>
               )}
             </FieldRow>
@@ -463,10 +472,10 @@ export default function ProfilePage() {
             )}>
               {phone
                 ? <span className="block truncate text-sm font-semibold text-gray-900" title={phone}>{phone}</span>
-                : <span className="text-sm text-gray-500">{profile ? 'Not added' : 'Loading…'}</span>}
-              {phoneNotice.notice && (
-                <p role="status" aria-live="polite" className="mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                  {phoneNotice.notice}
+                : <span className="text-sm text-gray-500">{missingValue('Not added')}</span>}
+              {phoneNotice.shown && (
+                <p role="status" aria-live="polite" inert={phoneNotice.closing} className={`mt-2 text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 ${toastMotion(phoneNotice.closing)}`}>
+                  {phoneNotice.shown}
                 </p>
               )}
             </FieldRow>

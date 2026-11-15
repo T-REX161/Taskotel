@@ -98,7 +98,7 @@ export default function LoginPage() {
           {/* Taskotel Branding / Logo */}
           <div className="mb-[19px]">
             <div className="flex items-center gap-2 sm:pl-2">
-              <TaskotelLogo className="w-[72px] h-[72px] shrink-0 transform transition-transform hover:scale-105 duration-200" />
+              <TaskotelLogo className="w-[72px] h-[72px] shrink-0" />
               <div className="flex flex-col">
                 <span className="text-[34px] sm:text-[38px] font-extrabold tracking-tight text-[#04302a] leading-[40px] dark:text-neutral-100">
                   Task<span className="text-[#0f9874]">otel</span>
@@ -121,7 +121,7 @@ export default function LoginPage() {
           <div className="login-alert-slot">
             {/* Verification Success Banner (when returning from email verification) */}
             {verifiedMessage && !loginError && !loginSuccess && (
-              <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn">
+              <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fade-in">
                 <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
@@ -134,7 +134,7 @@ export default function LoginPage() {
               <div
                 key={`success-${attemptId}`}
                 role="status"
-                className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn"
+                className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fade-in"
               >
                 <span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center" aria-hidden="true">
                   <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
@@ -150,7 +150,7 @@ export default function LoginPage() {
               <div
                 key={`error-${attemptId}`}
                 role="alert"
-                className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2.5 animate-fadeIn"
+                className="p-2 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2.5 animate-fade-in"
               >
                 {loginError.kind === 'invalid' && (
                   <span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-red-500 flex items-center justify-center" aria-hidden="true">
@@ -185,7 +185,7 @@ export default function LoginPage() {
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Username or Email"
                   autoComplete="username"
-                  className="w-full h-[43px] pl-10 pr-4 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
+                  className="w-full h-[43px] pl-10 pr-4 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-[color,background-color,border-color,box-shadow,opacity] outline-none"
                 />
               </div>
             </div>
@@ -208,7 +208,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Password"
                   autoComplete="current-password"
-                  className="w-full h-[43px] pl-10 pr-10 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all outline-none"
+                  className="w-full h-[43px] pl-10 pr-10 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-[color,background-color,border-color,box-shadow,opacity] outline-none"
                 />
                 {/* Show/Hide password toggle */}
                 <button
@@ -242,7 +242,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading || loginSuccess}
-                className={`w-full h-[43px] px-4 rounded-md text-base font-semibold text-white bg-[#0c6f50] hover:bg-[#0a5e44] active:bg-[#084f39] shadow-md shadow-emerald-900/20 hover:shadow-lg hover:shadow-emerald-900/25 transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${isLoading ? 'opacity-85 cursor-wait' : ''
+                className={`w-full h-[43px] px-4 rounded-md text-base font-semibold text-white bg-[#0c6f50] hover:bg-[#0a5e44] active:bg-[#084f39] shadow-md shadow-emerald-900/20 hover:shadow-lg hover:shadow-emerald-900/25 transition-[color,background-color,border-color,box-shadow,opacity] duration-base flex items-center justify-center gap-2 cursor-pointer ${isLoading ? 'opacity-85 cursor-wait' : ''
                   }`}
               >
                 {isLoading ? (

@@ -44,6 +44,7 @@ import SupportArchiveDialog from './support/SupportArchiveDialog';
 import SupportReserveOverrideDialog from './support/SupportReserveOverrideDialog';
 import SupportHistory from './support/SupportHistory';
 import SupportOverview from './support/SupportOverview';
+import { Presence } from '../../theme/presence';
 
 const PREVIEW_DEBOUNCE_MS = 300;
 
@@ -495,59 +496,69 @@ function SupportPanelContent({ onChanged }) {
         </details>
       )}
 
-      {['reviewing', 'submitting', 'error'].includes(endState.status) && endState.row && (
-        <SupportEndDialog
-          row={endState.row}
-          departmentName={departmentNames}
-          view={recordView(endState.row, role)}
-          status={endState.status}
-          error={endState.error}
-          stale={endState.stale}
-          onConfirm={handleEnd}
-          onCancel={() => endDispatch({ type: 'END_CANCEL' })}
-        />
-      )}
+      <Presence>
+        {['reviewing', 'submitting', 'error'].includes(endState.status) && endState.row && (
+          <SupportEndDialog
+            row={endState.row}
+            departmentName={departmentNames}
+            view={recordView(endState.row, role)}
+            status={endState.status}
+            error={endState.error}
+            stale={endState.stale}
+            onConfirm={handleEnd}
+            onCancel={() => endDispatch({ type: 'END_CANCEL' })}
+          />
+        )}
+      </Presence>
 
-      {['reviewing', 'submitting', 'error'].includes(archiveState.status) && archiveState.row && (
-        <SupportArchiveDialog
-          row={archiveState.row}
-          departmentName={departmentNames}
-          view={recordView(archiveState.row, role)}
-          status={archiveState.status}
-          error={archiveState.error}
-          stale={archiveState.stale}
-          onConfirm={handleArchive}
-          onCancel={() => archiveDispatch({ type: 'ARCHIVE_CANCEL' })}
-        />
-      )}
+      <Presence>
+        {['reviewing', 'submitting', 'error'].includes(archiveState.status) && archiveState.row && (
+          <SupportArchiveDialog
+            row={archiveState.row}
+            departmentName={departmentNames}
+            view={recordView(archiveState.row, role)}
+            status={archiveState.status}
+            error={archiveState.error}
+            stale={archiveState.stale}
+            onConfirm={handleArchive}
+            onCancel={() => archiveDispatch({ type: 'ARCHIVE_CANCEL' })}
+          />
+        )}
+      </Presence>
 
-      {state.reservePrompt && (
-        <SupportReserveOverrideDialog
-          rows={reserveRiskRows(state.reservePrompt, options.data, state.plan, state.preview.data)}
-          onCancel={() => dispatch({ type: 'CANCEL_RESERVE_PROMPT' })}
-          onContinue={() => dispatch({ type: 'CONFIRM_RESERVE_PROMPT', options: options.data })}
-        />
-      )}
+      <Presence>
+        {state.reservePrompt && (
+          <SupportReserveOverrideDialog
+            rows={reserveRiskRows(state.reservePrompt, options.data, state.plan, state.preview.data)}
+            onCancel={() => dispatch({ type: 'CANCEL_RESERVE_PROMPT' })}
+            onContinue={() => dispatch({ type: 'CONFIRM_RESERVE_PROMPT', options: options.data })}
+          />
+        )}
+      </Presence>
 
-      {state.discardPending && (
-        <SupportDiscardDialog
-          departmentName={receiving?.name || departmentNames(state.department)}
-          count={state.plan.length}
-          names={state.plan.map((pair) => knownStaff.current.get(pair.staffId)?.name).filter(Boolean)}
-          onKeep={() => dispatch({ type: 'CANCEL_DISCARD' })}
-          onDiscard={() => dispatch({ type: 'CONFIRM_DISCARD' })}
-        />
-      )}
+      <Presence>
+        {state.discardPending && (
+          <SupportDiscardDialog
+            departmentName={receiving?.name || departmentNames(state.department)}
+            count={state.plan.length}
+            names={state.plan.map((pair) => knownStaff.current.get(pair.staffId)?.name).filter(Boolean)}
+            onKeep={() => dispatch({ type: 'CANCEL_DISCARD' })}
+            onDiscard={() => dispatch({ type: 'CONFIRM_DISCARD' })}
+          />
+        )}
+      </Presence>
 
-      {confirming && state.preview.data && permissions.canConfirm && (
-        <SupportConfirmDialog
-          preview={state.preview.data}
-          receivingName={receiving?.name || ''}
-          submitting={state.confirm.status === 'submitting'}
-          onConfirm={handleConfirm}
-          onCancel={() => dispatch({ type: 'CANCEL_REVIEW' })}
-        />
-      )}
+      <Presence>
+        {confirming && state.preview.data && permissions.canConfirm && (
+          <SupportConfirmDialog
+            preview={state.preview.data}
+            receivingName={receiving?.name || ''}
+            submitting={state.confirm.status === 'submitting'}
+            onConfirm={handleConfirm}
+            onCancel={() => dispatch({ type: 'CANCEL_REVIEW' })}
+          />
+        )}
+      </Presence>
     </section>
   );
 }

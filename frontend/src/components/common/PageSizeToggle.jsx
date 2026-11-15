@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { SlidersIcon } from '../icons/Icons';
 import { PAGE_SIZE_OPTIONS } from '../../utils/pageSize';
 import { getNextMenuItemIndex } from '../../utils/assignmentUtils';
+import { menuMotion, usePresence } from '../../theme/presence';
 
 const MENU_WIDTH = 160;
 const MENU_HEIGHT = 140; // caption + three options
@@ -27,6 +28,9 @@ const FOCUS_CLASS = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-
 export default function PageSizeToggle({ value, onChange, options = PAGE_SIZE_OPTIONS, placement = 'top', label = 'Rows per page' }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState(null);
+  // The open list, kept for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+  const listPresence = usePresence(open && position ? position : null);
+  const shownPosition = listPresence.value;
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
   const menuId = useId();
@@ -122,14 +126,15 @@ export default function PageSizeToggle({ value, onChange, options = PAGE_SIZE_OP
         </svg>
       </button>
 
-      {open && position && createPortal(
+      {listPresence.present && createPortal(
         <div
           ref={menuRef}
           id={menuId}
           role="listbox"
           aria-label={label}
-          style={{ position: 'fixed', left: `${position.left}px`, width: `${MENU_WIDTH}px`, zIndex: 9999, ...(position.top !== undefined ? { top: `${position.top}px` } : { bottom: `${position.bottom}px` }) }}
-          className="rounded-xl border border-gray-200 bg-white shadow-lg p-1 select-none"
+          style={{ position: 'fixed', left: `${shownPosition.left}px`, width: `${MENU_WIDTH}px`, zIndex: 9999, ...(shownPosition.top !== undefined ? { top: `${shownPosition.top}px` } : { bottom: `${shownPosition.bottom}px` }) }}
+          className={`rounded-xl border border-gray-200 bg-white shadow-lg p-1 select-none ${menuMotion(listPresence.closing)}`}
+          inert={listPresence.closing}
         >
           <p className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{label}</p>
           {options.map((size) => {

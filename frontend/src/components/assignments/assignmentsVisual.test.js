@@ -76,7 +76,7 @@ test('heading: a larger title with the subtitle, and the count as a quiet pill t
 test('table: stronger header, roomier rows with hover, readable long text, and a stable layout on small screens', () => {
   assert.ok(page.includes('<table className="w-full min-w-[760px] text-left">'), 'columns keep their layout; the card scrolls sideways on a phone');
   assert.ok(page.includes('bg-emerald-50/50 text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap text-gray-600 border-y border-gray-200/70'), 'header labels stay on one line');
-  assert.match(page, /className=\{`transition-colors duration-150 hover:bg-emerald-50\/40 \$\{isMenuOpen \? 'bg-emerald-50\/40' : ''\}`\}/);
+  assert.match(page, /className=\{`transition-colors duration-base hover:bg-emerald-50\/40 \$\{isMenuOpen \? 'bg-emerald-50\/40' : ''\}`\}/);
   assert.ok(page.includes('line-clamp-2" title={taskTitle}>{taskTitle}</p>'), 'long titles wrap to two lines with the full text in a tooltip');
   assert.ok(page.includes('truncate font-medium text-gray-700" title={staffName}>{staffName}</span>'), 'long names are truncated with a tooltip');
   assert.ok(page.includes('initials={staffInitials(staffName)}'));
@@ -102,8 +102,8 @@ test('logic untouched: filters, page reset, pagination, summary and permission c
     "const canManageAssignments = userRole === 'ADMIN' || userRole === 'MANAGER';",
     'onClick={(e) => handleActionsButtonClick(e, assignment)}',
     'if (assignment && !isAssignmentTaskFinished(assignment, tasks)) handleOpenReassignModal(assignment);',
-    '{canManageAssignments && isAssignmentTaskFinished(activeMenu.assignment, tasks) && (',
-    '{canManageAssignments && !isAssignmentTaskFinished(activeMenu.assignment, tasks) && (',
+    '{canManageAssignments && isAssignmentTaskFinished(shownMenu.assignment, tasks) && (',
+    '{canManageAssignments && !isAssignmentTaskFinished(shownMenu.assignment, tasks) && (',
   ]) {
     assert.ok(page.includes(line), line);
   }

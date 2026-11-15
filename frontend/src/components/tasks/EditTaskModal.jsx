@@ -3,22 +3,12 @@ import { CloseIcon } from '../icons/Icons';
 import DepartmentOptions from '../common/DepartmentOptions';
 import useDepartments from '../../hooks/useDepartments';
 import { DEPARTMENT_CHANGE_LOCKED_HINT } from '../../utils/taskDepartment';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
+import Spinner from '../common/Spinner';
 
 /**
  * Inline spinner SVG reused across the submit buttons.
  */
-function Spinner() {
-  return (
-    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
-  );
-}
 
 /**
  * EditTaskModal — form for updating an existing task.
@@ -35,7 +25,7 @@ function Spinner() {
  *   canChangeDepartment – false for a Manager: the department is shown but cannot be changed (the server refuses a move too).
  *                        Defaults to true (Admin behaviour unchanged).
  */
-export default function EditTaskModal({
+function EditTaskModal({
   task,
   formData,
   onFormChange,
@@ -44,6 +34,7 @@ export default function EditTaskModal({
   isSubmitting,
   formError,
   canChangeDepartment = true,
+  closing = false,
 }) {
   const { departments } = useDepartments();
 
@@ -57,11 +48,12 @@ export default function EditTaskModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs ${backdropMotion(closing)}`}
+      inert={closing}
       onClick={() => !isSubmitting && onClose()}
     >
       <div
-        className="bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-xl border border-gray-100 max-h-[85vh] overflow-y-auto space-y-6"
+        className={`bg-white rounded-2xl max-w-2xl w-full p-6 sm:p-8 shadow-xl border border-gray-100 max-h-[85vh] overflow-y-auto space-y-6 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -228,7 +220,7 @@ export default function EditTaskModal({
             >
               {isSubmitting ? (
                 <>
-                  <Spinner />
+                  <Spinner className="text-white" />
                   <span>Saving Changes...</span>
                 </>
               ) : (
@@ -241,3 +233,6 @@ export default function EditTaskModal({
     </div>
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(EditTaskModal, (props) => Boolean(props.task));

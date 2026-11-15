@@ -56,7 +56,7 @@ export default function EmailVerificationPage() {
             <button
               type="button"
               onClick={() => navigate('/login')}
-              className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 transition-[color,background-color,border-color,box-shadow,opacity] flex items-center justify-center gap-2 cursor-pointer"
             >
               Back to Sign In
             </button>
@@ -235,7 +235,7 @@ export default function EmailVerificationPage() {
 
           {/* Taskotel Branding */}
           <div className="flex flex-col items-center text-center mb-6">
-            <TaskotelLogo className="w-16 h-16 mb-3 transform transition-transform hover:scale-105 duration-200" />
+            <TaskotelLogo className="w-16 h-16 mb-3" />
 
             <div className="flex items-center gap-1.5">
               <span className="text-xl font-extrabold tracking-tight text-[#04302a] dark:text-neutral-100">
@@ -275,15 +275,15 @@ export default function EmailVerificationPage() {
 
           {/* Success Banner */}
           {successMessage && (
-            <div className="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <div className="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fade-in">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span>{successMessage}</span>
             </div>
           )}
 
           {/* Backend Error Banner */}
           {error && (
-            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-2.5 animate-fadeIn">
+            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-2.5 animate-fade-in">
               <svg className="w-4 h-4 text-red-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
@@ -321,7 +321,7 @@ export default function EmailVerificationPage() {
                     onKeyDown={(e) => handleKeyDown(e, index)}
                     onPaste={handlePaste}
                     onFocus={(e) => e.target.select()}
-                    className={`w-10 h-12 sm:w-[48px] sm:h-[52px] text-center text-xl sm:text-2xl font-bold font-mono rounded-lg bg-white border transition-all duration-150 outline-none select-none ${
+                    className={`w-10 h-12 sm:w-[48px] sm:h-[52px] text-center text-xl sm:text-2xl font-bold font-mono rounded-lg bg-white border transition-[color,background-color,border-color,box-shadow,opacity] duration-base outline-none select-none ${
                       validationError
                         ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 text-red-900'
                         : digit
@@ -335,7 +335,7 @@ export default function EmailVerificationPage() {
 
               {/* Validation Message */}
               {validationError ? (
-                <p className="text-xs text-red-600 mt-2.5 text-center font-medium animate-fadeIn">
+                <p className="text-xs text-red-600 mt-2.5 text-center font-medium animate-fade-in">
                   {validationError}
                 </p>
               ) : (
@@ -350,7 +350,7 @@ export default function EmailVerificationPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || !!successMessage}
-                className={`w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 hover:shadow-lg hover:shadow-emerald-700/25 transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+                className={`w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 hover:shadow-lg hover:shadow-emerald-700/25 transition-[color,background-color,border-color,box-shadow,opacity] duration-base flex items-center justify-center gap-2 cursor-pointer ${
                   isSubmitting || !!successMessage ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >

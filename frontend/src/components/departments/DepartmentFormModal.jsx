@@ -6,6 +6,8 @@ import PickerDropdown from './PickerDropdown';
 import DepartmentIcon from '../common/DepartmentIcon';
 import { createDepartment, updateDepartment, getStaff } from '../../services/api';
 import { COLOR_KEYS, COLOR_STYLES, DEFAULT_COLOR_KEY, DEFAULT_ICON_KEY, ICON_KEYS } from '../../utils/departmentStyles';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
+import Spinner from '../common/Spinner';
 
 const ICON_LABELS = {
   building: 'Building (Department)',
@@ -52,7 +54,7 @@ const inputClass =
  *  - departments: the current list, used for an immediate duplicate-name check (the server checks again)
  *  - onSaved(savedDepartment, mode): called after the server accepted the change; mode is 'create' or 'edit'
  */
-export default function DepartmentFormModal({ isOpen, onClose, department = null, departments = [], onSaved }) {
+function DepartmentFormModal({ isOpen, onClose, department = null, departments = [], onSaved, closing = false }) {
   const navigate = useNavigate();
   const isEdit = department !== null;
 
@@ -208,14 +210,15 @@ export default function DepartmentFormModal({ isOpen, onClose, department = null
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 animate-fadeIn"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 ${backdropMotion(closing)}`}
+      inert={closing}
       onClick={handleClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="department-form-title"
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-[520px] max-h-[94vh] flex flex-col border border-gray-100"
+        className={`bg-white rounded-2xl shadow-2xl w-full max-w-[520px] max-h-[94vh] flex flex-col border border-gray-100 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -493,14 +496,7 @@ export default function DepartmentFormModal({ isOpen, onClose, department = null
             >
               {isSubmitting ? (
                 <>
-                  <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
+                  <Spinner className="text-white" />
                   <span>{isEdit ? 'Saving...' : 'Adding Department...'}</span>
                 </>
               ) : (
@@ -526,3 +522,6 @@ function ChevronDown() {
     </svg>
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(DepartmentFormModal, (props) => Boolean(props.isOpen));

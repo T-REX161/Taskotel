@@ -39,6 +39,18 @@ import AssignmentStatusBadge from '../components/assignments/AssignmentStatusBad
 import UserAvatar from '../components/common/UserAvatar';
 import { assignmentDepartmentTile, staffInitials } from '../components/assignments/assignmentTableStyles';
 import DepartmentIcon from '../components/common/DepartmentIcon';
+import { menuMotion, toastMotion, usePresence } from '../theme/presence';
+import Spinner from '../components/common/Spinner';
+import LoadError from '../components/common/LoadError';
+import {
+  STAFF_LOAD_ERROR_MESSAGE,
+  SUPPORTING_SOURCES,
+  WORKLOAD_LOAD_ERROR_MESSAGE,
+  createLatestRequest,
+  settleSupportingData,
+  sourcesIn,
+  supportingDataNotice,
+} from '../utils/loadState';
 
 const ASSIGN_TASK_BUTTON_CLASS =
   'shrink-0 inline-flex items-center justify-center bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2';
@@ -64,6 +76,8 @@ export default function AssignmentsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successBanner, setSuccessBanner] = useState('');
+  // The success notice, kept for its 120ms exit after it is dismissed (none with reduced motion); see theme/presence.js
+  const notice = usePresence(successBanner);
 
   // Default view is the Assignments overview table
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -72,9 +86,29 @@ export default function AssignmentsPage() {
   const [selectedStaffIds, setSelectedStaffIds] = useState([]); // several for a new assignment, at most one when reassigning
   const [assignModalError, setAssignModalError] = useState('');
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
-  const [isLoadingStaff] = useState(false);
-
   const [viewModalTask, setViewModalTask] = useState(null);
+
+  // Tasks, workload and staff support the list (departments, finished tasks, workload, eligible staff). Each is tracked on its own as
+  // 'loading' | 'ready' | 'error': a failed one keeps what it had and is reported with a retry, never replaced by an empty list.
+  // Only the newest request for a source may update it, so a slow earlier answer cannot overwrite a retry's.
+  const [supportStatus, setSupportStatus] = useState(() => ({ tasks: 'loading', workload: 'loading', staff: canManageAssignments ? 'loading' : 'ready' }));
+  const [supportRequests] = useState(() => Object.fromEntries(SUPPORTING_SOURCES.map((source) => [source, createLatestRequest()])));
+
+  const loadSupportingData = useCallback(async (sources) => {
+    const loaders = { tasks: getTasks, workload: getWorkload, staff: getStaff };
+    const setters = { tasks: setTasks, workload: setWorkload, staff: setAllStaff };
+    const tokens = sources.map((source) => supportRequests[source].next());
+    setSupportStatus((prev) => ({ ...prev, ...Object.fromEntries(sources.map((source) => [source, 'loading'])) }));
+    const settled = await Promise.allSettled(sources.map((source) => loaders[source]()));
+    const current = sources.filter((source, index) => supportRequests[source].isCurrent(tokens[index]));
+    const result = settleSupportingData(current, current.map((source) => settled[sources.indexOf(source)]));
+    current.forEach((source) => {
+      if (result.status[source] === 'ready') setters[source](result.values[source]);
+      else console.warn(`Failed to load ${source} for assignments calculations:`, settled[sources.indexOf(source)].reason);
+    });
+    if (current.length) setSupportStatus((prev) => ({ ...prev, ...result.status }));
+    return result;
+  }, [supportRequests]);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -82,32 +116,15 @@ export default function AssignmentsPage() {
 
     try {
       const assignmentsPromise = getAssignments();
-      const tasksPromise = getTasks().catch((err) => {
-        console.warn('Failed to load tasks for assignments calculations:', err);
-        return [];
-      });
-      const workloadPromise = getWorkload().catch((err) => {
-        console.warn('Failed to load workload for assignments calculations:', err);
-        return [];
-      });
-      const staffPromise = canManageAssignments
-        ? getStaff().catch((err) => {
-            console.warn('Failed to load staff for assignments calculations:', err);
-            return [];
-          })
-        : Promise.resolve([]);
+      const supportPromise = loadSupportingData(canManageAssignments ? SUPPORTING_SOURCES : ['tasks', 'workload']);
 
-      const [assignmentsData, tasksData, workloadData, staffData] = await Promise.all([
-        assignmentsPromise,
-        tasksPromise,
-        workloadPromise,
-        staffPromise,
-      ]);
+      const [assignmentsData, support] = await Promise.all([assignmentsPromise, supportPromise]);
+      if (support.redirect) {
+        navigate('/login');
+        return;
+      }
 
       setAssignments(Array.isArray(assignmentsData) ? assignmentsData : []);
-      setTasks(Array.isArray(tasksData) ? tasksData : []);
-      setWorkload(Array.isArray(workloadData) ? workloadData : []);
-      setAllStaff(Array.isArray(staffData) ? staffData : []);
     } catch (err) {
       if (err.message && err.message.includes('Redirecting to login')) {
         navigate('/login');
@@ -117,7 +134,16 @@ export default function AssignmentsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [navigate, canManageAssignments]);
+  }, [navigate, canManageAssignments, loadSupportingData]);
+
+  // Load again only what failed (from the notice, or the staff list from the assign dialog)
+  const retrySupportingData = useCallback(async (sources) => {
+    if (!sources.length) return;
+    const result = await loadSupportingData(sources);
+    if (result.redirect) navigate('/login');
+  }, [loadSupportingData, navigate]);
+  const failedSupport = sourcesIn(supportStatus, 'error');
+  const loadingSupport = sourcesIn(supportStatus, 'loading');
 
   useEffect(() => {
     fetchData();
@@ -279,6 +305,9 @@ export default function AssignmentsPage() {
   // Row actions menu (⋮): rendered through a portal so the table's overflow container cannot clip it
   const [activeMenu, setActiveMenu] = useState(null); // { assignment, buttonEl }
   const [menuPosition, setMenuPosition] = useState(null);
+  // The open menu, kept for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+  const menuPresence = usePresence(useMemo(() => (activeMenu && menuPosition ? { activeMenu, menuPosition } : null), [activeMenu, menuPosition]));
+  const { activeMenu: shownMenu, menuPosition: shownPosition } = menuPresence.value || {};
   const menuRef = useRef(null);
 
   const closeActionsMenu = useCallback((restoreFocus = false) => {
@@ -479,6 +508,28 @@ export default function AssignmentsPage() {
     },
   ];
 
+  // Non-blocking notice for supporting data that failed (the list itself loaded): what is missing, and a retry for just that.
+  // While a retry runs it says so, and its button is disabled so a second click cannot start a duplicate request.
+  const supportNotice = (failedSupport.length > 0 || (loadingSupport.length > 0 && !isLoading)) && (
+    <div
+      role={failedSupport.length > 0 ? 'alert' : 'status'}
+      data-testid="assignments-support-notice"
+      className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-sm flex flex-wrap items-center justify-between gap-3"
+    >
+      <span>{failedSupport.length > 0 ? supportingDataNotice(failedSupport) : 'Loading the missing details…'}</span>
+      {failedSupport.length > 0 && (
+        <button
+          type="button"
+          onClick={() => retrySupportingData(failedSupport)}
+          disabled={loadingSupport.length > 0}
+          className="px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-amber-900 text-xs font-semibold hover:bg-amber-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+
   if (isLoading) {
     return (
       <div className="w-full space-y-6">
@@ -500,26 +551,8 @@ export default function AssignmentsPage() {
 
         {/* Loading Spinner */}
         <div className="flex items-center justify-center p-16 bg-white rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex flex-col items-center gap-3">
-            <svg
-              className="animate-spin h-8 w-8 text-emerald-600"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
+          <div role="status" className="flex flex-col items-center gap-3">
+            <Spinner size="lg" className="text-emerald-600" />
             <p className="text-sm font-medium text-gray-500">
               Loading assignments...
             </p>
@@ -549,17 +582,7 @@ export default function AssignmentsPage() {
         </div>
 
         {/* Error Alert */}
-        <div className="p-6 bg-red-50 border border-red-200 rounded-2xl text-red-800 space-y-3" role="alert">
-          <h3 className="font-bold text-base">Failed to load assignments</h3>
-          <p className="text-sm">{error}</p>
-          <button
-            type="button"
-            onClick={fetchData}
-            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-sm font-medium transition-colors cursor-pointer"
-          >
-            Try Again
-          </button>
-        </div>
+        <LoadError title="Failed to load assignments" message={error} onRetry={fetchData} retryLabel="Try Again" />
       </div>
     );
   }
@@ -567,11 +590,11 @@ export default function AssignmentsPage() {
   if (canManageAssignments && isAssignModalOpen) {
     return (
       <div className="w-full space-y-6">
-        {successBanner && (
-          <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+        {notice.present && (
+          <div inert={notice.closing} className={`p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs ${toastMotion(notice.closing)}`}>
             <div className="flex items-center gap-2.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="font-semibold">{successBanner}</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+              <span className="font-semibold">{notice.value}</span>
             </div>
             <button
               type="button"
@@ -583,16 +606,21 @@ export default function AssignmentsPage() {
           </div>
         )}
 
+        {/* Tasks that failed to load would otherwise look like "no unassigned tasks" in the task picker */}
+        {supportNotice}
+
         <AssignTaskModal
           task={assignModalTask}
           unassignedTasks={unassignedTasks}
           onTaskChange={handleTaskSelect}
           currentAssignment={currentAssignment}
           eligibleStaff={eligibleStaff}
-          isLoadingStaff={isLoadingStaff}
+          isLoadingStaff={supportStatus.staff === 'loading'}
+          staffError={supportStatus.staff === 'error' ? STAFF_LOAD_ERROR_MESSAGE : ''}
+          onRetryStaff={() => retrySupportingData(['staff'])}
           workloadList={workload}
-          isLoadingWorkload={false}
-          workloadError=""
+          isLoadingWorkload={supportStatus.workload === 'loading'}
+          workloadError={supportStatus.workload === 'error' ? WORKLOAD_LOAD_ERROR_MESSAGE : ''}
           selectedStaffIds={selectedStaffIds}
           onStaffToggle={(staffId) => setSelectedStaffIds((current) => toggleStaffSelection(current, staffId, { single: Boolean(currentAssignment) }))}
           assignedStaffIds={currentAssignment && assignModalTask ? (assignmentsByTaskId.get(assignModalTask.id) || []).map((a) => a.staffId) : []}
@@ -625,11 +653,11 @@ export default function AssignmentsPage() {
       </div>
 
       {/* Success Notification Banner */}
-      {successBanner && (
-        <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs animate-fadeIn">
+      {notice.present && (
+        <div inert={notice.closing} className={`p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs ${toastMotion(notice.closing)}`}>
           <div className="flex items-center gap-2.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-semibold">{successBanner}</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+            <span className="font-semibold">{notice.value}</span>
           </div>
           <button
             type="button"
@@ -641,12 +669,14 @@ export default function AssignmentsPage() {
         </div>
       )}
 
+      {supportNotice}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5">
         {summaryCards.map((card, idx) => (
           <div
             key={idx}
-            className="bg-white rounded-xl p-5 shadow-sm border border-gray-200/70 flex items-center gap-4 transition-[box-shadow,border-color] duration-200 hover:shadow-md hover:border-gray-300/80"
+            className="bg-white rounded-xl p-5 shadow-sm border border-gray-200/70 flex items-center gap-4"
           >
             <div className={`shrink-0 p-3 rounded-xl ring-1 ring-inset ${card.bg} ${card.accent}`}>
               {card.icon}
@@ -756,7 +786,7 @@ export default function AssignmentsPage() {
                   const isMenuOpen = activeMenu?.assignment?.id === assignment.id;
 
                   return (
-                    <tr key={assignment.id} className={`transition-colors duration-150 hover:bg-emerald-50/40 ${isMenuOpen ? 'bg-emerald-50/40' : ''}`}>
+                    <tr key={assignment.id} className={`transition-colors duration-base hover:bg-emerald-50/40 ${isMenuOpen ? 'bg-emerald-50/40' : ''}`}>
                       {/* Department tile, then the title. Long titles wrap to two lines at most; the full text is in the tooltip */}
                       <td className="px-6 py-4 align-middle">
                         <div className="flex items-center gap-3 min-w-0">
@@ -892,21 +922,22 @@ export default function AssignmentsPage() {
       </div>
 
       {/* Row actions menu, rendered outside the table's overflow container */}
-      {activeMenu && menuPosition && createPortal(
+      {menuPresence.present && createPortal(
         <div
           ref={menuRef}
           id={ACTIONS_MENU_ID}
           role="menu"
-          aria-label={`Actions for ${activeMenu.assignment.taskTitle || 'assignment'}`}
+          aria-label={`Actions for ${shownMenu.assignment.taskTitle || 'assignment'}`}
           style={{
             position: 'fixed',
-            ...(menuPosition.openUpward
-              ? { bottom: `${menuPosition.bottom}px` }
-              : { top: `${menuPosition.top}px` }),
-            right: `${menuPosition.right}px`,
+            ...(shownPosition.openUpward
+              ? { bottom: `${shownPosition.bottom}px` }
+              : { top: `${shownPosition.top}px` }),
+            right: `${shownPosition.right}px`,
             zIndex: 9999,
           }}
-          className="w-44 rounded-lg bg-white shadow-lg border border-gray-200 py-1 select-none animate-fadeIn"
+          className={`w-44 rounded-lg bg-white shadow-lg border border-gray-200 py-1 select-none ${menuMotion(menuPresence.closing)}`}
+          inert={menuPresence.closing}
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -918,7 +949,7 @@ export default function AssignmentsPage() {
             <EyeIcon className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
             <span>View Details</span>
           </button>
-          {canManageAssignments && isAssignmentTaskFinished(activeMenu.assignment, tasks) && (
+          {canManageAssignments && isAssignmentTaskFinished(shownMenu.assignment, tasks) && (
             <button
               type="button"
               role="menuitem"
@@ -930,7 +961,7 @@ export default function AssignmentsPage() {
               <span>Reassign (task finished)</span>
             </button>
           )}
-          {canManageAssignments && !isAssignmentTaskFinished(activeMenu.assignment, tasks) && (
+          {canManageAssignments && !isAssignmentTaskFinished(shownMenu.assignment, tasks) && (
             <button
               type="button"
               role="menuitem"

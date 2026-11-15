@@ -18,7 +18,7 @@ const STATUS_LABELS = { PENDING: 'Pending' };
 const pill = 'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset';
 
 const Chevron = ({ open }) => (
-  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 shrink-0 text-gray-300 transition-transform duration-200 motion-reduce:transition-none group-hover:text-emerald-600 ${open ? 'rotate-90' : ''}`}>
+  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`w-4 h-4 shrink-0 text-gray-300 transition-transform duration-moderate motion-reduce:transition-none group-hover:text-emerald-600 ${open ? 'rotate-90' : ''}`}>
     <path d="M9 6l6 6-6 6" />
   </svg>
 );

@@ -33,6 +33,8 @@ import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
 import ManagerDepartmentModal from '../components/users/ManagerDepartmentModal';
+import { toastMotion, usePresence } from '../theme/presence';
+import Skeleton from '../components/common/Skeleton';
 
 const SUCCESS_MESSAGE_MS = 6000;
 
@@ -81,6 +83,8 @@ export default function UsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+  // The success notice, kept for its 120ms exit after it is dismissed (none with reduced motion); see theme/presence.js
+  const notice = usePresence(successMessage);
   const [actionError, setActionError] = useState('');
 
   // Filters (combined: search AND role AND status)
@@ -330,14 +334,15 @@ export default function UsersPage() {
     return (
       <div className="w-full space-y-6" aria-busy="true">
         {header}
-        <div className="animate-pulse space-y-6">
+        <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)] gap-3 sm:gap-4">
-            <div className="h-11 bg-gray-200 rounded-xl sm:col-span-2 lg:col-span-1" />
-            <div className="h-11 bg-gray-200 rounded-xl" />
-            <div className="h-11 bg-gray-200 rounded-xl" />
+            <Skeleton className="h-11 rounded-xl sm:col-span-2 lg:col-span-1" />
+            <Skeleton className="h-11 rounded-xl" />
+            <Skeleton className="h-11 rounded-xl" />
           </div>
-          <div className="h-80 bg-gray-200 rounded-xl" />
+          <Skeleton className="h-80 rounded-xl" />
         </div>
+        <p role="status" className="sr-only">Loading users…</p>
       </div>
     );
   }
@@ -383,9 +388,9 @@ export default function UsersPage() {
     <div className="w-full space-y-6">
       {header}
 
-      {successMessage && (
-        <div role="status" className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between gap-3 animate-fadeIn">
-          <span>{successMessage}</span>
+      {notice.present && (
+        <div role="status" inert={notice.closing} className={`p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between gap-3 ${toastMotion(notice.closing)}`}>
+          <span>{notice.value}</span>
           <button
             type="button"
             onClick={() => setSuccessMessage('')}

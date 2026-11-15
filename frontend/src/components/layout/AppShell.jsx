@@ -5,12 +5,15 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import useCurrentUserProfile from '../../hooks/useCurrentUserProfile';
 import { normalizePreferences } from '../../utils/preferences';
+import { usePageTransition } from '../../theme/pageTransition';
 
 export default function AppShell({ children, activeNav, onNavChange }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const mainRef = useRef(null);
+  // A short fade when the screen changes (theme/pageTransition.js); the page itself is not remounted
+  const contentRef = usePageTransition(location);
 
   // Reloading must not bring back an old offset into a page whose content loads afterwards
   useEffect(() => {
@@ -101,7 +104,7 @@ export default function AppShell({ children, activeNav, onNavChange }) {
 
         {/* Main Content Area */}
         <main ref={mainRef} data-page={currentNav} className="flex-1 min-w-0 p-4 sm:p-6 overflow-y-auto bg-surface-page">
-          <div key={contentKey} className="max-w-[1440px] mx-auto w-full">
+          <div key={contentKey} ref={contentRef} className="max-w-[1440px] mx-auto w-full">
             {children || <Outlet />}
           </div>
         </main>

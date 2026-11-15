@@ -16,6 +16,8 @@ import {
 import DepartmentOptions from '../common/DepartmentOptions';
 import { UNASSIGNED_MANAGER_NOTICE, canChooseNoDepartment, departmentPayload, departmentProblem, isUnassignedManager } from '../../utils/staffDepartment';
 import useDepartments from '../../hooks/useDepartments';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
+import Spinner from '../common/Spinner';
 
 /**
  * EditStaffModal — modal for updating an existing staff member's profile and active status.
@@ -27,7 +29,7 @@ import useDepartments from '../../hooks/useDepartments';
  *   onSuccess – callback(payload) after successful update
  *   onEmailChangeRequested – optional callback after a verification code was sent (the list can refresh its pending status)
  */
-export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEmailChangeRequested }) {
+function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEmailChangeRequested, closing = false }) {
   const { departments } = useDepartments();
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -182,11 +184,12 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fadeIn"
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 ${backdropMotion(closing)}`}
+      inert={closing}
       onClick={handleClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto border border-gray-100"
+        className={`bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] overflow-y-auto border border-gray-100 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6 border-b border-gray-100 flex justify-between items-center">
@@ -411,25 +414,7 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
             >
               {isSubmitting ? (
                 <>
-                  <svg
-                    className="animate-spin h-4 w-4 text-white"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                  >
-                    <circle
-                      className="opacity-25"
-                      cx="12"
-                      cy="12"
-                      r="10"
-                      stroke="currentColor"
-                      strokeWidth="4"
-                    />
-                    <path
-                      className="opacity-75"
-                      fill="currentColor"
-                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                    />
-                  </svg>
+                  <Spinner className="text-white" />
                   <span>Updating Staff...</span>
                 </>
               ) : (
@@ -443,3 +428,6 @@ export default function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEm
     document.body
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(EditStaffModal, (props) => Boolean(props.isOpen && props.staff));

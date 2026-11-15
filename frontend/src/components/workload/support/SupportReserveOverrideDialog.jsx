@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { backdropMotion, dialogMotion } from '../../../theme/presence';
 
 const FOCUSABLE = 'button:not([disabled])';
 
@@ -8,7 +9,7 @@ const FOCUSABLE = 'button:not([disabled])';
  * the draft exactly as it was.
  * `rows` is [{ donorName, personName, freeNow, freeAfter }].
  */
-export default function SupportReserveOverrideDialog({ rows, onCancel, onContinue }) {
+export default function SupportReserveOverrideDialog({ rows, onCancel, onContinue, closing = false }) {
   const dialogRef = useRef(null);
   const cancelRef = useRef(null);
   const previousFocus = useRef(null);
@@ -40,14 +41,14 @@ export default function SupportReserveOverrideDialog({ rows, onCancel, onContinu
 
   const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-1';
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4" onClick={onCancel}>
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 ${backdropMotion(closing)}`} inert={closing} onClick={onCancel}>
       <div
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="support-risk-title"
         aria-describedby="support-risk-body"
-        className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-100 shadow-xl p-4 sm:p-5 space-y-4"
+        className={`w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white border border-gray-100 shadow-xl p-4 sm:p-5 space-y-4 ${dialogMotion(closing)}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div>

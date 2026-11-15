@@ -21,6 +21,7 @@ export const DEFAULT_PREFERENCES = Object.freeze({
 
 export const PREFERENCE_MESSAGES = {
   loading: 'Loading your preferences…',
+  loadFailed: 'Your preferences could not be loaded.',
   saving: 'Saving…',
   saved: 'Preferences saved.',
   saveFailed: 'Could not save your preference. Please try again.',

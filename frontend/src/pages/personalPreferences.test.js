@@ -317,7 +317,8 @@ describe('theme wiring: one source of truth', () => {
 
   it('date and time changes reach every page: the content is remounted on a format change, but not on Settings', () => {
     assert.ok(shell.includes("const contentKey = currentNav === 'Settings' ? 'settings' : `${dateFormat}|${timeFormat}`;"));
-    assert.ok(shell.includes('<div key={contentKey} className="max-w-[1440px] mx-auto w-full">'));
+    // keyed by contentKey only (the ref carries the Stage 4 page fade and never remounts anything)
+    assert.ok(shell.includes('<div key={contentKey} ref={contentRef} className="max-w-[1440px] mx-auto w-full">'));
     assert.equal((shell.match(/useCurrentUserProfile\(\)/g) || []).length, 1);
   });
 });

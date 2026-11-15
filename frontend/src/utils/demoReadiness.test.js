@@ -105,8 +105,8 @@ test('reassign: a completed or cancelled task is finished; the loaded task list 
 
 test('reassign: the Assignments menu shows a disabled item for a finished task and never opens its dialog', () => {
   const page = read('pages', 'AssignmentsPage.jsx');
-  assert.match(page, /canManageAssignments && isAssignmentTaskFinished\(activeMenu\.assignment, tasks\) && \(\s*<button[\s\S]*?disabled\s*title="Cannot reassign completed or cancelled task"/);
-  assert.match(page, /canManageAssignments && !isAssignmentTaskFinished\(activeMenu\.assignment, tasks\) && \(\s*<button[\s\S]*?onClick=\{handleMenuReassign\}/);
+  assert.match(page, /canManageAssignments && isAssignmentTaskFinished\(shownMenu\.assignment, tasks\) && \(\s*<button[\s\S]*?disabled\s*title="Cannot reassign completed or cancelled task"/);
+  assert.match(page, /canManageAssignments && !isAssignmentTaskFinished\(shownMenu\.assignment, tasks\) && \(\s*<button[\s\S]*?onClick=\{handleMenuReassign\}/);
   assert.ok(page.includes('if (assignment && !isAssignmentTaskFinished(assignment, tasks)) handleOpenReassignModal(assignment);'));
   assert.ok(page.includes(`querySelectorAll('[role="menuitem"]:not([disabled])')`), 'arrow keys skip the disabled item');
 });

@@ -152,10 +152,13 @@ test('Create Task page: departments, staff, tasks and assignments are all gated 
   // departments: the shared hook, held back until needed (and no longer the unconditional call)
   assert.match(page, /useDepartments\(\{ enabled: formDataNeeded \}\)/);
   assert.doesNotMatch(page, /useDepartments\(\)/);
-  // staff, tasks, assignments: one effect, skipped until needed, re-run when it becomes needed
-  assert.match(page,
-    /useEffect\(\(\) => \{\s*if \(!formDataNeeded\) return undefined;[\s\S]*?getStaff\(\),\s*getTasks\(\),\s*getAssignments\(\),[\s\S]*?\}, \[formDataNeeded\]\);/);
-  // and that effect is the only place they are called
+  // staff, tasks, assignments: one loader (Stage 5A: callable again by the form's Retry), started by one effect that is skipped until the
+  // form is needed and re-run when it becomes needed; the Retry lives in the form, which is only rendered once it is needed
+  assert.match(page, /const loadFormData = React\.useCallback\(async \(\) => \{[\s\S]*?getStaff\(\),\s*getTasks\(\),\s*getAssignments\(\),/);
+  assert.match(page, /useEffect\(\(\) => \{\s*if \(!formDataNeeded\) return undefined;\s*loadFormData\(\);[\s\S]*?\}, \[formDataNeeded, loadFormData, formDataRequest\]\);/);
+  assert.match(page, /onRetryStaff=\{loadFormData\}/);
+  assert.ok(page.indexOf('onRetryStaff={loadFormData}') > page.indexOf("{(departmentAccess === 'select' || departmentAccess === 'locked') && ("), 'Retry only exists inside the shown form');
+  // and that loader is the only place they are called
   for (const call of ['getStaff(', 'getTasks(', 'getAssignments(']) {
     assert.equal(page.split(call).length - 1, 1, `${call} must be called only inside the gated effect`);
   }

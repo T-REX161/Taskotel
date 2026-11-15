@@ -16,22 +16,13 @@ import {
 import { getWorkload } from '../../services/api';
 import UserAvatar from '../common/UserAvatar';
 import { formatSelectedStaffCount } from '../../utils/staffSelection';
+import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
+import Spinner from '../common/Spinner';
+import LoadError from '../common/LoadError';
 
 /**
  * Inline spinner SVG.
  */
-function Spinner({ className = 'h-4 w-4 text-white' }) {
-  return (
-    <svg className={`animate-spin ${className}`} fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path
-        className="opacity-75"
-        fill="currentColor"
-        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-      />
-    </svg>
-  );
-}
 
 /**
  * Helper to extract up to 2-letter uppercase initials for staff avatar.
@@ -64,6 +55,9 @@ function getStaffInitials(name) {
  *   currentAssignment   – assignment record for this task (null / undefined if not assigned)
  *   eligibleStaff       – array of active+available staff objects belonging to task department
  *   isLoadingStaff      – boolean
+ *   staffError          – message when the staff list could not be loaded ('' otherwise): shown with a Retry instead of the
+ *                         "no eligible staff" empty state and the staff cards
+ *   onRetryStaff        – () => void; loads the staff list again
  *   workloadList        – array of WorkloadDto objects from getWorkload()
  *   workload            – alias for workloadList
  *   isLoadingWorkload   – boolean
@@ -77,7 +71,7 @@ function getStaffInitials(name) {
  *   error               – string | ''
  *   asModal             – boolean (default false)
  */
-export default function AssignTaskModal({
+function AssignTaskModal({
   task,
   unassignedTasks,
   selectedTaskId,
@@ -85,6 +79,8 @@ export default function AssignTaskModal({
   currentAssignment,
   eligibleStaff = [],
   isLoadingStaff = false,
+  staffError = '',
+  onRetryStaff,
   workloadList,
   workload,
   isLoadingWorkload = false,
@@ -97,6 +93,7 @@ export default function AssignTaskModal({
   isSubmitting = false,
   error = '',
   asModal = false,
+  closing = false,
 }) {
   const isReassign = Boolean(currentAssignment);
   const formattedDueDate = task ? formatDate(task.dueDate) : null;
@@ -227,7 +224,7 @@ export default function AssignTaskModal({
       {/* Global Error Banner */}
       {error && (
         <div
-          className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-3 shadow-xs animate-fadeIn"
+          className="p-4 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-3 shadow-xs animate-fade-in"
           role="alert"
         >
           <svg className="w-5 h-5 flex-shrink-0 text-red-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -425,7 +422,7 @@ export default function AssignTaskModal({
                 {/* Loading State */}
                 {isWorkloadLoading && (
                   <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-center gap-2 text-xs text-gray-500">
-                    <Spinner className="h-4 w-4 text-emerald-600" />
+                    <Spinner className="text-emerald-600" />
                     <span>Loading workload data from server...</span>
                   </div>
                 )}
@@ -489,9 +486,12 @@ export default function AssignTaskModal({
                 >
                   {formatSelectedStaffCount(selectedCount)}
                 </span>
-                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
-                  {selectableStaffCount} {selectableStaffCount === 1 ? 'Eligible Staff Member' : 'Eligible Staff Members'}
-                </span>
+                {/* The count is only known once the staff list has loaded */}
+                {!isLoadingStaff && !staffError && (
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+                    {selectableStaffCount} {selectableStaffCount === 1 ? 'Eligible Staff Member' : 'Eligible Staff Members'}
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -499,13 +499,18 @@ export default function AssignTaskModal({
           {/* Loading state for staff */}
           {isLoadingStaff && (
             <div className="p-6 text-center text-sm text-gray-400 flex items-center justify-center gap-2">
-              <Spinner className="h-4 w-4 text-emerald-600" />
+              <Spinner className="text-emerald-600" />
               <span>Loading eligible staff members...</span>
             </div>
           )}
 
-          {/* Empty state when no eligible staff found */}
-          {!isLoadingStaff && task && selectableStaffCount === 0 && (
+          {/* The staff list could not be loaded: say so and offer a retry (never the "no eligible staff" message below) */}
+          {!isLoadingStaff && staffError && (
+            <LoadError variant="banner" compact message={staffError} onRetry={onRetryStaff} retryDisabled={isSubmitting} />
+          )}
+
+          {/* Empty state when no eligible staff found (only after the staff list loaded successfully) */}
+          {!isLoadingStaff && !staffError && task && selectableStaffCount === 0 && (
             <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
               <p className="font-semibold">No eligible staff members available</p>
               <p>
@@ -525,7 +530,7 @@ export default function AssignTaskModal({
           )}
 
           {/* Responsive Selectable Staff Cards Grid */}
-          {!isLoadingStaff && eligibleStaff.length > 0 && (
+          {!isLoadingStaff && !staffError && eligibleStaff.length > 0 && (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {eligibleStaff.map((staff) => {
                 const isCurrent = isOnThisTask(staff.id);
@@ -544,7 +549,7 @@ export default function AssignTaskModal({
                         onStaffToggle(staff.id);
                       }
                     }}
-                    className={`relative rounded-xl p-4 transition-all border flex flex-col justify-between space-y-3 ${
+                    className={`relative rounded-xl p-4 transition-[color,background-color,border-color,box-shadow,opacity] border flex flex-col justify-between space-y-3 ${
                       isCurrent
                         ? 'opacity-60 cursor-not-allowed bg-gray-50/80 border-gray-200'
                         : isSelected
@@ -665,7 +670,7 @@ export default function AssignTaskModal({
           >
             {isSubmitting ? (
               <>
-                <Spinner />
+                <Spinner className="text-white" />
                 <span>Processing...</span>
               </>
             ) : isReassign ? (
@@ -684,11 +689,12 @@ export default function AssignTaskModal({
   if (asModal) {
     return (
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs animate-fadeIn overflow-y-auto"
+        className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-xs overflow-y-auto ${backdropMotion(closing)}`}
+        inert={closing}
         onClick={() => !isSubmitting && onClose()}
       >
         <div
-          className="bg-white rounded-2xl max-w-5xl w-full p-6 sm:p-8 shadow-xl border border-gray-100 max-h-[92vh] overflow-y-auto my-6"
+          className={`bg-white rounded-2xl max-w-5xl w-full p-6 sm:p-8 shadow-xl border border-gray-100 max-h-[92vh] overflow-y-auto my-6 ${dialogMotion(closing)}`}
           onClick={(e) => e.stopPropagation()}
         >
           {content}
@@ -754,7 +760,7 @@ function WorkloadImpact({ projectedWorkload, staffName, showName }) {
                         <div className="space-y-1 pt-1">
                           <div className="w-full h-2 bg-gray-200/70 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full transition-all duration-300 ${getWorkloadProgressBarColor(projectedWorkload.currentStatus)}`}
+                              className={`h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${getWorkloadProgressBarColor(projectedWorkload.currentStatus)}`}
                               style={{ width: `${calculateWorkloadPercentage(projectedWorkload.currentMinutes)}%` }}
                             />
                           </div>
@@ -792,7 +798,7 @@ function WorkloadImpact({ projectedWorkload, staffName, showName }) {
                         <div className="space-y-1 pt-1">
                           <div className="w-full h-2 bg-emerald-100/70 rounded-full overflow-hidden">
                             <div
-                              className={`h-full rounded-full transition-all duration-300 ${getWorkloadProgressBarColor(projectedWorkload.projectedStatus)}`}
+                              className={`h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${getWorkloadProgressBarColor(projectedWorkload.projectedStatus)}`}
                               style={{ width: `${calculateWorkloadPercentage(projectedWorkload.projectedMinutes)}%` }}
                             />
                           </div>
@@ -818,3 +824,6 @@ function WorkloadImpact({ projectedWorkload, staffName, showName }) {
     </div>
   );
 }
+
+// Stays mounted for its 120ms exit after closing (none with reduced motion); see theme/presence.js
+export default withExitTransition(AssignTaskModal, (props) => Boolean(props.asModal && (props.task || props.unassignedTasks)));

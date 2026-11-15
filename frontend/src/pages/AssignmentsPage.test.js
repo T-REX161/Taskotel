@@ -108,16 +108,19 @@ describe('AssignmentsPage Component Integration', () => {
   describe('Loading, Error, and Empty States', () => {
     it('renders a loading state with spinner and "Loading assignments..." message', () => {
       assert.ok(pageSource.includes('isLoading'), 'Component must track isLoading state');
-      assert.ok(pageSource.includes('animate-spin'), 'Loading state must include spinner animation');
+      // Stage 5C: the shared spinner (components/common/Spinner, which animates with animate-spin)
+      assert.ok(pageSource.includes('<Spinner size="lg" className="text-emerald-600" />'), 'Loading state must include spinner animation');
       assert.ok(pageSource.includes('Loading assignments...'), 'Loading state must display "Loading assignments..."');
     });
 
     it('renders an error state with alert banner and "Try Again" retry action', () => {
       assert.ok(pageSource.includes('error'), 'Component must track error state');
-      assert.ok(pageSource.includes('role="alert"'), 'Error container must have role="alert"');
+      // Stage 5C: the shared LoadError, which renders a role="alert" panel with the title, the message and the Retry button
+      const errorPanel = '<LoadError title="Failed to load assignments" message={error} onRetry={fetchData} retryLabel="Try Again" />';
+      assert.ok(pageSource.includes(errorPanel), 'Error container must have role="alert"');
       assert.ok(pageSource.includes('Failed to load assignments'), 'Error container must display title "Failed to load assignments"');
       assert.ok(
-        pageSource.includes('Try Again') && pageSource.includes('onClick={fetchData}'),
+        pageSource.includes('retryLabel="Try Again"') && pageSource.includes('onRetry={fetchData}'),
         'Error container must include a "Try Again" button that triggers refetching'
       );
     });
@@ -320,10 +323,10 @@ describe('AssignmentsPage Component Integration', () => {
       assert.ok(pageSource.includes('<span>View Details</span>'), 'Menu must contain "View Details"');
       assert.ok(pageSource.includes('<span>Reassign</span>'), 'Menu must contain "Reassign"');
       assert.ok(
-        /\{canManageAssignments && !isAssignmentTaskFinished\(activeMenu\.assignment, tasks\) && \(\s*<button\s+type="button"\s+role="menuitem"\s+onClick=\{handleMenuReassign\}/.test(pageSource),
+        /\{canManageAssignments && !isAssignmentTaskFinished\(shownMenu\.assignment, tasks\) && \(\s*<button\s+type="button"\s+role="menuitem"\s+onClick=\{handleMenuReassign\}/.test(pageSource),
         'Reassign must stay restricted to ADMIN and MANAGER'
       );
-      assert.ok(/\{canManageAssignments && isAssignmentTaskFinished\(activeMenu\.assignment, tasks\) && \(/.test(pageSource),
+      assert.ok(/\{canManageAssignments && isAssignmentTaskFinished\(shownMenu\.assignment, tasks\) && \(/.test(pageSource),
         'the disabled variant is also ADMIN and MANAGER only');
     });
 

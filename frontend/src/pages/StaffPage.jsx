@@ -25,6 +25,8 @@ import AddStaffModal from '../components/staff/AddStaffModal';
 import EditStaffModal from '../components/staff/EditStaffModal';
 import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
+import { toastMotion, usePresence } from '../theme/presence';
+import Spinner from '../components/common/Spinner';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -34,6 +36,8 @@ export default function StaffPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  // The success notice, kept for its 120ms exit after it is dismissed (none with reduced motion); see theme/presence.js
+  const notice = usePresence(successMessage);
 
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -348,26 +352,8 @@ export default function StaffPage() {
           </div>
         </div>
         <div className="flex items-center justify-center p-14 bg-white rounded-xl border border-slate-200/80 shadow-xs">
-          <div className="flex flex-col items-center gap-3">
-            <svg
-              className="animate-spin h-7 w-7 text-emerald-600"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
+          <div role="status" className="flex flex-col items-center gap-3">
+            <Spinner size="md" className="text-emerald-600" />
             <p className="text-xs sm:text-sm font-medium text-slate-500">
               Loading staff directory and workload...
             </p>
@@ -408,11 +394,11 @@ export default function StaffPage() {
   return (
     <div className="w-full space-y-6">
       {/* Success notification banner */}
-      {successMessage && (
-        <div className="p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs">
+      {notice.present && (
+        <div inert={notice.closing} className={`p-3.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center justify-between shadow-xs ${toastMotion(notice.closing)}`}>
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-medium">{successMessage}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="font-medium">{notice.value}</span>
           </div>
           <button
             type="button"

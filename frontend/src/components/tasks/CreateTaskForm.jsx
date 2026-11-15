@@ -1,6 +1,8 @@
 import React from 'react';
 import DepartmentOptions from '../common/DepartmentOptions';
 import { MANAGER_DEPARTMENT_LOCKED_HINT } from '../../utils/taskDepartment';
+import { listState } from '../../utils/loadState';
+import Spinner from '../common/Spinner';
 
 /**
  * CreateTaskForm — controlled form card presentation for task creation and optional initial assignment.
@@ -10,6 +12,8 @@ import { MANAGER_DEPARTMENT_LOCKED_HINT } from '../../utils/taskDepartment';
  *   onInputChange      – change event handler for form inputs
  *   staffList          – array of active staff members for assignment
  *   isLoadingStaff     – boolean indicating whether staff list is loading
+ *   staffLoadError     – message when the staff list could not be loaded ('' otherwise); shown with a Retry, never as "no staff"
+ *   onRetryStaff       – loads the staff list again
  *   isSubmitting       – boolean indicating in-flight creation/assignment operation
  *   createdTaskRecord  – record of created task if task creation succeeded but assignment failed
  *   formError          – validation or API error message
@@ -26,6 +30,8 @@ export default function CreateTaskForm({
   departments = [],
   lockedDepartment = null,
   isLoadingStaff = false,
+  staffLoadError = '',
+  onRetryStaff,
   isSubmitting = false,
   createdTaskRecord = null,
   formError = '',
@@ -34,6 +40,8 @@ export default function CreateTaskForm({
   onViewTasks,
 }) {
   const isTaskLocked = createdTaskRecord !== null;
+  // loading | error | empty (the server answered: nobody available) | ready; a failure is never shown as "no staff"
+  const staffState = listState({ loading: isLoadingStaff, error: staffLoadError, count: staffList.length });
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 sm:p-8">
@@ -127,22 +135,29 @@ export default function CreateTaskForm({
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-sm text-gray-900 bg-white disabled:bg-gray-50"
             >
               <option value="">Unassigned</option>
-              {staffList.length === 0 ? (
+              {staffState === 'empty' && (
                 <option value="" disabled>
                   No available staff in this department
                 </option>
-              ) : (
-                staffList.map((staff) => (
-                  <option key={staff.id} value={staff.id}>
-                    {staff.name}
-                  </option>
-                ))
               )}
+              {staffState === 'ready' && staffList.map((staff) => (
+                <option key={staff.id} value={staff.id}>
+                  {staff.name}
+                </option>
+              ))}
             </select>
-            {isLoadingStaff && (
-              <p className="text-xs text-gray-400">Loading staff members...</p>
+            {staffState === 'loading' && (
+              <p role="status" className="text-xs text-gray-400">Loading staff members...</p>
             )}
-            {!isLoadingStaff && staffList.length === 0 && (
+            {staffState === 'error' && (
+              <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium text-red-700">
+                <span>{staffLoadError}</span>
+                <button type="button" onClick={onRetryStaff} disabled={isSubmitting} className="font-semibold underline cursor-pointer disabled:cursor-not-allowed disabled:opacity-60">
+                  Retry
+                </button>
+              </div>
+            )}
+            {staffState === 'empty' && (
               <p className="text-xs text-amber-600 font-medium">
                 No available staff in this department
               </p>
@@ -281,25 +296,7 @@ export default function CreateTaskForm({
           >
             {isSubmitting ? (
               <>
-                <svg
-                  className="animate-spin h-4 w-4 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  />
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
+                <Spinner className="text-white" />
                 <span>
                   {createdTaskRecord ? 'Assigning Staff...' : 'Creating Task...'}
                 </span>

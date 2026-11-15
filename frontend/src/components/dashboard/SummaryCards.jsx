@@ -42,7 +42,7 @@ export default function SummaryCards({ data, isStaff }) {
   return (
     <div className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-4 gap-3">
       {[...first, ...second].map(({ title, value, Icon, tone }) => (
-        <div key={title} className="bg-white rounded-xl p-4 min-h-[5.75rem] border border-gray-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors duration-150 hover:border-emerald-200 flex items-start justify-between gap-3">
+        <div key={title} className="bg-white rounded-xl p-4 min-h-[5.75rem] border border-gray-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-colors duration-base hover:border-emerald-200 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-sm font-medium text-gray-600">{title}</p>
             <p className={`mt-2 text-3xl font-bold leading-none tabular-nums truncate ${TONES[tone].value}`}>{value}</p>

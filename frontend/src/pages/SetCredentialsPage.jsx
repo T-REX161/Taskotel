@@ -55,7 +55,7 @@ export default function SetCredentialsPage() {
             <button
               type="button"
               onClick={() => navigate('/login')}
-              className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 transition-[color,background-color,border-color,box-shadow,opacity] flex items-center justify-center gap-2 cursor-pointer"
             >
               Back to Sign In
             </button>
@@ -146,7 +146,7 @@ export default function SetCredentialsPage() {
         <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-200/80 shadow-xl shadow-emerald-950/5 p-7 sm:p-10">
           {/* Header Branding */}
           <div className="flex flex-col items-center text-center mb-6">
-            <TaskotelLogo className="w-16 h-16 mb-3 transform transition-transform hover:scale-105 duration-200" />
+            <TaskotelLogo className="w-16 h-16 mb-3" />
 
             <div className="flex items-center gap-1.5">
               <span className="text-xl font-extrabold tracking-tight text-[#04302a] dark:text-neutral-100">
@@ -167,15 +167,15 @@ export default function SetCredentialsPage() {
 
           {/* Success Banner */}
           {successMessage && (
-            <div className="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fadeIn">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+            <div className="mb-5 p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fade-in">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
               <span>{successMessage}</span>
             </div>
           )}
 
           {/* Server Error Banner */}
           {serverError && (
-            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-2.5 animate-fadeIn">
+            <div className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-2.5 animate-fade-in">
               <svg className="w-4 h-4 text-red-500 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
@@ -213,7 +213,7 @@ export default function SetCredentialsPage() {
                     }
                   }}
                   placeholder="Enter permanent username"
-                  className={`w-full pl-10 pr-4 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 rounded-xl border text-sm transition-all outline-none ${
+                  className={`w-full pl-10 pr-4 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 rounded-xl border text-sm transition-[color,background-color,border-color,box-shadow,opacity] outline-none ${
                     validationErrors.username
                       ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
                       : 'border-gray-200/90 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10'
@@ -251,7 +251,7 @@ export default function SetCredentialsPage() {
                     }
                   }}
                   placeholder="••••••••"
-                  className={`w-full pl-10 pr-11 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 rounded-xl border text-sm transition-all outline-none ${
+                  className={`w-full pl-10 pr-11 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 rounded-xl border text-sm transition-[color,background-color,border-color,box-shadow,opacity] outline-none ${
                     validationErrors.password
                       ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
                       : 'border-gray-200/90 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10'
@@ -301,7 +301,7 @@ export default function SetCredentialsPage() {
                     }
                   }}
                   placeholder="••••••••"
-                  className={`w-full pl-10 pr-11 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 rounded-xl border text-sm transition-all outline-none ${
+                  className={`w-full pl-10 pr-11 py-2.5 bg-gray-50/70 hover:bg-gray-50 focus:bg-white text-gray-900 placeholder-gray-400 rounded-xl border text-sm transition-[color,background-color,border-color,box-shadow,opacity] outline-none ${
                     validationErrors.confirmPassword
                       ? 'border-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'
                       : 'border-gray-200/90 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10'
@@ -327,7 +327,7 @@ export default function SetCredentialsPage() {
               <button
                 type="submit"
                 disabled={isSubmitting || !!successMessage}
-                className={`w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 hover:shadow-lg hover:shadow-emerald-700/25 transition-all duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+                className={`w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-md shadow-emerald-700/20 hover:shadow-lg hover:shadow-emerald-700/25 transition-[color,background-color,border-color,box-shadow,opacity] duration-base flex items-center justify-center gap-2 cursor-pointer ${
                   isSubmitting || !!successMessage ? 'opacity-70 cursor-not-allowed' : ''
                 }`}
               >

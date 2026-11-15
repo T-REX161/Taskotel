@@ -16,5 +16,7 @@ export default function useCurrentUserProfile() {
     loadCurrentProfile({ username });
   }, [username]);
 
-  return { profile: profileFor(state, username), loading: state.loading, error: state.error };
+  // loading and error belong to this user's request only (never a previous account's)
+  const own = Boolean(username) && state.username === username;
+  return { profile: profileFor(state, username), loading: own && state.loading, error: own ? state.error : null };
 }
