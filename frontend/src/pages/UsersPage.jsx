@@ -34,6 +34,8 @@ import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
 import ManagerDepartmentModal from '../components/users/ManagerDepartmentModal';
 import ManagerViewAccessModal from '../components/users/ManagerViewAccessModal';
+import ManagerAdditionalAccess from '../components/users/ManagerAdditionalAccess';
+import { showsAdditionalAccess } from '../utils/managerViewAccess';
 import { toastMotion, usePresence } from '../theme/presence';
 import { UsersPageSkeleton } from '../components/common/PageSkeletons';
 
@@ -461,7 +463,16 @@ export default function UsersPage() {
       />
 
       {/* Dialogs (shared with the Staff page) */}
-      <StaffDetailsModal staff={viewingStaff} onClose={() => setViewingStaff(null)} />
+      <StaffDetailsModal
+        staff={viewingStaff}
+        onClose={() => setViewingStaff(null)}
+        departmentAccess={
+          // Admin only, for a Manager: the additional departments they may view (read fresh each time the details open)
+          isAdmin && viewingStaff && showsAdditionalAccess(getUserRole(), viewingStaff)
+            ? <ManagerAdditionalAccess key={viewingStaff.userId} staff={viewingStaff} />
+            : null
+        }
+      />
 
       <AddStaffModal
         isOpen={isAddOpen}

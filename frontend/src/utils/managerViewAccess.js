@@ -73,6 +73,31 @@ export function selectionChanged(savedCodes, selectedCodes) {
   return false;
 }
 
+/**
+ * Whether a person's details show their additional view-only departments: only an Admin looking at a Manager who has an account
+ * (the grants are read from the Admin-only endpoint, keyed by the account). Everyone else sees the details exactly as before.
+ */
+export function showsAdditionalAccess(viewerRole, staff) {
+  return canManageViewAccess(viewerRole, staff) && Boolean(staff?.userId);
+}
+
+/**
+ * The additional departments to list in a Manager's details, by name, from the GET answer: never the primary department (the server
+ * leaves it out already; it is dropped here as well, against the answer and against the record being shown), never twice.
+ */
+export function additionalAccessRows(access, staffDepartmentCode = '') {
+  const primary = new Set([access?.primaryDepartmentCode, staffDepartmentCode].filter(Boolean));
+  const seen = new Set();
+  const rows = [];
+  for (const grant of Array.isArray(access?.departments) ? access.departments : []) {
+    const code = grant?.departmentCode;
+    if (!code || primary.has(code) || seen.has(code)) continue;
+    seen.add(code);
+    rows.push({ code, name: grant.departmentName || code, active: grant.active !== false });
+  }
+  return rows.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** One line for an audit record. */
 export function describeViewAccessChange(change) {
   const name = change?.departmentName || change?.departmentCode || 'A department';

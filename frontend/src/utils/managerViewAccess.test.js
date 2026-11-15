@@ -9,6 +9,8 @@ import {
   describeViewAccessChange,
   grantedCodes,
   isViewOnly,
+  showsAdditionalAccess,
+  additionalAccessRows,
   selectionChanged,
   viewAccessChoices,
   viewAccessErrorMessage,
@@ -109,6 +111,16 @@ describe('view-only records', () => {
     assert.deepEqual(getEligibleUnassignedTasks({ tasks, assignments: [] }).map((t) => t.id), ['t1']);
   });
 
+  it('the compact badge keeps the label and the sky colours, only smaller; an unknown size falls back to the default', () => {
+    const compact = renderToStaticMarkup(h(ViewOnlyBadge, { size: 'compact' }));
+    assert.match(compact, />View only</);
+    assert.match(compact, /bg-sky-50/);
+    assert.ok(compact.includes('text-[9px]'));
+    assert.ok(compact.includes('class="w-2.5 h-2.5"'));
+    assert.equal(renderToStaticMarkup(h(ViewOnlyBadge, { size: 'huge' })), renderToStaticMarkup(h(ViewOnlyBadge)));
+    assert.ok(renderToStaticMarkup(h(ViewOnlyBadge)).includes('text-[10px]'), 'tables keep the default size');
+  });
+
   it('the badge says "View only", with an explanation', () => {
     const html = renderToStaticMarkup(h(ViewOnlyBadge));
     assert.match(html, /data-view-only/);
@@ -191,5 +203,63 @@ describe('the Admin dialog', () => {
     const page = read('pages', 'UsersPage.jsx');
     assert.ok(page.includes("if (action === 'viewAccess') {\n      // Admin only (the server refuses anyone else too); kept on the Manager's account\n      if (isAdmin) setGrantingViewAccess(user);\n      return;\n    }"));
     assert.ok(page.includes('isOpen={isAdmin && Boolean(grantingViewAccess)}'));
+  });
+});
+
+describe('a Manager’s details on the Users page: Additional Department Access', () => {
+  const manager = { userId: 'u1', role: 'MANAGER', department: 'HK' };
+
+  it('shown only to an Admin looking at a Manager with an account; Managers and Staff never fetch or see it', () => {
+    assert.equal(showsAdditionalAccess('ADMIN', manager), true);
+    assert.equal(showsAdditionalAccess('MANAGER', manager), false);
+    assert.equal(showsAdditionalAccess('STAFF', manager), false);
+    assert.equal(showsAdditionalAccess('ADMIN', { ...manager, role: 'STAFF' }), false);
+    assert.equal(showsAdditionalAccess('ADMIN', { ...manager, role: 'ADMIN' }), false);
+    assert.equal(showsAdditionalAccess('ADMIN', { ...manager, userId: null }), false);
+  });
+
+  it('every granted department by name, never the primary one, never twice; inactive ones are marked', () => {
+    const access = {
+      primaryDepartmentCode: 'HK',
+      departments: [
+        { departmentCode: 'SEC', departmentName: 'Security', active: false },
+        { departmentCode: 'FD', departmentName: 'Front Desk', active: true },
+        { departmentCode: 'HK', departmentName: 'Housekeeping', active: true },
+        { departmentCode: 'FD', departmentName: 'Front Desk', active: true },
+      ],
+    };
+    assert.deepEqual(additionalAccessRows(access, 'HK'), [
+      { code: 'FD', name: 'Front Desk', active: true },
+      { code: 'SEC', name: 'Security', active: false },
+    ]);
+    assert.deepEqual(additionalAccessRows({ primaryDepartmentCode: 'HK', departments: [{ departmentCode: 'MT', departmentName: 'Maintenance' }] }, 'MT'), [], 'the record’s own department is dropped too');
+    assert.deepEqual(additionalAccessRows({ departments: [] }, 'HK'), []);
+    assert.deepEqual(additionalAccessRows(null), []);
+  });
+
+  it('the row reads the existing Admin-only endpoint each time the details open, labels each department View only, and shows no history', () => {
+    const row = read('components', 'users', 'ManagerAdditionalAccess.jsx');
+    assert.ok(row.includes('const allowed = showsAdditionalAccess(getUserRole(), staff);'));
+    assert.ok(row.includes('if (!allowed) return null;'));
+    assert.ok(row.includes('getManagerViewAccess(userId)'), 'the existing view-access read, nothing new');
+    assert.ok(!/getManagerViewAccessHistory|updateManagerViewAccess|history/i.test(row.replace(/\/\*[\s\S]*?\*\//g, '')), 'read-only, no audit history');
+    assert.ok(row.includes('<ViewOnlyBadge size="compact" />'), 'each department keeps its View only label, in the compact size');
+    assert.ok(row.includes('divide-y divide-gray-100') && !row.includes('bg-gray-50'), 'a plain list with hairline separators, no card per department');
+    assert.ok(row.includes('No additional department access'));
+    assert.ok(row.includes('<DetailRow icon={EyeIcon} label="Additional Department Access" note={list}>'), 'the modal’s own row design; the list sits in its note area');
+    assert.ok(row.includes('let cancelled = false;'), 'a late answer for someone else is ignored');
+  });
+
+  it('the shared details modal still fetches nothing; it only places the optional row below Department', () => {
+    const details = read('components', 'staff', 'StaffDetailsModal.jsx');
+    assert.doesNotMatch(details, /services\/api|fetch\(/);
+    assert.match(details, /\{formatDepartment\(staff\.department\)\}\s*<\/DetailRow>\s*\{departmentAccess\}/);
+    assert.ok(details.includes("function StaffDetailsModal({ staff, onClose, closing = false, departmentAccess = null })"));
+  });
+
+  it('only the Users page passes it, for an Admin; the Staff and Workload pages are unchanged', () => {
+    const users = read('pages', 'UsersPage.jsx');
+    assert.match(users, /departmentAccess=\{\s*\/\/[^\n]*\n\s*isAdmin && viewingStaff && showsAdditionalAccess\(getUserRole\(\), viewingStaff\)\s*\? <ManagerAdditionalAccess key=\{viewingStaff\.userId\} staff=\{viewingStaff\} \/>\s*: null/);
+    for (const page of ['StaffPage.jsx', 'WorkloadPage.jsx']) assert.ok(!read('pages', page).includes('departmentAccess'), page);
   });
 });

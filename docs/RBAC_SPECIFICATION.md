@@ -340,6 +340,8 @@ Authorization is enforced twice: the URL rules (Admin only, next to the Manager 
 
 **Write refusal.** Every task, staff and assignment write keeps checking the primary department (`includes` / `department()`), so a granted-department id is refused (403 or 404, as for any other department) whatever the page offers. The pages show a "View only" badge on such records and offer View Details only; assignment pickers never list view-only staff or tasks.
 
+**Details on the Users page (Admin only).** An Admin opening a Manager's details on the Users page sees "Additional Department Access" below Department: each granted department labelled View only, or "No additional department access". It is read from `GET /api/users/{id}/view-departments` each time the details open (no history is shown) by `ManagerAdditionalAccess.jsx`; the shared details modal itself still fetches nothing. Managers and Staff never see or request it, and other pages are unchanged.
+
 **Lifecycle.** Grants are deleted with the account or the department (database ON DELETE CASCADE). When an Admin moves a Manager's primary department to a department they had view access to, that now-redundant grant is removed and audited (`PRIMARY_DEPARTMENT_CHANGE`).
 
 **Audit history** (table `manager_view_access_changes`, append-only, no foreign keys, name snapshots): `managerUserId`, `managerUsername`, `departmentId`, `departmentCode`, `departmentName`, `action` (`GRANTED` or `REVOKED`), `changeSource` (`ADMIN_VIEW_ACCESS` or `PRIMARY_DEPARTMENT_CHANGE`), `changedByUserId`, `changedByUsername`, `changedAt`.

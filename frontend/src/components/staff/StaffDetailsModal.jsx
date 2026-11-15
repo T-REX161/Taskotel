@@ -17,7 +17,7 @@ import {
 } from './staffFormatters';
 
 /** One labelled line in a details section: a small tinted icon, the label, and the value (stacked on a phone, side by side from sm up). */
-function DetailRow({ icon: Icon, label, children, note }) {
+export function DetailRow({ icon: Icon, label, children, note }) {
   return (
     <div className="px-4 py-3">
       <div className="flex items-start gap-3">
@@ -53,10 +53,12 @@ function StatusPill({ className, children }) {
  * divided rows. Nothing is fetched or changed here.
  *
  * Props:
- *   staff   – staff object to display (or null)
- *   onClose – callback to dismiss modal
+ *   staff            – staff object to display (or null)
+ *   onClose          – callback to dismiss modal
+ *   departmentAccess – optional extra Work information row(s) shown right below Department; the Users page passes a Manager's
+ *                      additional view-only departments here (read by that row's own component, never by this modal)
  */
-function StaffDetailsModal({ staff, onClose, closing = false }) {
+function StaffDetailsModal({ staff, onClose, closing = false, departmentAccess = null }) {
   if (!staff) return null;
 
   const available = isAvailable(staff.availability);
@@ -131,6 +133,7 @@ function StaffDetailsModal({ staff, onClose, closing = false }) {
               >
                 {formatDepartment(staff.department)}
               </DetailRow>
+              {departmentAccess}
               <DetailRow icon={UserIcon} label="Role">
                 {roleLabel}
               </DetailRow>
