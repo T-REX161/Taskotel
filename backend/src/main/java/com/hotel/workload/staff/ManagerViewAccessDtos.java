@@ -41,4 +41,18 @@ public final class ManagerViewAccessDtos {
                     change.getChangeSource(), change.getChangedByUsername(), change.getChangedAt());
         }
     }
+
+    /**
+     * One page of a Manager's access history, newest first. {@code counts} are for the department filter (if any) across all actions, so
+     * the All / Granted / Revoked choices can show their totals; {@code departments} lists every department in the Manager's history.
+     */
+    public record HistoryPage(List<Change> items, int page, int size, long totalElements, boolean hasMore, HistoryCounts counts,
+                              List<HistoryDepartment> departments) {
+    }
+
+    public record HistoryCounts(long all, long granted, long revoked) {
+    }
+
+    public record HistoryDepartment(String code, String name) {
+    }
 }

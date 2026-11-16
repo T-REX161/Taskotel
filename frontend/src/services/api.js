@@ -451,6 +451,15 @@ export const updateManagerViewAccess = (userId, departmentCodes) => apiFetch(`/a
   body: JSON.stringify({ departments: departmentCodes }),
 });
 export const getManagerViewAccessHistory = (userId) => apiFetch(`/api/users/${userId}/view-departments/history`);
+/**
+ * Admin only: one page of the access history, newest first. action: 'ALL' | 'GRANTED' | 'REVOKED'; department: a department code or ''.
+ * Answers { items, page, size, totalElements, hasMore, counts: { all, granted, revoked }, departments: [{ code, name }] }. Read-only.
+ */
+export const getManagerViewAccessHistoryPage = (userId, { page = 0, size = 10, action = 'ALL', department = '' } = {}) => {
+  const query = new URLSearchParams({ page: String(page), size: String(size), action });
+  if (department) query.set('department', department);
+  return apiFetch(`/api/users/${userId}/view-departments/history/page?${query}`);
+};
 
 /**
  * Activate a staff member.

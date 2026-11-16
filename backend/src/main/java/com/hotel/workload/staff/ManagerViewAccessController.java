@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -39,5 +40,16 @@ public class ManagerViewAccessController {
     @GetMapping("/history")
     public ResponseEntity<List<ManagerViewAccessDtos.Change>> history(@PathVariable UUID userId) {
         return ResponseEntity.ok(service.history(userId));
+    }
+
+    /** One page of the history, newest first; optional filters action (ALL, GRANTED, REVOKED) and department (a department code). */
+    @GetMapping("/history/page")
+    public ResponseEntity<ManagerViewAccessDtos.HistoryPage> historyPage(
+            @PathVariable UUID userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "" + ManagerViewAccessService.HISTORY_PAGE_DEFAULT_SIZE) int size,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) String department) {
+        return ResponseEntity.ok(service.historyPage(userId, page, size, action, department));
     }
 }

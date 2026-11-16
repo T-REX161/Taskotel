@@ -4,15 +4,20 @@ import com.hotel.workload.security.CurrentUserScopeResolver;
 import com.hotel.workload.security.Role;
 import com.hotel.workload.security.User;
 import com.hotel.workload.security.UserRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -125,6 +130,51 @@ public class ManagerViewAccessService {
     public List<ManagerViewAccessDtos.Change> history(UUID userId) {
         scopeResolver.requireAdmin(ADMIN_ONLY_MESSAGE);
         return changeRepository.findByManagerUserIdOrderByChangedAtDesc(userId).stream().map(ManagerViewAccessDtos.Change::of).toList();
+    }
+
+    static final int HISTORY_PAGE_DEFAULT_SIZE = 10;
+    static final int HISTORY_PAGE_MAX_SIZE = 100;
+
+    /**
+     * One page of the history, newest first (ties broken by id, so pages never overlap or skip), optionally only GRANTED or REVOKED records
+     * and/or one department's. Read-only, Admin only, like {@link #history}, which stays as it is for existing callers. A page number below
+     * 0 is read as 0 and a size outside 1..100 is brought into that range, so a request can never ask for an unbounded list.
+     */
+    @Transactional(readOnly = true)
+    public ManagerViewAccessDtos.HistoryPage historyPage(UUID userId, int page, int size, String action, String departmentCode) {
+        scopeResolver.requireAdmin(ADMIN_ONLY_MESSAGE);
+        String actionFilter = normalizeAction(action);
+        String departmentFilter = departmentCode == null || departmentCode.isBlank() ? null : departmentCode.trim();
+        int pageNumber = Math.max(page, 0);
+        int pageSize = Math.min(Math.max(size, 1), HISTORY_PAGE_MAX_SIZE);
+
+        Page<ManagerViewGrantChange> result = changeRepository.findPage(userId, actionFilter, departmentFilter,
+                PageRequest.of(pageNumber, pageSize, Sort.by(Sort.Order.desc("changedAt"), Sort.Order.desc("id"))));
+
+        long granted = 0;
+        long revoked = 0;
+        long all = 0;
+        for (Object[] row : changeRepository.countByAction(userId, departmentFilter)) {
+            long count = ((Number) row[1]).longValue();
+            all += count;
+            if (ManagerViewGrantChange.ACTION_GRANTED.equals(row[0])) granted = count;
+            if (ManagerViewGrantChange.ACTION_REVOKED.equals(row[0])) revoked = count;
+        }
+        List<ManagerViewAccessDtos.HistoryDepartment> departments = changeRepository.departmentsInHistory(userId).stream()
+                .map(row -> new ManagerViewAccessDtos.HistoryDepartment((String) row[0], (String) row[1]))
+                .sorted(Comparator.comparing(ManagerViewAccessDtos.HistoryDepartment::name, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        return new ManagerViewAccessDtos.HistoryPage(result.getContent().stream().map(ManagerViewAccessDtos.Change::of).toList(),
+                pageNumber, pageSize, result.getTotalElements(), result.hasNext(),
+                new ManagerViewAccessDtos.HistoryCounts(all, granted, revoked), departments);
+    }
+
+    private static String normalizeAction(String action) {
+        if (action == null || action.isBlank() || "ALL".equalsIgnoreCase(action.trim())) return null;
+        String value = action.trim().toUpperCase(Locale.ROOT);
+        if (ManagerViewGrantChange.ACTION_GRANTED.equals(value) || ManagerViewGrantChange.ACTION_REVOKED.equals(value)) return value;
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The action filter must be ALL, GRANTED or REVOKED.");
     }
 
     /**

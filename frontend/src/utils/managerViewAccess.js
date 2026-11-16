@@ -166,11 +166,36 @@ export function viewAccessHistoryRows(history) {
     .sort((a, b) => time(b.change) - time(a.change) || a.index - b.index)
     .map(({ change }) => ({
       id: change.id,
-      action: change.action === 'GRANTED' ? 'Granted' : change.action === 'REVOKED' ? 'Revoked' : 'Changed',
+      action: change.action === 'GRANTED' ? 'Access granted' : change.action === 'REVOKED' ? 'Access revoked' : 'Access changed',
       tone: change.action === 'GRANTED' ? 'granted' : change.action === 'REVOKED' ? 'revoked' : 'other',
       department: change.departmentName || change.departmentCode || 'A department',
       actor: change.changedByUsername || 'Unknown',
       automatic: change.changeSource === 'PRIMARY_DEPARTMENT_CHANGE',
       changedAt: change.changedAt,
     }));
+}
+
+/** The Manager View Access dialog shows this many of the newest records; the full history opens in its own dialog. */
+export const HISTORY_PREVIEW_SIZE = 10;
+/** Records fetched per "Load more" in the full history. */
+export const HISTORY_PAGE_SIZE = 20;
+export const HISTORY_FILTERS = [
+  { key: 'ALL', label: 'All', count: 'all' },
+  { key: 'GRANTED', label: 'Granted', count: 'granted' },
+  { key: 'REVOKED', label: 'Revoked', count: 'revoked' },
+];
+
+/** Whether the preview needs a "View all history" action: only when there are more records than it shows. */
+export function hasMoreHistory(page) {
+  return Number(page?.totalElements) > HISTORY_PREVIEW_SIZE;
+}
+
+/**
+ * The records loaded so far plus the next page, without duplicates: a change saved while the Admin is reading moves later pages by one,
+ * so a record can come back twice; it is listed once, and the order (newest first) is kept.
+ */
+export function appendHistoryPage(loaded, next) {
+  const seen = new Set((Array.isArray(loaded) ? loaded : []).map((change) => change?.id));
+  const added = (Array.isArray(next?.items) ? next.items : []).filter((change) => change && !seen.has(change.id));
+  return [...(Array.isArray(loaded) ? loaded : []), ...added];
 }

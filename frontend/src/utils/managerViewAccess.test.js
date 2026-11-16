@@ -5,8 +5,13 @@ import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   VIEW_ACCESS_ADMIN_ONLY_MESSAGE,
+  HISTORY_FILTERS,
+  HISTORY_PAGE_SIZE,
+  HISTORY_PREVIEW_SIZE,
+  appendHistoryPage,
   canManageViewAccess,
   choiceState,
+  hasMoreHistory,
   describeViewAccessChange,
   revokeSelection,
   viewAccessHistoryRows,
@@ -345,8 +350,8 @@ describe('the Admin dialog: layout and history', () => {
       null,
     ]);
     assert.deepEqual(rows.map((r) => r.id), [3, 2, 1]);
-    assert.deepEqual(rows[0], { id: 3, action: 'Revoked', tone: 'revoked', department: 'SEC', actor: 'admin2', automatic: true, changedAt: '2026-11-12T09:00:00Z' });
-    assert.equal(rows[2].action, 'Granted');
+    assert.deepEqual(rows[0], { id: 3, action: 'Access revoked', tone: 'revoked', department: 'SEC', actor: 'admin2', automatic: true, changedAt: '2026-11-12T09:00:00Z' });
+    assert.equal(rows[2].action, 'Access granted');
     assert.equal(rows[1].automatic, false);
     assert.deepEqual(viewAccessHistoryRows(null), []);
   });
@@ -357,5 +362,69 @@ describe('the Admin dialog: layout and history', () => {
     assert.equal(rows.length, 500);
     assert.equal(rows[0].id, 499);
     assert.equal(rows[499].id, 0);
+  });
+});
+
+describe('access history: preview, full history, filters and Load more', () => {
+  const modal = read('components', 'users', 'ManagerViewAccessModal.jsx');
+  const full = read('components', 'users', 'ManagerViewAccessHistoryModal.jsx');
+  const row = read('components', 'users', 'ViewAccessHistoryRow.jsx');
+  const api = read('services', 'api.js');
+
+  it('the dialog shows the 10 newest; "View all history" only when there are more than 10', () => {
+    assert.equal(HISTORY_PREVIEW_SIZE, 10);
+    for (const [total, more] of [[0, false], [5, false], [10, false], [11, true], [100, true], [1000, true]]) {
+      assert.equal(hasMoreHistory({ totalElements: total }), more, `${total} records`);
+    }
+    assert.equal(hasMoreHistory(null), false);
+    assert.ok(modal.includes('setHistory(await getManagerViewAccessHistoryPage(userId, { page: 0, size: HISTORY_PREVIEW_SIZE }));'), 'only the newest page is requested');
+    assert.ok(!modal.includes('getManagerViewAccessHistory(userId)'), 'the dialog no longer loads the whole history');
+    assert.ok(modal.includes('{hasMoreHistory(history) && (') && modal.includes('View all history ({historyTotal})'));
+    assert.ok(modal.includes('<ManagerViewAccessHistoryModal isOpen={showAllHistory} user={user} onClose={() => setShowAllHistory(false)} />'));
+    assert.ok(modal.includes("if (event.key !== 'Escape' || inFlight.current || showAllHistory) return;"), 'Escape closes the full history first');
+  });
+
+  it('the paged endpoint: Admin-only URL, page, size, action and optional department', () => {
+    assert.ok(api.includes('return apiFetch(`/api/users/${userId}/view-departments/history/page?${query}`);'));
+    assert.ok(api.includes("const query = new URLSearchParams({ page: String(page), size: String(size), action });"));
+    assert.ok(api.includes("if (department) query.set('department', department);"));
+  });
+
+  it('full history: Admin only, All / Granted / Revoked and department filters, Load more by pages of 20', () => {
+    assert.ok(full.includes('const permitted = isOpen && canManageViewAccess(getUserRole(), user);') && full.includes('if (!permitted) return null;'));
+    assert.deepEqual(HISTORY_FILTERS.map((f) => f.key), ['ALL', 'GRANTED', 'REVOKED']);
+    assert.equal(HISTORY_PAGE_SIZE, 20);
+    assert.ok(full.includes('getManagerViewAccessHistoryPage(userId, { page: 0, size: HISTORY_PAGE_SIZE, action: filter, department })'));
+    assert.ok(full.includes('getManagerViewAccessHistoryPage(userId, { page: page + 1, size: HISTORY_PAGE_SIZE, action: filter, department })'));
+    assert.ok(full.includes('if (mine !== request.current) return;'), 'a late answer for an old filter is ignored');
+    assert.ok(full.includes('h-[min(26rem,52vh)] overflow-y-auto'), 'a fixed-height list that scrolls on its own');
+    assert.ok(full.includes('aria-label="Close"') && full.includes('<header className="shrink-0') && full.includes('<footer className="shrink-0'));
+  });
+
+  it('read-only everywhere: no delete or clear action, and the API module has no call that changes the history', () => {
+    for (const [name, text] of [['full', full], ['row', row]]) {
+      assert.ok(!/delete|clear history|remove entry/i.test(text.replace(/\/\*\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), name);
+    }
+    assert.ok(!row.includes('<button') && !row.includes('onClick'), 'a history row has no actions');
+    assert.ok(!/view-departments\/history[^\n]*method:/.test(api), 'no request with a method other than GET goes to the history');
+  });
+
+  it('rows read "Access granted" / "Access revoked" with department, Admin and time', () => {
+    const [granted, revoked] = viewAccessHistoryRows([
+      { id: 'b', action: 'GRANTED', departmentName: 'Front Desk', changedByUsername: 'admin', changedAt: '2026-11-12T09:00:00Z' },
+      { id: 'a', action: 'REVOKED', departmentName: 'Security', changedByUsername: 'admin', changedAt: '2026-11-11T09:00:00Z' },
+    ]);
+    assert.equal(granted.action, 'Access granted');
+    assert.equal(revoked.action, 'Access revoked');
+    assert.ok(row.includes('{row.action}') && row.includes('{row.department}') && row.includes('by {row.actor}') && row.includes('{formatWhen(row.changedAt)}'));
+    assert.ok(row.includes("granted: { dot: 'bg-emerald-500', text: 'text-emerald-700' }") && row.includes("revoked: { dot: 'bg-rose-500', text: 'text-rose-700' }"));
+  });
+
+  it('Load more appends the next page without listing a record twice', () => {
+    const first = [{ id: 1 }, { id: 2 }];
+    assert.deepEqual(appendHistoryPage(first, { items: [{ id: 2 }, { id: 3 }] }).map((c) => c.id), [1, 2, 3]);
+    assert.deepEqual(appendHistoryPage([], { items: [{ id: 9 }] }).map((c) => c.id), [9]);
+    assert.deepEqual(appendHistoryPage(first, null), first);
+    assert.deepEqual(appendHistoryPage(null, { items: [null, { id: 4 }] }).map((c) => c.id), [4]);
   });
 });

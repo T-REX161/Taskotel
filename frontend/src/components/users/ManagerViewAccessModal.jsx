@@ -3,19 +3,21 @@ import { createPortal } from 'react-dom';
 import {
   getDepartments,
   getManagerViewAccess,
-  getManagerViewAccessHistory,
+  getManagerViewAccessHistoryPage,
   getUserRole,
   updateManagerViewAccess,
 } from '../../services/api';
 import { CloseIcon, LockIcon } from '../icons/Icons';
 import ViewOnlyBadge from '../common/ViewOnlyBadge';
-import { formatDate, formatTime } from '../../utils/dateTimeFormat';
-import { getPreferences } from '../../utils/preferences';
+import ViewAccessHistoryRow from './ViewAccessHistoryRow';
+import ManagerViewAccessHistoryModal from './ManagerViewAccessHistoryModal';
 import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import {
+  HISTORY_PREVIEW_SIZE,
   canManageViewAccess,
   choiceState,
   grantedCodes,
+  hasMoreHistory,
   revokeSelection,
   selectionChanged,
   viewAccessChoices,
@@ -23,20 +25,6 @@ import {
   viewAccessHistoryRows,
   viewAccessSummary,
 } from '../../utils/managerViewAccess';
-
-const formatWhen = (value) => {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  const { dateFormat, timeFormat } = getPreferences();
-  return `${formatDate(date, dateFormat)}, ${formatTime(date, timeFormat)}`;
-};
-
-const ACTION_TONE = {
-  granted: 'bg-emerald-50 text-emerald-700',
-  revoked: 'bg-rose-50 text-rose-700',
-  other: 'bg-gray-100 text-gray-600',
-};
 
 // Saved grants first (so they are easy to find), then the rest; the own department stays on top. Only the SAVED state decides the
 // order, so rows do not jump while the Admin ticks boxes.
@@ -60,7 +48,8 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
   const [access, setAccess] = useState(null);
   const [departments, setDepartments] = useState([]);
   const [selected, setSelected] = useState([]);
-  const [history, setHistory] = useState([]);
+  const [history, setHistory] = useState(null); // the newest page only (HISTORY_PREVIEW_SIZE records); the rest opens in its own dialog
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -76,7 +65,7 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
   const loadHistory = useCallback(async () => {
     if (!userId) return;
     try {
-      setHistory(await getManagerViewAccessHistory(userId));
+      setHistory(await getManagerViewAccessHistoryPage(userId, { page: 0, size: HISTORY_PREVIEW_SIZE }));
       setHistoryError('');
     } catch (err) {
       setHistoryError(viewAccessErrorMessage(err, 'The access history could not be loaded.'));
@@ -90,7 +79,8 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
     setLoadError('');
     setAccess(null);
     setSelected([]);
-    setHistory([]);
+    setHistory(null);
+    setShowAllHistory(false);
     setSubmitError('');
     setSaved('');
     setRevoking(null);
@@ -116,14 +106,15 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
   useEffect(() => {
     if (!permitted) return undefined;
     const onKeyDown = (event) => {
-      if (event.key !== 'Escape' || inFlight.current) return;
+      // the full history, when open, handles its own Escape
+      if (event.key !== 'Escape' || inFlight.current || showAllHistory) return;
       // Escape first dismisses the confirmation, then the dialog
       if (revoking) setRevoking(null);
       else onClose();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [permitted, onClose, revoking]);
+  }, [permitted, onClose, revoking, showAllHistory]);
 
   useEffect(() => {
     if (revoking) confirmCancelRef.current?.focus();
@@ -136,7 +127,8 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
     .map((choice) => ({ choice, state: choiceState(choice, savedCodes, selected) }))
     .sort((a, b) => STATE_ORDER[choiceState(a.choice, savedCodes, savedCodes)] - STATE_ORDER[choiceState(b.choice, savedCodes, savedCodes)]);
   const changed = selectionChanged(savedCodes, selected);
-  const historyRows = viewAccessHistoryRows(history);
+  const historyRows = viewAccessHistoryRows(history?.items);
+  const historyTotal = Number(history?.totalElements) || 0;
   const primaryName = choices.find(({ state }) => state === 'primary')?.choice.name || access?.primaryDepartmentName || '';
 
   const toggle = (code) => {
@@ -194,7 +186,9 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
 
   const grantedCount = savedCodes.length;
 
-  return createPortal(
+  return (
+    <>
+      {createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-gray-900/50 backdrop-blur-xs ${backdropMotion(closing)}`}
       inert={closing}
@@ -308,46 +302,40 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
             </fieldset>
           )}
 
-          {/* C. History: append-only and read-only, newest first, in its own scroll area */}
+          {/* C. History: append-only and read-only. Only the newest records here; the full history opens in its own dialog */}
           {access && (
             <section aria-labelledby="view-access-history-title" className="min-w-0">
               <div className="flex items-baseline justify-between gap-3">
                 <h4 id="view-access-history-title" className="text-sm font-semibold text-gray-900">Access change history</h4>
-                {historyRows.length > 0 && (
+                {historyTotal > 0 && (
                   <span className="shrink-0 text-xs text-gray-500" data-testid="history-count">
-                    {historyRows.length} {historyRows.length === 1 ? 'change' : 'changes'}
+                    {hasMoreHistory(history) ? `Latest ${historyRows.length} of ${historyTotal}` : `${historyTotal} ${historyTotal === 1 ? 'change' : 'changes'}`}
                   </span>
                 )}
               </div>
               {historyError && <p role="alert" className="mt-2 text-xs text-red-700">{historyError}</p>}
-              {!historyError && historyRows.length === 0 && <p className="mt-2 text-xs text-gray-500">No access changes recorded yet.</p>}
+              {!historyError && history && historyRows.length === 0 && <p className="mt-2 text-xs text-gray-500">No access changes recorded yet.</p>}
               {historyRows.length > 0 && (
                 <ol
                   data-testid="view-access-history"
                   tabIndex={0}
-                  aria-label="Access changes, most recent first"
+                  aria-label="Latest access changes, most recent first"
                   className="mt-2 max-h-48 sm:max-h-56 overflow-y-auto overscroll-contain divide-y divide-gray-100 border-y border-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                 >
                   {historyRows.map((row) => (
-                    <li key={row.id} className="py-2 pr-1">
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                        <p className="min-w-0 text-sm text-gray-900 break-words">
-                          <span className={`inline-block mr-1.5 rounded px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide align-[1px] ${ACTION_TONE[row.tone]}`}>
-                            {row.action}
-                          </span>
-                          {row.department}
-                        </p>
-                        <time dateTime={row.changedAt || undefined} className="shrink-0 text-xs text-gray-500 tabular-nums">
-                          {formatWhen(row.changedAt)}
-                        </time>
-                      </div>
-                      <p className="text-xs text-gray-500 break-words">
-                        by {row.actor}
-                        {row.automatic && ' · automatic: it became the Manager’s own department'}
-                      </p>
-                    </li>
+                    <ViewAccessHistoryRow key={row.id} row={row} />
                   ))}
                 </ol>
+              )}
+              {hasMoreHistory(history) && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllHistory(true)}
+                  data-testid="view-all-history"
+                  className="mt-2 inline-flex items-center gap-1 rounded-lg px-2 py-1 -ml-2 text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition-colors cursor-pointer"
+                >
+                  View all history ({historyTotal})
+                </button>
               )}
             </section>
           )}
@@ -421,6 +409,9 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
       </div>
     </div>,
     document.body
+  )}
+      <ManagerViewAccessHistoryModal isOpen={showAllHistory} user={user} onClose={() => setShowAllHistory(false)} />
+    </>
   );
 }
 

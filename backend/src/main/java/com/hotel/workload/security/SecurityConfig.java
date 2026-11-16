@@ -112,7 +112,8 @@ public class SecurityConfig {
 
         // ── Users, Manager departments and Manager view access: Admin only ─────────────────────────────────────────────────────────────────────────
         allowGet(authz, new String[]{"/api/users", "/api/users/*/manager-department", "/api/users/*/manager-department/history",
-                "/api/users/*/view-departments", "/api/users/*/view-departments/history"}, ADMIN);
+                "/api/users/*/view-departments", "/api/users/*/view-departments/history",
+                "/api/users/*/view-departments/history/page"}, ADMIN);
         authz.requestMatchers(HttpMethod.PUT, "/api/users/*/manager-department", "/api/users/*/view-departments").hasRole(ADMIN);
         authz.requestMatchers(HttpMethod.PATCH, "/api/users/*/deactivate", "/api/users/*/activate").hasRole(ADMIN);
         authz.requestMatchers(HttpMethod.DELETE, "/api/users/*").hasRole(ADMIN);
