@@ -151,12 +151,38 @@ public class SecurityNotificationRulesTest {
     }
 
     @Test
-    @DisplayName("Other categories keep their old rules: no verified-address requirement, and an unverified active account is still emailed")
-    public void otherCategoriesUnchanged() {
+    @DisplayName("Every category requires a verified address: an unverified account is skipped for each of them, a verified one is emailed")
+    public void everyCategoryRequiresAVerifiedAddress() {
         User unverified = account("other", true, false, P + "other@hotel.test");
-        preferenceRepository.saveAndFlush(new NotificationPreference(unverified.getId(), NotificationCategory.TASK_ASSIGNED, true, true));
+        User verified = account("other_ok", true);
+        for (NotificationCategory category : NotificationCategory.values()) {
+            preferenceRepository.save(new NotificationPreference(unverified.getId(), category, true, true));
+            preferenceRepository.save(new NotificationPreference(verified.getId(), category, true, true));
+            notifications.sendAfterCommit(category, List.of(new Notice(unverified.getId(), CONTENT), new Notice(verified.getId(), CONTENT)));
+        }
+        verifySent(unverified, 0);
+        verifySent(verified, NotificationCategory.values().length);
+    }
+
+    @Test
+    @DisplayName("The inactive exception lifts only the 'active' requirement: an unverified inactive owner is still skipped, a verified one is emailed")
+    public void inactiveExceptionStillNeedsAVerifiedAddress() {
+        User unverifiedInactive = account("inact_unver", false, false, P + "inact_unver@hotel.test");
+        User verifiedInactive = account("inact_ver", false);
+        notifications.sendAfterCommit(NotificationCategory.SECURITY, List.of(new Notice(unverifiedInactive.getId(), CONTENT, true)));
+        verifySent(unverifiedInactive, 0);
+        notifications.sendAfterCommit(NotificationCategory.SECURITY, List.of(new Notice(verifiedInactive.getId(), CONTENT, true)));
+        verifySent(verifiedInactive, 1);
+    }
+
+    @Test
+    @DisplayName("Task assignment and status notices skip an unverified account too (the resolver is shared by every category)")
+    public void taskNoticesSkipUnverified() {
+        User unverified = account("task_unver", true, false, P + "task_unver@hotel.test");
+        preferenceRepository.save(new NotificationPreference(unverified.getId(), NotificationCategory.TASK_STATUS, true, true));
         notifications.sendAfterCommit(NotificationCategory.TASK_ASSIGNED, List.of(new Notice(unverified.getId(), CONTENT)));
-        verifySent(unverified, 1);
+        notifications.sendAfterCommit(NotificationCategory.TASK_STATUS, () -> List.of(new Notice(unverified.getId(), CONTENT)));
+        verifySent(unverified, 0);
     }
 
     @Test

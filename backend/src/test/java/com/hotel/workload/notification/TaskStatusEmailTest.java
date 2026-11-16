@@ -123,6 +123,12 @@ public class TaskStatusEmailTest {
         departmentRepository.saveAndFlush(dead);
 
         // Everyone has TASK_STATUS switched on, so the tests below show who is chosen by the rules, not by a default
+        // Every notification goes only to a verified address, so the fixture accounts are verified
+        for (String name : USERS) {
+            User account = userRepository.findByUsername(name).orElseThrow();
+            account.setEmailVerified(true);
+            userRepository.saveAndFlush(account);
+        }
         for (String name : USERS) enable(name, true);
         Mockito.clearInvocations(emailService);
     }
@@ -437,5 +443,20 @@ public class TaskStatusEmailTest {
         Mockito.clearInvocations(emailService);
         assertEquals(200, edit("n2_admin", "ADMIN", task, TaskStatus.COMPLETED).getResponse().getStatus());
         assertTrue(sent().isEmpty());
+    }
+
+    @Test
+    @DisplayName("An unverified assignee is not emailed about a status change; the verified Managers still are")
+    public void unverifiedAssigneeIsNotEmailed() throws Exception {
+        verified("n2_s1", false);
+        Task task = task("Unverified", home, TaskStatus.ASSIGNED, s1);
+        assertEquals(200, edit("n2_admin", "ADMIN", task, TaskStatus.IN_PROGRESS).getResponse().getStatus());
+        assertEquals(mails("n2_mgr_home", "n2_mgr_grant"), recipients());
+    }
+
+    private void verified(String username, boolean value) {
+        User account = userRepository.findByUsername(username).orElseThrow();
+        account.setEmailVerified(value);
+        userRepository.saveAndFlush(account);
     }
 }

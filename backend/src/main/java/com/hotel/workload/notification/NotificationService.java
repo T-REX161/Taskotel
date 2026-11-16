@@ -146,9 +146,11 @@ public class NotificationService {
                 if (user == null) continue;
                 // Inactive accounts are skipped, except for the one explicit SECURITY notice that tells an owner their account was deactivated
                 if (!user.isActive() && !(security && entry.getValue().includeInactive())) continue;
-                // A security notice goes only to an address the owner has verified
-                if (security && !user.isEmailVerified()) {
-                    log.warn("A SECURITY notification was skipped: the account's email address is not verified");
+                // Every notification, whatever its category, goes only to an address the owner has verified (an account that has not
+                // finished onboarding has an address nobody has confirmed, possibly mistyped). The deactivation exception above lifts the
+                // "active" requirement only: that notice needs a verified address too.
+                if (!user.isEmailVerified()) {
+                    log.warn("A {} notification was skipped: the account's email address is not verified", category);
                     continue;
                 }
                 if (!usableAddress(user.getEmail())) {

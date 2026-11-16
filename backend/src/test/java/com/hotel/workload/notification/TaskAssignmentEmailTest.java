@@ -94,6 +94,12 @@ public class TaskAssignmentEmailTest {
         s2 = fixtures.staff("n1_s2", home);
         s3 = fixtures.staff("n1_s3", home);
         outsider = fixtures.staff("n1_out", other);
+        // Every notification goes only to a verified address, so the fixture accounts are verified
+        for (String name : USERS) {
+            User account = userRepository.findByUsername(name).orElseThrow();
+            account.setEmailVerified(true);
+            userRepository.saveAndFlush(account);
+        }
         Mockito.clearInvocations(emailService);
     }
 
@@ -346,6 +352,16 @@ public class TaskAssignmentEmailTest {
         account.setEmail("");
         userRepository.saveAndFlush(account);
         assertEquals(201, assignAs("n1_admin", "ADMIN", task("No address", home), s1).getResponse().getStatus());
+        assertTrue(sent().isEmpty());
+    }
+
+    @Test
+    @DisplayName("An assignee whose email address is not verified is not emailed; the assignment itself succeeds")
+    public void unverifiedAssigneeIsNotEmailed() throws Exception {
+        User account = s1.getUser();
+        account.setEmailVerified(false);
+        userRepository.saveAndFlush(account);
+        assertEquals(201, assignAs("n1_admin", "ADMIN", task("Unverified assignee", home), s1).getResponse().getStatus());
         assertTrue(sent().isEmpty());
     }
 }
