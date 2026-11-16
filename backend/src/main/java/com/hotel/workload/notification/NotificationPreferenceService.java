@@ -19,6 +19,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * A user's own notification preferences. The account is always the signed-in one (the caller passes the name from the security
@@ -39,6 +40,34 @@ public class NotificationPreferenceService {
         this.repository = repository;
         this.userRepository = userRepository;
         this.entityManager = entityManager;
+    }
+
+    /**
+     * Whether this account wants this category by email, read from the database now. SECURITY is always on. For the others a saved choice
+     * wins; with no saved row the category's default applies (so accounts that existed before the "all on" default keep their behaviour).
+     */
+    @Transactional(readOnly = true)
+    public boolean isEmailEnabled(UUID userId, NotificationCategory category) {
+        if (category == null) return false;
+        if (category.isMandatory()) return true;
+        for (NotificationPreference row : repository.findByUserId(userId)) {
+            if (category.name().equals(row.getCategory())) return row.isEmail();
+        }
+        return category.defaultEmail();
+    }
+
+    /**
+     * For a NEW account: every optional category starts ON by email. Only categories without a saved row get one, so a saved choice is
+     * never overwritten. Runs in the caller's transaction (the account creation), so the rows and the account appear together.
+     */
+    @Transactional
+    public void enableAllOptionalForNewAccount(UUID userId) {
+        Set<String> saved = new java.util.HashSet<>();
+        for (NotificationPreference row : repository.findByUserId(userId)) saved.add(row.getCategory());
+        for (NotificationCategory category : NotificationCategory.values()) {
+            if (category.isMandatory() || saved.contains(category.name())) continue;
+            repository.save(new NotificationPreference(userId, category, category.defaultInApp(), true));
+        }
     }
 
     @Transactional(readOnly = true)

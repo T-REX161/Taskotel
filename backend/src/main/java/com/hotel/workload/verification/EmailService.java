@@ -63,6 +63,12 @@ public interface EmailService {
     void sendAdministratorEmailChangeUnavailableNotice(String toOldEmail, String maskedProposedEmail);
 
     /**
+     * Sends one notification email (a task, workload or security event) with a plain-text and an HTML body. Throws
+     * {@link EmailSendingException} when it cannot be sent; the notification layer logs and swallows that, so it never reaches a user's request.
+     */
+    void sendNotificationEmail(String toEmail, String subject, String text, String html);
+
+    /**
      * Checks if the email service is properly configured to send emails.
      *
      * @return true if configured, false otherwise

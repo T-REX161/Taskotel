@@ -10,9 +10,9 @@ import { getNotificationPreferences, updateNotificationPreferences } from '../se
 
 export const NOTIFICATION_CATEGORIES = [
   { key: 'TASK_ASSIGNED', title: 'Task Assigned / Reassigned', description: 'Get notified when a task is assigned or reassigned to you.', defaults: { email: true } },
-  { key: 'TASK_STATUS', title: 'Task Status Updates', description: "Get notified when an assigned task's status changes.", defaults: { email: false } },
+  { key: 'TASK_STATUS', title: 'Task Status Updates', description: "Get notified when an assigned task's status changes.", defaults: { email: true } },
   { key: 'WORKLOAD_ALERT', title: 'Workload Alerts', description: 'Get notified when your workload reaches HIGH or AT_RISK.', defaults: { email: true } },
-  { key: 'TASK_REMINDER', title: 'Task Reminders', description: 'Receive reminders about pending or overdue tasks.', defaults: { email: false } },
+  { key: 'TASK_REMINDER', title: 'Task Reminders', description: 'Receive reminders about pending or overdue tasks.', defaults: { email: true } },
   { key: 'SECURITY', title: 'Security Alerts', description: 'Receive important account and login security notifications.', defaults: { email: true }, locked: true },
 ];
 
@@ -30,7 +30,7 @@ export const NOTIFICATION_MESSAGES = {
 const MAX_MESSAGE_LENGTH = 200;
 const isLocked = (key) => NOTIFICATION_CATEGORIES.find((c) => c.key === key)?.locked === true;
 
-/** The defaults as a map (what a user sees before choosing anything). */
+/** The defaults as a map: every optional category starts ON for a new account (the server always sends the real, saved values; this is only the fallback). */
 export function defaultPreferenceMap() {
   return Object.fromEntries(NOTIFICATION_CATEGORIES.map((c) => [c.key, { ...c.defaults, locked: Boolean(c.locked) }]));
 }

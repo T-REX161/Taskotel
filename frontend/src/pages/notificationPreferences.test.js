@@ -69,12 +69,12 @@ describe('categories and defaults', () => {
     ]);
   });
 
-  it('defaults: email on for assignment, workload and security; off for status and reminders', () => {
+  it('defaults: every optional category is on by email for a new account, and security is on and locked', () => {
     assert.deepEqual(defaultPreferenceMap(), {
       TASK_ASSIGNED: { email: true, locked: false },
-      TASK_STATUS: { email: false, locked: false },
+      TASK_STATUS: { email: true, locked: false },
       WORKLOAD_ALERT: { email: true, locked: false },
-      TASK_REMINDER: { email: false, locked: false },
+      TASK_REMINDER: { email: true, locked: false },
       SECURITY: { email: true, locked: true },
     });
   });
@@ -101,10 +101,10 @@ describe('changes and the security lock', () => {
   const map = defaultPreferenceMap();
 
   it('switching the email switch changes only that category', () => {
-    const next = withChange(map, 'TASK_STATUS', 'email', true);
-    assert.deepEqual(next.TASK_STATUS, { email: true, locked: false });
+    const next = withChange(map, 'TASK_STATUS', 'email', false);
+    assert.deepEqual(next.TASK_STATUS, { email: false, locked: false });
     assert.deepEqual({ ...next, TASK_STATUS: map.TASK_STATUS }, map, 'nothing else changed');
-    assert.deepEqual(map.TASK_STATUS, { email: false, locked: false }, 'the old map is not modified');
+    assert.deepEqual(map.TASK_STATUS, { email: true, locked: false }, 'the old map is not modified');
   });
 
   it('security alerts cannot be switched off from the screen, nor can unknown categories or channels be invented', () => {
@@ -149,12 +149,12 @@ describe('loading, saving and persistence (against a fake server)', () => {
   it('a save sends only the changed category and resolves with the server\'s complete answer', async () => {
     signInAs('maria');
     const { calls } = fakeServer();
-    const saved = await saveNotificationPreference(defaultPreferenceMap(), 'TASK_STATUS', 'email', true);
-    assert.deepEqual(saved.TASK_STATUS, { email: true, locked: false });
+    const saved = await saveNotificationPreference(defaultPreferenceMap(), 'TASK_STATUS', 'email', false);
+    assert.deepEqual(saved.TASK_STATUS, { email: false, locked: false });
     assert.deepEqual(saved.SECURITY, { email: true, locked: true });
     assert.equal(calls.length, 1);
     assert.equal(calls[0].method, 'PUT');
-    assert.deepEqual(calls[0].body, { preferences: [{ category: 'TASK_STATUS', email: true }] });
+    assert.deepEqual(calls[0].body, { preferences: [{ category: 'TASK_STATUS', email: false }] });
   });
 
   it('survives a refresh and signing out and in: a fresh load reads what was saved', async () => {
@@ -170,13 +170,13 @@ describe('loading, saving and persistence (against a fake server)', () => {
     signInAs('admin');
     await saveNotificationPreference(defaultPreferenceMap(), 'TASK_ASSIGNED', 'email', false);
     signInAs('manager');
-    await saveNotificationPreference(defaultPreferenceMap(), 'TASK_REMINDER', 'email', true);
+    await saveNotificationPreference(defaultPreferenceMap(), 'TASK_REMINDER', 'email', false);
     signInAs('staff');
     assert.deepEqual(await loadNotificationPreferences(), defaultPreferenceMap(), 'staff never changed anything');
     signInAs('admin');
     const admin = await loadNotificationPreferences();
     assert.equal(admin.TASK_ASSIGNED.email, false);
-    assert.equal(admin.TASK_REMINDER.email, false, 'the manager\'s change did not reach the admin');
+    assert.equal(admin.TASK_REMINDER.email, true, 'the manager\'s change did not reach the admin');
     assert.deepEqual(Object.keys(rowsByUser).sort(), ['admin', 'manager', 'staff']);
     assert.deepEqual(Object.keys(rowsByUser.admin), ['TASK_ASSIGNED']);
   });

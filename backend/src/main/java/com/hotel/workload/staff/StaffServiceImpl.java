@@ -74,6 +74,14 @@ public class StaffServiceImpl implements StaffService {
         this.managerAuditRecorder = managerAuditRecorder;
     }
 
+    /** Optional, so a service built by hand in a unit test creates no preference rows. */
+    private com.hotel.workload.notification.NotificationPreferenceService notificationPreferences;
+
+    @Autowired(required = false)
+    public void setNotificationPreferenceService(com.hotel.workload.notification.NotificationPreferenceService notificationPreferences) {
+        this.notificationPreferences = notificationPreferences;
+    }
+
     @Autowired
     public StaffServiceImpl(StaffRepository staffRepository,
                             UserRepository userRepository,
@@ -173,6 +181,9 @@ public class StaffServiceImpl implements StaffService {
         } catch (DataIntegrityViolationException e) {
             throw duplicateAccount(e);
         }
+
+        // A new account starts with every optional email category ON (SECURITY is always on); existing accounts are not touched
+        if (notificationPreferences != null) notificationPreferences.enableAllOptionalForNewAccount(user.getId());
 
         Staff staff = new Staff();
         staff.setUser(user);

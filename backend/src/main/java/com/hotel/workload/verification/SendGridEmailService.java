@@ -346,6 +346,11 @@ public class SendGridEmailService implements EmailService {
     }
 
     @Override
+    public void sendNotificationEmail(String toEmail, String subject, String text, String html) {
+        dispatch(toEmail, subject, text, html, "notification");
+    }
+
+    @Override
     public boolean isConfigured() {
         return sendGridClient != null;
     }

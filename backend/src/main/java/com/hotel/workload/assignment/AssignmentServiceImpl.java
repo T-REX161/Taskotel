@@ -49,6 +49,14 @@ public class AssignmentServiceImpl implements AssignmentService {
         this.scopeResolver = scopeResolver;
     }
 
+    /** Tells assignees by email (after commit). Optional, so a service built by hand in a unit test simply sends nothing. */
+    private com.hotel.workload.notification.TaskEmailNotifier taskEmails;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTaskEmailNotifier(com.hotel.workload.notification.TaskEmailNotifier taskEmails) {
+        this.taskEmails = taskEmails;
+    }
+
     /**
      * The scope for creating or reassigning: ALL (Admin) or one department (a valid Manager). Anyone else (Staff) is refused with 403
      * before any repository is read; a refused Manager or a missing sign-in is refused by the resolver (403, 401).
@@ -217,6 +225,8 @@ public class AssignmentServiceImpl implements AssignmentService {
             // The database refused a duplicate (task, staff) pair: nothing is kept
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Task already has an active assignment");
         }
+        // Each new assignee is told once, after this transaction commits (nothing is sent if anything above failed)
+        if (taskEmails != null) taskEmails.taskAssigned(task, requestedIds.stream().map(byId::get).toList());
         return created;
     }
 
@@ -322,11 +332,14 @@ public class AssignmentServiceImpl implements AssignmentService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Target staff member already has an active assignment");
         }
 
+        Staff previousHolder = assignment.getStaff();
         assignment.setStaff(targetStaff);
         assignment.setAssignedAt(LocalDateTime.now());
         assignment = assignmentRepository.saveAndFlush(assignment);
         // If this task was being supported from another department, that support ends: someone else holds it now
         if (task != null) supportLifecycle.onTaskReassigned(task.getId(), targetStaff.getId());
+        // The new assignee is told it is theirs and the previous one that it no longer is, after commit
+        if (taskEmails != null && task != null) taskEmails.taskReassigned(task, previousHolder, targetStaff);
 
         return AssignmentDto.fromEntity(assignment);
     }
