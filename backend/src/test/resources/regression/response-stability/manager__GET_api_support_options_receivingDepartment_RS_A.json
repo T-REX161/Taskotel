@@ -3,7 +3,7 @@
   "status" : 200,
   "body" : {
     "donors" : [ ],
-    "limitations" : [ "Only active STAFF accounts that can sign in (email verified, credentials set up) can be selected.", "Shifts and working hours are not recorded. \"Available\" means active, marked Available and with no active task right now.", "Skills are not recorded in Taskotel, so a person's suitability for the task is not verified. You decide whether they can do it.", "Support lasts until the task is completed. The person stays in their home department the whole time." ],
+    "limitations" : [ "Skills are not recorded in Taskotel, so a person's suitability for the task is not verified. You decide whether they can do it.", "Shifts and working hours are not recorded. \"Available\" means active, marked Available and with no active task right now.", "Only active STAFF accounts that can sign in (email verified, credentials set up) can be selected.", "Support lasts until the task is completed. The person stays in their home department the whole time." ],
     "maxHelpers" : 0,
     "receiving" : {
       "activeStaff" : 4,

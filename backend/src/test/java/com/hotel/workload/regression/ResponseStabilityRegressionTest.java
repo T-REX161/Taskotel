@@ -64,10 +64,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * any of those requests differently.
  *
  * <p>The guarantee is <b>equivalent normalized responses</b> (same status code and the same JSON after normalization), not byte-identical
- * responses. Normalization: object keys are sorted; arrays are compared as sorted lists (several endpoints list rows in primary-key order,
- * and primary keys are random UUIDs); fixture ids become stable labels (for example {@code <staff:rs_staff_a1>}) and any other UUID becomes
- * {@code <uuid>}, also inside strings; date-times become {@code <datetime>}; dates become their distance from today ({@code <today+1>}).
- * Every other value (numbers, booleans, texts, nulls, the presence of every field) must match exactly.
+ * responses. Normalization: object keys are sorted; fixture ids become stable labels (for example {@code <staff:rs_staff_a1>}) and any other
+ * UUID becomes {@code <uuid>}, also inside strings; date-times become {@code <datetime>}; dates become their distance from today
+ * ({@code <today+1>}). Arrays keep the order the API sent and are compared in that order, EXCEPT the few listed in {@link #UNORDERED}, whose
+ * order the API does not define (their query has no ORDER BY, so rows come back in primary-key order and primary keys are random UUIDs):
+ * only those are compared as sorted lists. Every other value (numbers, booleans, texts, nulls, the presence of every field) must match.
+ *
+ * <p>The newest-first contracts of the history endpoints (and the other documented orders) are also asserted directly, with several
+ * records, by the {@code ...Order...} tests below; the reference files hold only the fixture's (mostly empty) histories.
  *
  * <p>Runs on its own empty in-memory database, so data left by other test classes can never change what an Admin lists; every test
  * method rolls back. Reference files: {@code src/test/resources/regression/response-stability/}. To re-record them deliberately (only
@@ -88,12 +92,34 @@ public class ResponseStabilityRegressionTest {
     private static final Pattern DATE_TIME = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}[T ]\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?(Z|[+-]\\d{2}:?\\d{2})?$");
     private static final Pattern DATE = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
 
+    /**
+     * The only arrays compared without regard to order: "METHOD /path" (ids as {id}, no query) mapped to JSON paths ("$" is the body, "[]"
+     * an array element). Each is justified by the query behind it, which has no ORDER BY:
+     * <ul>
+     *   <li>GET /api/staff: {@code staffRepository.findAll()} (Admin) / {@code findByDepartmentAndUserRole} (Manager)</li>
+     *   <li>GET /api/tasks: {@code taskRepository.findAll()} / {@code findByDepartment} / {@code findTasksByStaffId} (Staff)</li>
+     *   <li>GET /api/users: {@code userRepository.findAll()}</li>
+     *   <li>GET /api/workload: one row per staff member, in the order of {@code staffRepository.findAll()} / {@code findByDepartmentAndUserRole}</li>
+     *   <li>GET /api/dashboard/summary {@code recentAssignments} (Staff): {@code assignmentRepository.findByStaffId}</li>
+     * </ul>
+     * Everything else is compared in order: assignments (assigned time, newest first), departments (created time, then name), every history
+     * (newest first), support lists (newest first), capacity alerts and recommendations (explicit sorts), limitation notes (fixed order).
+     * An array that is not listed here is ordered by default, so a new array is never silently relaxed.
+     */
+    static final Map<String, java.util.Set<String>> UNORDERED = Map.of(
+            "GET /api/staff", java.util.Set.of("$"),
+            "GET /api/tasks", java.util.Set.of("$"),
+            "GET /api/users", java.util.Set.of("$"),
+            "GET /api/workload", java.util.Set.of("$"),
+            "GET /api/dashboard/summary", java.util.Set.of("$.recentAssignments"));
+
     @Autowired private WebApplicationContext context;
     @Autowired private UserRepository userRepository;
     @Autowired private StaffRepository staffRepository;
     @Autowired private DepartmentRepository departmentRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private JwtUtil jwt;
+    @Autowired private com.hotel.workload.support.SupportAssignmentRepository supportRepository;
     @MockitoBean private EmailService emailService;
 
     private final ObjectMapper json = new ObjectMapper();
@@ -104,6 +130,7 @@ public class ResponseStabilityRegressionTest {
     private String managerA;
     private String staffA1;
     private User managerAUser;
+    private User managerBUser;
     private Staff staffA2;
     private Staff staffB1;
     private UUID taskAPending;
@@ -149,7 +176,9 @@ public class ResponseStabilityRegressionTest {
         UUID taskAAssigned = createTask("RS A assigned", "RS_A", "MEDIUM", 45, 2);
         taskBPending = createTask("RS B pending", "RS_B", "URGENT", 60, 0);
         UUID taskBAssigned = createTask("RS B assigned", "RS_B", "LOW", 20, 3);
+        managerBUser = mgrB.getUser();
         assignmentA = assign(taskAAssigned, a1.getId(), "assignment:RS A assigned");
+        Thread.sleep(20); // assignments are listed newest first by assigned time alone: keep the two times apart, so their order is defined
         assignmentB = assign(taskBAssigned, staffB1.getId(), "assignment:RS B assigned");
     }
 
@@ -265,17 +294,174 @@ public class ResponseStabilityRegressionTest {
     // ── the guard itself ───────────────────────────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("The normalizer: labels, dates, sorted keys and arrays; nothing else is relaxed")
+    @DisplayName("The normalizer: labels, dates and sorted keys; arrays keep their order unless the endpoint's order is undefined")
     void normalizerIsStrictOutsideVolatileFields() throws Exception {
         UUID known = UUID.randomUUID();
         label(known, "thing:x");
         JsonNode raw = json.readTree("{\"b\":[3,1,2],\"a\":\"" + known + "\",\"c\":\"" + UUID.randomUUID() + "\",\"d\":\"2026-01-02T03:04:05.678\","
                 + "\"e\":\"" + LocalDate.now().plusDays(2) + "\",\"f\":\"text " + known + "\",\"g\":false,\"h\":null,\"i\":1.5}");
-        assertEquals("{\"a\":\"<thing:x>\",\"b\":[1,2,3],\"c\":\"<uuid>\",\"d\":\"<datetime>\",\"e\":\"<today+2>\",\"f\":\"text <thing:x>\","
-                + "\"g\":false,\"h\":null,\"i\":1.5}", json.writeValueAsString(normalize(raw)));
-        // a changed value, a missing field and an extra field are all differences
-        assertTrue(!normalize(json.readTree("{\"g\":true}")).equals(normalize(json.readTree("{\"g\":false}"))));
-        assertTrue(!normalize(json.readTree("{\"g\":true}")).equals(normalize(json.readTree("{\"g\":true,\"x\":1}"))));
+        // An endpoint with no unordered arrays: the array keeps the order it was sent in
+        assertEquals("{\"a\":\"<thing:x>\",\"b\":[3,1,2],\"c\":\"<uuid>\",\"d\":\"<datetime>\",\"e\":\"<today+2>\",\"f\":\"text <thing:x>\","
+                + "\"g\":false,\"h\":null,\"i\":1.5}", json.writeValueAsString(normalize(raw, "GET /api/assignments")));
+        // A listed path is compared sorted, and only that path: an array inside its elements keeps its order
+        assertEquals("[{\"k\":1,\"n\":[2,1]},{\"k\":2,\"n\":[2,1]}]",
+                json.writeValueAsString(normalize(json.readTree("[{\"k\":2,\"n\":[2,1]},{\"k\":1,\"n\":[2,1]}]"), "GET /api/staff")));
+        assertEquals("{\"recentAssignments\":[1,2],\"x\":[2,1]}",
+                json.writeValueAsString(normalize(json.readTree("{\"x\":[2,1],\"recentAssignments\":[2,1]}"), "GET /api/dashboard/summary")));
+        // Order, a changed value, a missing field and an extra field are all differences
+        assertTrue(!normalize(json.readTree("[1,2]"), "GET /api/assignments").equals(normalize(json.readTree("[2,1]"), "GET /api/assignments")));
+        assertTrue(!normalize(json.readTree("{\"g\":true}"), "GET /x").equals(normalize(json.readTree("{\"g\":false}"), "GET /x")));
+        assertTrue(!normalize(json.readTree("{\"g\":true}"), "GET /x").equals(normalize(json.readTree("{\"g\":true,\"x\":1}"), "GET /x")));
+        // Sorting an unordered list never hides a changed element
+        assertTrue(!normalize(json.readTree("[1,2]"), "GET /api/staff").equals(normalize(json.readTree("[1,3]"), "GET /api/staff")));
+    }
+
+    // ── documented orders, asserted directly with several records ──────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("Order: the access history (full and paged) lists the newest change first; pages neither overlap nor skip")
+    void accessHistoryOrderNewestFirst() throws Exception {
+        String base = "/api/users/" + managerAUser.getId() + "/view-departments";
+        List<String> performed = new ArrayList<>();
+        for (List<String> grants : List.of(List.of("RS_B"), List.<String>of(), List.of("RS_B"), List.of("RS_B", "HOUSEKEEPING"), List.of("HOUSEKEEPING"))) {
+            Thread.sleep(20); // distinct change times, so "newest first" has a single right answer
+            MvcResult put = call(HttpMethod.PUT, base, admin, Map.of("departments", grants));
+            assertEquals(200, put.getResponse().getStatus(), put.getResponse().getContentAsString());
+        }
+        performed.addAll(List.of("GRANTED RS_B", "REVOKED RS_B", "GRANTED RS_B", "GRANTED HOUSEKEEPING", "REVOKED RS_B"));
+
+        JsonNode full = body(call(HttpMethod.GET, base + "/history", admin, null));
+        List<String> shown = new ArrayList<>();
+        full.forEach(c -> shown.add(c.get("action").asText() + " " + c.get("departmentCode").asText()));
+        List<String> newestFirst = new ArrayList<>(performed);
+        java.util.Collections.reverse(newestFirst);
+        assertEquals(newestFirst, shown, "the full history lists the newest change first");
+        assertNonIncreasing(full, "changedAt");
+
+        List<String> paged = new ArrayList<>();
+        for (int page = 0; page < 3; page++) {
+            JsonNode p = body(call(HttpMethod.GET, base + "/history/page?size=2&page=" + page, admin, null));
+            assertNonIncreasing(p.get("items"), "changedAt");
+            p.get("items").forEach(c -> paged.add(c.get("id").asText()));
+            assertEquals(page < 2, p.get("hasMore").asBoolean(), "page " + page);
+        }
+        List<String> fullIds = new ArrayList<>();
+        full.forEach(c -> fullIds.add(c.get("id").asText()));
+        assertEquals(fullIds, paged, "pages of 2 read in turn give exactly the full history, in the same order");
+
+        JsonNode departments = body(call(HttpMethod.GET, base + "/history/page", admin, null)).get("departments");
+        List<String> names = new ArrayList<>();
+        departments.forEach(d -> names.add(d.get("name").asText()));
+        List<String> sortedNames = new ArrayList<>(names);
+        sortedNames.sort(String.CASE_INSENSITIVE_ORDER);
+        assertEquals(sortedNames, names, "the history's department filter is sorted by name");
+        assertEquals(2, names.size());
+
+        JsonNode grants = body(call(HttpMethod.GET, base, admin, null)).get("departments");
+        assertEquals(1, grants.size());
+    }
+
+    @Test
+    @DisplayName("Order: changes made in one save keep a stable order across pages (ties are broken by id)")
+    void accessHistoryTiesAreStableAcrossPages() throws Exception {
+        String base = "/api/users/" + managerAUser.getId() + "/view-departments";
+        // One save that grants three departments records three changes at (nearly) the same moment
+        assertEquals(200, call(HttpMethod.PUT, base, admin, Map.of("departments", List.of("RS_B", "HOUSEKEEPING", "SECURITY"))).getResponse().getStatus());
+        Thread.sleep(20);
+        assertEquals(200, call(HttpMethod.PUT, base, admin, Map.of("departments", List.of())).getResponse().getStatus());
+        List<String> all = new ArrayList<>();
+        body(call(HttpMethod.GET, base + "/history/page?size=100", admin, null)).get("items").forEach(c -> all.add(c.get("id").asText()));
+        assertEquals(6, all.size());
+        for (int size = 1; size <= 4; size++) {
+            List<String> paged = new ArrayList<>();
+            for (int page = 0; paged.size() < all.size() && page < 10; page++) {
+                body(call(HttpMethod.GET, base + "/history/page?size=" + size + "&page=" + page, admin, null)).get("items")
+                        .forEach(c -> paged.add(c.get("id").asText()));
+            }
+            assertEquals(all, paged, "page size " + size + " gives the same order, nothing repeated or skipped");
+        }
+        JsonNode full = body(call(HttpMethod.GET, base + "/history", admin, null));
+        assertNonIncreasing(full, "changedAt");
+        assertEquals(6, full.size());
+    }
+
+    @Test
+    @DisplayName("Order: a Manager's department history lists the newest change first")
+    void managerDepartmentHistoryOrderNewestFirst() throws Exception {
+        String base = "/api/users/" + managerBUser.getId() + "/manager-department";
+        for (String department : List.of("RS_A", "HOUSEKEEPING", "RS_B")) {
+            Thread.sleep(20);
+            MvcResult put = call(HttpMethod.PUT, base, admin, Map.of("department", department));
+            assertEquals(200, put.getResponse().getStatus(), put.getResponse().getContentAsString());
+        }
+        JsonNode history = body(call(HttpMethod.GET, base + "/history", admin, null));
+        assertEquals(3, history.size(), history.toString());
+        assertNonIncreasing(history, "changedAt");
+        assertTrue(history.get(0).toString().contains("RS_B") && history.get(2).toString().contains("RS_A"), history.toString());
+    }
+
+    @Test
+    @DisplayName("Order: the support history lists the newest record first, for an Admin and for a Manager")
+    void supportHistoryOrderNewestFirst() throws Exception {
+        java.time.LocalDateTime now = java.time.LocalDateTime.now().withNano(0);
+        // Saved out of order on purpose: 1 hour ago, 3 hours ago, 2 hours ago
+        for (int hoursAgo : new int[]{1, 3, 2}) {
+            com.hotel.workload.support.SupportAssignment s = new com.hotel.workload.support.SupportAssignment();
+            s.setPlanId(UUID.randomUUID());
+            s.setStaffId(staffA2.getId());
+            s.setStaffName("Scope rs_staff_a2");
+            s.setHomeDepartmentCode("RS_A");
+            s.setReceivingDepartmentCode("RS_B");
+            s.setTaskId(taskBPending);
+            s.setTaskTitle("RS B pending " + hoursAgo);
+            s.setApprovedByUserId(UUID.randomUUID());
+            s.setApprovedByUsername("rs_admin");
+            s.setCreatedAt(now.minusHours(hoursAgo));
+            s.end(com.hotel.workload.support.SupportStatus.COMPLETED, com.hotel.workload.support.SupportEndReason.TASK_COMPLETED, now);
+            supportRepository.saveAndFlush(s);
+        }
+        for (String token : List.of(admin, managerA)) {
+            JsonNode rows = body(call(HttpMethod.GET, "/api/support/assignments", token, null));
+            assertEquals(3, rows.size(), rows.toString());
+            List<String> created = new ArrayList<>();
+            rows.forEach(r -> created.add(r.get("createdAt").asText()));
+            assertEquals(List.of(now.minusHours(1), now.minusHours(2), now.minusHours(3)),
+                    created.stream().map(java.time.LocalDateTime::parse).toList(), "newest first");
+        }
+    }
+
+    @Test
+    @DisplayName("Order: assignments newest first; departments by creation time, then name")
+    void assignmentAndDepartmentOrder() throws Exception {
+        for (String token : List.of(admin, managerA)) {
+            assertNonIncreasing(body(call(HttpMethod.GET, "/api/assignments", token, null)), "assignedAt");
+        }
+        JsonNode adminAssignments = body(call(HttpMethod.GET, "/api/assignments", admin, null));
+        assertEquals(assignmentB.toString(), adminAssignments.get(0).get("id").asText(), "the later assignment comes first");
+
+        List<String> expected = new ArrayList<>();
+        com.hotel.workload.staff.DepartmentCatalog.BUILT_IN.forEach(b -> expected.add(b.code()));
+        expected.addAll(List.of("RS_A", "RS_B"));
+        for (String token : List.of(admin, managerA, staffA1)) {
+            List<String> codes = new ArrayList<>();
+            body(call(HttpMethod.GET, "/api/departments", token, null)).forEach(d -> codes.add(d.get("code").asText()));
+            assertEquals(expected, codes);
+        }
+    }
+
+    private JsonNode body(MvcResult result) throws Exception {
+        assertEquals(200, result.getResponse().getStatus(), result.getResponse().getContentAsString());
+        return json.readTree(result.getResponse().getContentAsString(StandardCharsets.UTF_8));
+    }
+
+    /** Each element's date-time field is not later than the one before it (newest first). */
+    private static void assertNonIncreasing(JsonNode array, String field) {
+        java.time.LocalDateTime previous = null;
+        for (JsonNode element : array) {
+            java.time.LocalDateTime value = java.time.LocalDateTime.parse(element.get(field).asText());
+            if (previous != null) assertTrue(!value.isAfter(previous), field + " out of order: " + value + " after " + previous);
+            previous = value;
+        }
     }
 
     // ── helpers ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -318,7 +504,8 @@ public class ResponseStabilityRegressionTest {
         String shownUrl = labelText(url);
         actual.put("request", method.name() + " " + shownUrl);
         actual.put("status", result.getResponse().getStatus());
-        actual.set("body", content.isBlank() ? JsonNodeFactory.instance.nullNode() : normalize(parse(content)));
+        String endpoint = method.name() + " " + shownUrl.replaceAll("<[^>]+>", "{id}").replaceAll("\\?.*$", "");
+        actual.set("body", content.isBlank() ? JsonNodeFactory.instance.nullNode() : normalize(parse(content), endpoint));
         String rendered = json.copy().enable(SerializationFeature.INDENT_OUTPUT).writeValueAsString(actual).replace("\r\n", "\n") + "\n";
         String file = fileName(role, method, shownUrl, body);
 
@@ -370,19 +557,24 @@ public class ResponseStabilityRegressionTest {
         return out.toString();
     }
 
-    private JsonNode normalize(JsonNode node) {
+    /** Normalizes a response of {@code endpoint} ("METHOD /path" with {id} placeholders); see {@link #UNORDERED} for array order. */
+    private JsonNode normalize(JsonNode node, String endpoint) {
+        return normalize(node, "$", UNORDERED.getOrDefault(endpoint, java.util.Set.of()));
+    }
+
+    private JsonNode normalize(JsonNode node, String path, java.util.Set<String> unordered) {
         if (node.isObject()) {
             ObjectNode sorted = JsonNodeFactory.instance.objectNode();
             List<String> names = new ArrayList<>();
             node.fieldNames().forEachRemaining(names::add);
             names.sort(Comparator.naturalOrder());
-            for (String name : names) sorted.set(name, normalize(node.get(name)));
+            for (String name : names) sorted.set(name, normalize(node.get(name), path + "." + name, unordered));
             return sorted;
         }
         if (node.isArray()) {
             List<JsonNode> items = new ArrayList<>();
-            node.forEach(item -> items.add(normalize(item)));
-            items.sort(Comparator.comparing(JsonNode::toString));
+            node.forEach(item -> items.add(normalize(item, path + "[]", unordered)));
+            if (unordered.contains(path)) items.sort(Comparator.comparing(JsonNode::toString)); // the API defines no order here (see UNORDERED)
             ArrayNode array = JsonNodeFactory.instance.arrayNode();
             items.forEach(array::add);
             return array;
