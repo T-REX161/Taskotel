@@ -120,7 +120,7 @@ describe('each skeleton follows its loaded page: same containers, columns and wi
     assert.equal(count(html, /class="min-w-0 bg-white rounded-2xl border border-gray-200\/80 shadow-sm"/g), 6);
   });
 
-  it('Users: the same filter placeholders as before, and the 6-column table in its card instead of one block', () => {
+  it('Users: the same filter placeholders as before, and the 5-column table in its card instead of one block', () => {
     const html = render(UsersPageSkeleton);
     const page = read('pages/UsersPage.jsx');
     const table = read('components/users/UsersTable.jsx');
@@ -130,7 +130,7 @@ describe('each skeleton follows its loaded page: same containers, columns and wi
     assert.ok(page.includes('<UsersTable'));
     for (const width of cols(html)) assert.ok(table.includes(`<col className="${width}" />`), width);
     for (const { cls, label } of headings(html)) assert.ok(table.includes(`<th scope="col" className="${cls}">${label}</th>`), `column "${label}" matches UsersTable`);
-    assert.equal(count(html, /<tr class="h-\[69px\]">/g), 6);
+    assert.equal(count(html, /<tr class="h-\[77px\]">/g), 6);
   });
 });
 

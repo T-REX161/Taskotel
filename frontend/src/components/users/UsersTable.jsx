@@ -133,17 +133,15 @@ export default function UsersTable({ users, staffByUserId, currentUsername, isAd
       <div className="overflow-x-auto">
         <table className="w-full min-w-[800px] text-left table-fixed">
           <colgroup>
-            <col className="w-[18%]" />
-            <col className="w-[25%]" />
+            <col className="w-[36%]" />
+            <col className="w-[15%]" />
             <col className="w-[14%]" />
-            <col className="w-[13%]" />
-            <col className="w-[18%]" />
-            <col className="w-[12%]" />
+            <col className="w-[20%]" />
+            <col className="w-[15%]" />
           </colgroup>
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr className="text-sm font-semibold text-gray-800">
               <th scope="col" className="px-5 py-3.5 border-r border-gray-100">Username</th>
-              <th scope="col" className="px-5 py-3.5 border-r border-gray-100">Email</th>
               <th scope="col" className="px-5 py-3.5 border-r border-gray-100">Role</th>
               <th scope="col" className="px-5 py-3.5 border-r border-gray-100">Status</th>
               <th scope="col" className="px-5 py-3.5 border-r border-gray-100">Created</th>
@@ -153,7 +151,7 @@ export default function UsersTable({ users, staffByUserId, currentUsername, isAd
           <tbody className="divide-y divide-gray-100">
             {users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-12">
+                <td colSpan={5} className="px-6 py-12">
                   {emptyState}
                 </td>
               </tr>
@@ -166,24 +164,27 @@ export default function UsersTable({ users, staffByUserId, currentUsername, isAd
                 return (
                   <tr key={user.id} className="hover:bg-gray-50/60 transition-colors">
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-2 min-w-0">
+                      {/* Avatar, username (semibold) and the email underneath: the same arrangement as the Staff page's Name column */}
+                      <div className="flex items-center gap-3 min-w-0">
                         <UserAvatar
                           imageUrl={user.profileImageUrl}
                           initials={avatarInitials(user.fullName || user.username)}
                           name={user.fullName || user.username}
-                          className="w-8 h-8 rounded-full shrink-0 border border-gray-200"
-                          fallbackClassName="bg-gray-100 text-gray-600 font-semibold text-[11px]"
+                          className="w-10 h-10 rounded-full shrink-0 border border-gray-200"
+                          fallbackClassName="bg-gray-100 text-gray-600 font-semibold text-xs"
                         />
-                        <span className="font-bold text-[15px] text-gray-900 truncate" title={user.fullName ? `${user.username} (${user.fullName})` : user.username}>
-                          {user.username}
-                        </span>
-                        {own && (
-                          <span className="shrink-0 px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px] font-semibold uppercase tracking-wide">You</span>
-                        )}
+                        <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-semibold text-[15px] text-gray-900 truncate" title={user.fullName ? `${user.username} (${user.fullName})` : user.username}>
+                              {user.username}
+                            </span>
+                            {own && (
+                              <span className="shrink-0 px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 text-[10px] font-semibold uppercase tracking-wide">You</span>
+                            )}
+                          </div>
+                          <span className="text-[13px] text-gray-500 truncate block mt-0.5" title={user.email || ''}>{user.email || '—'}</span>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-5 py-4 text-sm text-gray-700">
-                      <span className="block truncate" title={user.email || ''}>{user.email || '—'}</span>
                     </td>
                     <td className="px-5 py-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide ${roleBadgeClass(user.role)}`}>

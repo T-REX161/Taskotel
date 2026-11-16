@@ -42,9 +42,26 @@ describe('UsersPage layout', () => {
 });
 
 describe('UsersTable', () => {
-  it('has exactly the reference columns, in order', () => {
+  it('has the reference columns, in order (the email is shown under the username, as on the Staff page)', () => {
     const headers = [...table.matchAll(/<th scope="col"[^>]*>([^<]+)<\/th>/g)].map((m) => m[1]);
-    assert.deepStrictEqual(headers, ['Username', 'Email', 'Role', 'Status', 'Created', 'Actions']);
+    assert.deepStrictEqual(headers, ['Username', 'Role', 'Status', 'Created', 'Actions']);
+    assert.ok(table.includes('colSpan={5}'), 'the empty state spans every column');
+  });
+
+  it('the profile cell matches the Staff page: a 40px avatar, a semibold 15px username and a 13px email underneath', () => {
+    const staffTable = read('..', 'components', 'staff', 'StaffTable.jsx');
+    // the same arrangement and the same avatar size/border as the Staff page's Name column
+    assert.ok(staffTable.includes('className="w-10 h-10 rounded-full shrink-0 border border-gray-200"') && table.includes('className="w-10 h-10 rounded-full shrink-0 border border-gray-200"'));
+    assert.ok(table.includes('flex items-center gap-3 min-w-0') && table.includes('flex flex-col min-w-0 flex-1 overflow-hidden'));
+    assert.ok(table.includes('font-semibold text-[15px] text-gray-900 truncate') && !table.includes('font-bold text-[15px]'));
+    assert.ok(table.includes('text-[13px] text-gray-500 truncate block mt-0.5'));
+    // the picture (when there is one) or the initials, the "You" marker and the row styling are kept
+    assert.ok(table.includes('imageUrl={user.profileImageUrl}') && table.includes('initials={avatarInitials(user.fullName || user.username)}'));
+    assert.ok(table.includes('>You</span>') && table.includes('<tr key={user.id} className="hover:bg-gray-50/60 transition-colors">'));
+    // theme: only the theme-aware gray utilities, no fixed colours
+    const start = table.indexOf('{/* Avatar, username');
+    const cell = table.slice(start, table.indexOf('</td>', start));
+    assert.ok(!/#[0-9a-fA-F]{3,6}|\bbg-white\b|\btext-black\b/.test(cell), 'colours come from the theme-aware utilities');
   });
 
   it('uses the role and status badges and the project date format', () => {

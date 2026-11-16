@@ -281,13 +281,12 @@ export function UsersPageSkeleton({ label = 'Loading users…' } = {}) {
     h(TableSkeleton, {
       cardClassName: 'bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden',
       tableClassName: 'w-full min-w-[800px] text-left table-fixed',
-      colWidths: ['w-[18%]', 'w-[25%]', 'w-[14%]', 'w-[13%]', 'w-[18%]', 'w-[12%]'],
+      colWidths: ['w-[36%]', 'w-[15%]', 'w-[14%]', 'w-[20%]', 'w-[15%]'],
       theadClassName: 'bg-gray-50 border-b border-gray-200',
       headRowClassName: 'text-sm font-semibold text-gray-800',
-      rowClassName: 'h-[69px]',
+      rowClassName: 'h-[77px]',
       columns: [
-        { label: 'Username', th: 'px-5 py-3.5 border-r border-gray-100', td, cell: person('h-8 w-8') },
-        { label: 'Email', th: 'px-5 py-3.5 border-r border-gray-100', td, bar: text('w-4/5', 'w-3/4') },
+        { label: 'Username', th: 'px-5 py-3.5 border-r border-gray-100', td, cell: person('h-10 w-10') },
         { label: 'Role', th: 'px-5 py-3.5 border-r border-gray-100', td, bar: badge('w-16') },
         { label: 'Status', th: 'px-5 py-3.5 border-r border-gray-100', td, bar: badge('w-16') },
         { label: 'Created', th: 'px-5 py-3.5 border-r border-gray-100', td, bar: text('w-24') },
