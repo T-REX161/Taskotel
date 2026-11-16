@@ -58,6 +58,15 @@ public class SecurityEmailTest {
     private static final String OLD_PASSWORD = "Old@Pass123";
     private static final String NEW_PASSWORD = "Brand@New456x";
     private static final String CODE = "482913";
+    /**
+     * The password-reset confirm endpoint is rate-limited per client, per account and per client + account, and the limiter's counters live
+     * in the application context, which other test classes share. Every test therefore uses its own client address and its own reset
+     * account, so it starts from empty counters whatever ran before it (the limiter itself is covered by ResetAndSetupRateLimitTest).
+     */
+    private static final java.util.concurrent.atomic.AtomicInteger SEQUENCE = new java.util.concurrent.atomic.AtomicInteger();
+    private String resetClient;
+    private String resetEmail;
+
     private static final String[] USERS = {"n3_admin", "n3_admin2", "n3_mgr", "n3_mgr_other", "n3_s1", "n3_s2", "n3_s3", "n3_pw", "n3_reset"};
 
     @Autowired private WebApplicationContext context;
@@ -98,7 +107,11 @@ public class SecurityEmailTest {
         pw.setPassword(passwordEncoder.encode(OLD_PASSWORD));
         pw.setCredentialsSetupRequired(false);
         userRepository.saveAndFlush(pw);
+        int n = SEQUENCE.incrementAndGet();
+        resetClient = "10.73." + (n / 250) + "." + (n % 250 + 1);
+        resetEmail = "n3_reset_" + n + "@scope.test";
         User reset = fixtures.account("n3_reset", Role.STAFF, true);
+        reset.setEmail(resetEmail);
         reset.setPassword(passwordEncoder.encode(OLD_PASSWORD));
         reset.setCredentialsSetupRequired(false);
         reset.setPasswordResetCodeHash(passwordEncoder.encode(CODE));
@@ -148,8 +161,19 @@ public class SecurityEmailTest {
     }
 
     private MvcResult confirmReset(String code, String password) throws Exception {
-        return call(post("/api/auth/password-reset/confirm"), null, null,
-                "{\"email\":\"n3_reset@scope.test\",\"code\":\"" + code + "\",\"newPassword\":\"" + password + "\",\"confirmPassword\":\"" + password + "\"}");
+        MockHttpServletRequestBuilder request = post("/api/auth/password-reset/confirm").with(r -> {
+            r.setRemoteAddr(resetClient);
+            return r;
+        });
+        return call(request, null, null,
+                "{\"email\":\"" + resetEmail + "\",\"code\":\"" + code + "\",\"newPassword\":\"" + password + "\",\"confirmPassword\":\"" + password + "\"}");
+    }
+
+    /** Refused by the reset service itself (wrong, expired or cancelled code): never 200, and never the rate limiter's 429. */
+    private static void assertRefusedByTheService(MvcResult result) {
+        int status = result.getResponse().getStatus();
+        assertNotEquals(200, status);
+        assertNotEquals(429, status, "the request must reach the service, not be stopped by the shared rate limiter");
     }
 
     private MvcResult deactivate(String actor, String role, Staff target) throws Exception {
@@ -246,7 +270,7 @@ public class SecurityEmailTest {
     public void resetCompleted() throws Exception {
         MvcResult result = confirmReset(CODE, NEW_PASSWORD);
         assertEquals(200, result.getResponse().getStatus(), result.getResponse().getContentAsString());
-        assertEquals(List.of(mail("n3_reset")), recipients());
+        assertEquals(List.of(resetEmail), recipients());
         String[] m = sent().get(0);
         assertEquals("Taskotel - Your password was reset", m[1]);
         assertTrue(m[2].contains("verification code that was sent to your email address"));
@@ -258,7 +282,7 @@ public class SecurityEmailTest {
     @DisplayName("PASSWORD_RESET_COMPLETED: a wrong, expired or exhausted code sends nothing, and the attempt counter still persists as before")
     public void resetRefusalsSendNothing() throws Exception {
         for (int attempt = 1; attempt <= 2; attempt++) { // the endpoint allows 5 attempts per client and account, so few calls are used here
-            assertNotEquals(200, confirmReset("000000", NEW_PASSWORD).getResponse().getStatus());
+            assertRefusedByTheService(confirmReset("000000", NEW_PASSWORD));
             assertEquals(attempt, userRepository.findByUsername("n3_reset").orElseThrow().getPasswordResetAttemptCount(), "attempt " + attempt + " is saved");
         }
         assertTrue(sent().isEmpty());
@@ -268,7 +292,7 @@ public class SecurityEmailTest {
         account.setPasswordResetAttemptCount(0);
         account.setPasswordResetExpiresAt(LocalDateTime.now().minusMinutes(1));
         userRepository.saveAndFlush(account);
-        assertNotEquals(200, confirmReset(CODE, NEW_PASSWORD).getResponse().getStatus());
+        assertRefusedByTheService(confirmReset(CODE, NEW_PASSWORD));
         assertTrue(sent().isEmpty());
 
         // the fifth wrong attempt cancels the code, so even the right code then fails
@@ -276,8 +300,10 @@ public class SecurityEmailTest {
         account.setPasswordResetExpiresAt(LocalDateTime.now().plusMinutes(10));
         account.setPasswordResetAttemptCount(4);
         userRepository.saveAndFlush(account);
-        assertNotEquals(200, confirmReset("111111", NEW_PASSWORD).getResponse().getStatus());
+        assertRefusedByTheService(confirmReset("111111", NEW_PASSWORD));
         assertNull(userRepository.findByUsername("n3_reset").orElseThrow().getPasswordResetCodeHash(), "the code is cancelled");
+        assertRefusedByTheService(confirmReset(CODE, NEW_PASSWORD)); // the right code no longer works either
+        assertTrue(passwordEncoder.matches(OLD_PASSWORD, userRepository.findByUsername("n3_reset").orElseThrow().getPassword()), "the password is unchanged");
         assertTrue(sent().isEmpty());
     }
 

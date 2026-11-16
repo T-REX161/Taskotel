@@ -471,7 +471,8 @@ public class AuthControllerTest {
         userRepository.save(user);
 
         ResetPasswordRequest req = new ResetPasswordRequest("reset2@hotel.com", "123456", "NewPass@123", "NewPass@123");
-        mockMvc.perform(post("/api/auth/password-reset/confirm")
+        // Its own client address: the rate limiter's counters are shared with other tests in this application context
+        mockMvc.perform(post("/api/auth/password-reset/confirm").with(r -> { r.setRemoteAddr("10.81.0.2"); return r; })
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isOk());
@@ -493,7 +494,7 @@ public class AuthControllerTest {
         userRepository.save(user);
 
         ResetPasswordRequest req = new ResetPasswordRequest("reset3@hotel.com", "wrong", "NewPass@123", "NewPass@123");
-        mockMvc.perform(post("/api/auth/password-reset/confirm")
+        mockMvc.perform(post("/api/auth/password-reset/confirm").with(r -> { r.setRemoteAddr("10.81.0.3"); return r; })
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
@@ -504,7 +505,7 @@ public class AuthControllerTest {
     @DisplayName("POST /api/auth/password-reset/confirm with mismatched passwords returns 400 Bad Request")
     public void testPasswordResetConfirm_PasswordMismatch_ReturnsBadRequest() throws Exception {
         ResetPasswordRequest req = new ResetPasswordRequest("reset4@hotel.com", "123456", "NewPass@123", "DifferentPass@123");
-        mockMvc.perform(post("/api/auth/password-reset/confirm")
+        mockMvc.perform(post("/api/auth/password-reset/confirm").with(r -> { r.setRemoteAddr("10.81.0.4"); return r; })
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
