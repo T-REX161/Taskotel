@@ -27,6 +27,14 @@ public class PasswordResetService {
     private final PasswordValidatorService passwordValidatorService;
     private final SecureRandom secureRandom;
 
+    /** Tells the owner by email after the reset has committed. Optional: a service built by hand in a unit test sends nothing. */
+    private com.hotel.workload.notification.SecurityEmailNotifier securityEmails;
+
+    @Autowired(required = false)
+    public void setSecurityEmailNotifier(com.hotel.workload.notification.SecurityEmailNotifier securityEmails) {
+        this.securityEmails = securityEmails;
+    }
+
     @Autowired
     public PasswordResetService(UserRepository userRepository,
                                 EmailService emailService,
@@ -167,6 +175,8 @@ public class PasswordResetService {
         user.setPasswordChangedAt(java.time.LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
         clearResetFields(user);
         userRepository.save(user);
+        // Only the successful path gets here (every refusal above throws): queued for after the commit
+        if (securityEmails != null) securityEmails.passwordResetCompleted(user.getId());
     }
 
     private void clearResetFields(User user) {

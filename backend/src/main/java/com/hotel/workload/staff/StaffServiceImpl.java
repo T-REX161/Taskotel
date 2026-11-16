@@ -74,6 +74,24 @@ public class StaffServiceImpl implements StaffService {
         this.managerAuditRecorder = managerAuditRecorder;
     }
 
+    /** Tells an account's owner by email when it is deactivated or reactivated. Optional: a service built by hand sends nothing. */
+    private com.hotel.workload.notification.SecurityEmailNotifier securityEmails;
+
+    @Autowired(required = false)
+    public void setSecurityEmailNotifier(com.hotel.workload.notification.SecurityEmailNotifier securityEmails) {
+        this.securityEmails = securityEmails;
+    }
+
+    /** Announces a genuine change of the account's active state (never a no-op), once, to its owner, after commit. */
+    private void announceActiveChange(User user, boolean wasActive, DepartmentScope scope) {
+        if (securityEmails == null || user == null || user.getId() == null || wasActive == user.isActive()) return;
+        if (user.isActive()) {
+            securityEmails.accountReactivated(user.getId());
+        } else {
+            securityEmails.accountDeactivated(user.getId(), scope.isAll() ? "Administrator" : "Manager");
+        }
+    }
+
     /** Optional, so a service built by hand in a unit test creates no preference rows. */
     private com.hotel.workload.notification.NotificationPreferenceService notificationPreferences;
 
@@ -279,9 +297,11 @@ public class StaffServiceImpl implements StaffService {
         staff.setActive(request.isActive());
 
         User user = staff.getUser();
+        boolean accountWasActive = user != null && user.isActive();
         if (user != null) {
             user.setActive(request.isActive());
         }
+        announceActiveChange(user, accountWasActive, scope);
 
         staff = staffRepository.save(staff);
         // A Manager department change must always leave an audit record (Decision 17.6), also when an Admin makes it through this edit.
@@ -317,12 +337,14 @@ public class StaffServiceImpl implements StaffService {
 
         staff.setActive(false);
         User user = staff.getUser();
+        boolean accountWasActive = user != null && user.isActive();
         if (user != null) {
             user.setActive(false);
             if (userRepository != null) {
                 userRepository.save(user);
             }
         }
+        announceActiveChange(user, accountWasActive, scope);
 
         staff = staffRepository.save(staff);
         return StaffDto.fromEntity(staff);
@@ -344,12 +366,14 @@ public class StaffServiceImpl implements StaffService {
 
         staff.setActive(true);
         User user = staff.getUser();
+        boolean accountWasActive = user != null && user.isActive();
         if (user != null) {
             user.setActive(true);
             if (userRepository != null) {
                 userRepository.save(user);
             }
         }
+        announceActiveChange(user, accountWasActive, scope);
 
         staff = staffRepository.save(staff);
         return StaffDto.fromEntity(staff);

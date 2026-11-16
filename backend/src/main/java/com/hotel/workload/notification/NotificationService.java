@@ -43,8 +43,18 @@ public class NotificationService {
     private static final Pattern PLAIN_ADDRESS = Pattern.compile("^[^@\\s,;<>]+@[^@\\s,;<>]+\\.[^@\\s,;<>]+$");
     private static final int MAX_ADDRESS_LENGTH = 254;
 
-    /** One message for one account. */
-    public record Notice(UUID userId, EmailContent content) {}
+    /**
+     * One message for one account.
+     *
+     * @param includeInactive only honoured for the SECURITY category: the account may be inactive at delivery. It exists for the single
+     *                        notice that tells an owner their account was just deactivated; no other notice type is ever delivered to
+     *                        an inactive account.
+     */
+    public record Notice(UUID userId, EmailContent content, boolean includeInactive) {
+        public Notice(UUID userId, EmailContent content) {
+            this(userId, content, false);
+        }
+    }
 
     private record Target(String email, EmailContent content) {}
 
@@ -122,23 +132,31 @@ public class NotificationService {
         template.setReadOnly(true);
         return template.execute(status -> {
             // One notice per account per event: a person named twice receives the first notice only
-            Map<UUID, EmailContent> notices = new LinkedHashMap<>();
+            Map<UUID, Notice> notices = new LinkedHashMap<>();
             Collection<Notice> named = recipients.get();
             if (named != null) {
                 for (Notice notice : named) {
-                    if (notice != null && notice.userId() != null && notice.content() != null) notices.putIfAbsent(notice.userId(), notice.content());
+                    if (notice != null && notice.userId() != null && notice.content() != null) notices.putIfAbsent(notice.userId(), notice);
                 }
             }
             List<Target> targets = new ArrayList<>();
-            for (Map.Entry<UUID, EmailContent> entry : notices.entrySet()) {
+            boolean security = category == NotificationCategory.SECURITY;
+            for (Map.Entry<UUID, Notice> entry : notices.entrySet()) {
                 User user = userRepository.findById(entry.getKey()).orElse(null);
-                if (user == null || !user.isActive()) continue;
+                if (user == null) continue;
+                // Inactive accounts are skipped, except for the one explicit SECURITY notice that tells an owner their account was deactivated
+                if (!user.isActive() && !(security && entry.getValue().includeInactive())) continue;
+                // A security notice goes only to an address the owner has verified
+                if (security && !user.isEmailVerified()) {
+                    log.warn("A SECURITY notification was skipped: the account's email address is not verified");
+                    continue;
+                }
                 if (!usableAddress(user.getEmail())) {
                     log.warn("A {} notification was skipped: the account has no usable email address", category);
                     continue;
                 }
                 if (!preferences.isEmailEnabled(user.getId(), category)) continue;
-                targets.add(new Target(user.getEmail().trim(), entry.getValue()));
+                targets.add(new Target(user.getEmail().trim(), entry.getValue().content()));
             }
             return targets;
         });

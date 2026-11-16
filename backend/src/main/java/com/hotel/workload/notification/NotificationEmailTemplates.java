@@ -63,8 +63,53 @@ public final class NotificationEmailTemplates {
         return facts;
     }
 
+    private static final String PREFERENCES_FOOTER = "You receive this email because of your notification settings (Settings > Notification Preferences).";
+    private static final String SECURITY_FOOTER = "This is a required security notice from Taskotel. It cannot be turned off.";
+    private static final String CONTACT_ADVICE = "Contact an administrator immediately";
+
+    /** Security notices: nothing in them is secret (no password, code, token, username, id, address, time or device), and they have no link. */
+    public static EmailContent passwordChanged() {
+        return composeSecurity("Taskotel - Your password was changed",
+                "Your password was changed",
+                "The password of your Taskotel account was changed. Everywhere you were signed in before, you have been signed out.",
+                List.of(new Fact("If this was not you", CONTACT_ADVICE)));
+    }
+
+    public static EmailContent passwordResetCompleted() {
+        return composeSecurity("Taskotel - Your password was reset",
+                "Your password was reset",
+                "The password of your Taskotel account was reset using a verification code that was sent to your email address.",
+                List.of(new Fact("If this was not you", CONTACT_ADVICE)));
+    }
+
+    /** @param actorRole "Administrator" or "Manager": the role of whoever deactivated the account, never a name */
+    public static EmailContent accountDeactivated(String actorRole) {
+        List<Fact> facts = new ArrayList<>();
+        if (present(actorRole)) facts.add(new Fact("Deactivated by", actorRole));
+        facts.add(new Fact("If this is unexpected", CONTACT_ADVICE));
+        return composeSecurity("Taskotel - Your account was deactivated",
+                "Your account was deactivated",
+                "Your Taskotel account was deactivated. You can no longer sign in.",
+                facts);
+    }
+
+    public static EmailContent accountReactivated() {
+        return composeSecurity("Taskotel - Your account was reactivated",
+                "Your account was reactivated",
+                "Your Taskotel account is active again. You can sign in with your existing password.",
+                List.of(new Fact("If this is unexpected", CONTACT_ADVICE)));
+    }
+
+    private static EmailContent composeSecurity(String subject, String heading, String intro, List<Fact> facts) {
+        return compose(subject, heading, intro, facts, SECURITY_FOOTER);
+    }
+
     /** The common layout: plain text and HTML with the same content. */
     public static EmailContent compose(String subject, String heading, String intro, List<Fact> facts) {
+        return compose(subject, heading, intro, facts, PREFERENCES_FOOTER);
+    }
+
+    private static EmailContent compose(String subject, String heading, String intro, List<Fact> facts, String footer) {
         StringBuilder text = new StringBuilder();
         text.append("Taskotel\n\n").append(heading).append("\n\n").append(intro).append("\n\n");
         StringBuilder rows = new StringBuilder();
@@ -77,7 +122,7 @@ public final class NotificationEmailTemplates {
                     .append("</td></tr>");
         }
         text.append("\nRegards,\nTaskotel Team\n\n")
-                .append("You receive this email because of your notification settings (Settings > Notification Preferences).\n");
+                .append(footer).append('\n');
 
         String html = "<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111827;\">"
                 + "<div style=\"background:#059669;color:#ffffff;padding:14px 20px;font-size:18px;font-weight:bold;border-radius:8px 8px 0 0;\">Taskotel</div>"
@@ -86,8 +131,7 @@ public final class NotificationEmailTemplates {
                 + "<p style=\"margin:0 0 16px;\">" + escape(intro) + "</p>"
                 + "<table style=\"border-collapse:collapse;font-size:14px;\">" + rows + "</table>"
                 + "<p style=\"margin:20px 0 0;\">Regards,<br>Taskotel Team</p>"
-                + "<p style=\"margin:16px 0 0;font-size:12px;color:#6b7280;\">You receive this email because of your notification settings "
-                + "(Settings &gt; Notification Preferences).</p>"
+                + "<p style=\"margin:16px 0 0;font-size:12px;color:#6b7280;\">" + escape(footer) + "</p>"
                 + "</div></div>";
         return new EmailContent(oneLine(subject), text.toString(), html);
     }

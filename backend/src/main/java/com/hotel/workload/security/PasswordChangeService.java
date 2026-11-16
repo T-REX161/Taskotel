@@ -33,6 +33,13 @@ public class PasswordChangeService {
     private final PasswordEncoder passwordEncoder;
     private final PasswordValidatorService passwordValidator;
     private final PasswordChangeLimiter limiter;
+    /** Tells the owner by email once the new password is stored. Optional: a service built by hand in a unit test sends nothing. */
+    private com.hotel.workload.notification.SecurityEmailNotifier securityEmails;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSecurityEmailNotifier(com.hotel.workload.notification.SecurityEmailNotifier securityEmails) {
+        this.securityEmails = securityEmails;
+    }
 
     public PasswordChangeService(UserRepository userRepository, PasswordEncoder passwordEncoder,
                                  PasswordValidatorService passwordValidator, PasswordChangeLimiter limiter) {
@@ -79,6 +86,8 @@ public class PasswordChangeService {
 
         userRepository.updatePassword(user.getId(), passwordEncoder.encode(request.newPassword()),
                 LocalDateTime.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS)); // milliseconds: the session password version is derived from it
+        // updatePassword has committed (it runs in its own transaction); the owner is told, and a failure to send changes nothing
+        if (securityEmails != null) securityEmails.passwordChanged(user.getId());
         limiter.succeeded(client, username);
     }
 

@@ -61,6 +61,14 @@ public class UserAccountService {
         this.preferenceRepository = preferenceRepository;
     }
 
+    /** Tells an account's owner by email when it is deactivated or reactivated. Optional: a service built by hand sends nothing. */
+    private com.hotel.workload.notification.SecurityEmailNotifier securityEmails;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setSecurityEmailNotifier(com.hotel.workload.notification.SecurityEmailNotifier securityEmails) {
+        this.securityEmails = securityEmails;
+    }
+
     @Transactional
     public UserDto deactivate(UUID id) {
         scopeResolver.requireAdmin();
@@ -72,6 +80,8 @@ public class UserAccountService {
             staffService.deactivateStaff(staff.get().getId()); // staff rules (e.g. active assignments) still apply
         } else if (user.isActive()) {
             userRepository.updateActive(user.getId(), false);
+            // Only this direct branch announces here: with a Staff record StaffServiceImpl has already done it (no duplicate)
+            if (securityEmails != null) securityEmails.accountDeactivated(user.getId(), "Administrator");
         }
         return reload(id);
     }
@@ -85,6 +95,7 @@ public class UserAccountService {
             staffService.activateStaff(staff.get().getId());
         } else if (!user.isActive()) {
             userRepository.updateActive(user.getId(), true);
+            if (securityEmails != null) securityEmails.accountReactivated(user.getId());
         }
         return reload(id);
     }
