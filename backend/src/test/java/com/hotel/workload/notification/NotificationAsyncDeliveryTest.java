@@ -178,7 +178,7 @@ public class NotificationAsyncDeliveryTest {
         gate.countDown();
         waitFor(3);
         Thread.sleep(300); // a dropped event must never show up later
-        assertEquals(List.of("e1", "e2", "e3"), deliveredSubjects, "delivered in the order committed; e4 and e5 were dropped");
+        assertEquals(List.of("e1", "e2", "e3"), deliveredSubjects, "delivered in the order submitted to the worker; e4 and e5 were dropped");
         for (String thread : deliveryThreads) assertTrue(thread.startsWith("notify-"), "never on the caller's thread: " + thread);
     }
 
