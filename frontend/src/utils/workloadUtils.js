@@ -266,13 +266,36 @@ export const SUPPORTED_DEPARTMENTS = [
 ];
 
 /**
- * Aggregates workload by department, ensuring mathematical consistency with staff workload totals.
+ * The workload rows of the departments in `departmentList` only. Used for a Manager, whose page is about the departments they manage:
+ * the server already sends only those, and this keeps the cards, totals, table and pages consistent with the department list. Without a
+ * department list (not loaded, or it failed) the rows are returned as they are, because the server has already limited them.
  *
  * @param {Array<Object>} [workloadList=[]]
  * @param {Array<Object>} [departmentList=[]]
+ * @returns {Array<Object>}
+ */
+export function restrictWorkloadToDepartments(workloadList = [], departmentList = []) {
+  const rows = Array.isArray(workloadList) ? workloadList : [];
+  const codes = new Set(
+    (Array.isArray(departmentList) ? departmentList : []).filter((d) => d && d.code).map((d) => String(d.code).toUpperCase())
+  );
+  if (codes.size === 0) return rows;
+  return rows.filter((row) => row && codes.has(String(row.department || '').toUpperCase()));
+}
+
+/**
+ * Aggregates workload by department, ensuring mathematical consistency with staff workload totals.
+ *
+ * With `options.strict` (a Manager): the built-in departments are never used as a fallback, and a row of a department that is not in the
+ * department list neither creates a card nor counts towards the total, so no percentage ever includes it.
+ *
+ * @param {Array<Object>} [workloadList=[]]
+ * @param {Array<Object>} [departmentList=[]]
+ * @param {{ strict?: boolean }} [options]
  * @returns {Array<{ code: string, name: string, totalMinutes: number, activeTaskCount: number, staffCount: number, percentage: number, overallMinutes: number }>}
  */
-export function calculateDepartmentWorkloads(workloadList = [], departmentList = []) {
+export function calculateDepartmentWorkloads(workloadList = [], departmentList = [], options = {}) {
+  const strict = options?.strict === true;
   const safeWorkload = Array.isArray(workloadList) ? workloadList : [];
   const safeDeptList = Array.isArray(departmentList) ? departmentList : [];
 
@@ -285,7 +308,7 @@ export function calculateDepartmentWorkloads(workloadList = [], departmentList =
 
   // Departments come from the database, so a department created later appears here without any code change.
   // Without a list, the built-in six are used.
-  const seeds = deptMetaMap.size > 0 ? Array.from(deptMetaMap.values()) : SUPPORTED_DEPARTMENTS;
+  const seeds = deptMetaMap.size > 0 ? Array.from(deptMetaMap.values()) : strict ? [] : SUPPORTED_DEPARTMENTS;
 
   const deptMap = new Map();
   seeds.forEach((dept) => {
@@ -308,6 +331,8 @@ export function calculateDepartmentWorkloads(workloadList = [], departmentList =
     if (!w) return;
     // Someone on temporary cross-department support counts under the department they are helping (their home department is unchanged)
     const rawDept = String(w.supportDepartment || w.department || '').toUpperCase();
+    // Strict (a Manager): with a known department list, a row of any other department is not part of this page at all
+    if (strict && deptMetaMap.size > 0 && !deptMap.has(rawDept)) return;
     const duration =
       typeof w.totalEstimatedDuration === 'number'
         ? w.totalEstimatedDuration

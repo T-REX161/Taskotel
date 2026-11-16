@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -50,7 +52,10 @@ public class DepartmentServiceImpl implements DepartmentService {
         // everyone else, and every other department, gets the basic identity a selector needs. The figures for a department that is not
         // shown in full are never computed, so they cannot leak. A Manager's answer also says, for every department, whether they manage it
         // ("managed"); Admin and Staff answers do not carry that field at all.
-        DepartmentScope scope = scopeResolver.resolve();
+        return departmentsFor(scopeResolver.resolve());
+    }
+
+    private List<DepartmentDto> departmentsFor(DepartmentScope scope) {
         return departmentRepository.findAllByOrderByCreatedAtAscNameAsc().stream()
                 .map(department -> {
                     if (scope.isAll()) {
@@ -65,6 +70,25 @@ public class DepartmentServiceImpl implements DepartmentService {
                     return toBasicDto(department);
                 })
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DepartmentDto> getDepartmentsForWorkload() {
+        DepartmentScope scope = scopeResolver.resolve();
+        if (!scope.isDepartment()) {
+            return departmentsFor(scope); // Admin and Staff: unchanged
+        }
+        // A Manager: only the departments the scope says they manage. The list is built from the scope itself (which the resolver read from
+        // the database for this request, active departments only), never by loading every department and removing some afterwards.
+        List<Department> managed = new ArrayList<>(scope.managedDepartments());
+        managed.sort(Comparator.comparing(Department::getCreatedAt, Comparator.nullsLast(Comparator.<java.time.LocalDateTime>naturalOrder()))
+                .thenComparing(Department::getName, String.CASE_INSENSITIVE_ORDER));
+        return managed.stream().map(department -> {
+            DepartmentDto dto = toDto(department);
+            dto.setManaged(true);
+            return dto;
+        }).collect(Collectors.toList());
     }
 
     @Override

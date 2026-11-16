@@ -7,6 +7,13 @@ public interface DepartmentService {
     /** Every department, active and inactive, with live staff and active-task counts. */
     List<DepartmentDto> getAllDepartments();
 
+    /**
+     * The departments the Workload page shows as cards. An Admin and a Staff member get exactly what {@link #getAllDepartments()} gives them.
+     * A Manager gets ONLY the departments they manage (their primary department and the active departments an Administrator granted), each
+     * in full and marked {@code managed}: no other department is returned, not even as a basic identity, whatever its workload is.
+     */
+    List<DepartmentDto> getDepartmentsForWorkload();
+
     DepartmentDto createDepartment(CreateDepartmentRequest request);
 
     DepartmentDto updateDepartment(String code, UpdateDepartmentRequest request);

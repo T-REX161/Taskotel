@@ -23,12 +23,14 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       assert.ok(apiSource.includes('export const getWorkload'), 'api.js must export getWorkload()');
       assert.ok(apiSource.includes('export const getDepartments'), 'api.js must export getDepartments()');
       assert.ok(apiSource.includes('export const getStaff'), 'api.js must export getStaff()');
+      assert.ok(apiSource.includes('export const getWorkloadDepartments'), 'api.js must export getWorkloadDepartments()');
     });
 
-    it('imports getWorkload, getDepartments, and getStaff in WorkloadPage.jsx', () => {
+    it('imports getWorkload, getWorkloadDepartments, and getStaff in WorkloadPage.jsx, and never the all-departments list', () => {
       assert.ok(pageSource.includes('getWorkload'), 'WorkloadPage must import getWorkload');
-      assert.ok(pageSource.includes('getDepartments'), 'WorkloadPage must import getDepartments');
+      assert.ok(pageSource.includes('getWorkloadDepartments'), 'WorkloadPage must import getWorkloadDepartments');
       assert.ok(pageSource.includes('getStaff'), 'WorkloadPage must import getStaff');
+      assert.ok(!/\bgetDepartments\b/.test(pageSource), 'the page takes its departments from the server-scoped list, not from GET /api/departments');
     });
 
     it('fetches real data using Promise.all for workload, departments, and staff', () => {
@@ -246,8 +248,8 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
         'WorkloadPage must import and call sortWorkloadAlphabetically'
       );
       assert.ok(
-        pageSource.includes('sortWorkloadAlphabetically(workload)'),
-        'Must sort the full workload dataset alphabetically'
+        pageSource.includes('sortWorkloadAlphabetically(visibleWorkload)'),
+        'Must sort the full (visible) workload dataset alphabetically'
       );
     });
 
@@ -382,11 +384,11 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
 
     it('ensures summary cards and department totals remain based on all staff, not just the visible page', () => {
       assert.ok(
-        pageSource.includes('calculateWorkloadSummary(workload)'),
+        pageSource.includes('calculateWorkloadSummary(visibleWorkload)'),
         'Summary cards must be calculated from full workload dataset, not paginated slice'
       );
       assert.ok(
-        pageSource.includes('calculateDepartmentWorkloads(workload, departments)'),
+        pageSource.includes('calculateDepartmentWorkloads(visibleWorkload, departments, { strict: isManager })'),
         'Department totals must be calculated from full workload dataset, not paginated slice'
       );
 

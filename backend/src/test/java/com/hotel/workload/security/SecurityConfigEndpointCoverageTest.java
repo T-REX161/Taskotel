@@ -98,7 +98,7 @@ public class SecurityConfigEndpointCoverageTest {
         allow(A, "GET", "/api/system-settings");
         allow(A, "PUT", "/api/system-settings");
         // Workload and dashboard
-        allow(ALL, "GET", "/api/workload", "/api/dashboard/summary");
+        allow(ALL, "GET", "/api/workload", "/api/workload/departments", "/api/dashboard/summary");
         allow(AM, "GET", "/api/workload/recommendations");
         // Departments
         allow(ALL, "GET", "/api/departments");

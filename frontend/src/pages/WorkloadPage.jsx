@@ -6,11 +6,12 @@ import {
   TasksIcon,
   EyeIcon,
 } from '../components/icons/Icons';
-import { getWorkload, getDepartments, getStaff, getUserRole } from '../services/api';
+import { getWorkload, getWorkloadDepartments, getStaff, getUserRole } from '../services/api';
 import { canListStaff } from '../utils/accessPolicy';
 import {
   calculateWorkloadSummary,
   calculateDepartmentWorkloads,
+  restrictWorkloadToDepartments,
   getWorkloadStatusBadge,
   getWorkloadProgressBarColor,
   calculateWorkloadPercentage,
@@ -81,7 +82,8 @@ export default function WorkloadPage() {
 
     try {
       const workloadPromise = getWorkload();
-      const departmentsPromise = getDepartments().catch((err) => {
+      // The department cards come from the server's own answer for this account: for a Manager only the departments they manage
+      const departmentsPromise = getWorkloadDepartments().catch((err) => {
         console.warn('Failed to load departments for workload distribution:', err);
         return null;
       });
@@ -101,8 +103,10 @@ export default function WorkloadPage() {
       if (!isMountedRef.current) return;
 
       setWorkload(Array.isArray(workloadData) ? workloadData : []);
-      // A failed departments/staff request keeps the previous list on a background refresh
-      setDepartments((prev) => (Array.isArray(departmentsData) ? departmentsData : isBackground ? prev : []));
+      // A failed departments/staff request keeps the previous list on a background refresh, except for a Manager's departments: after a
+      // revocation the previous list could still hold a department they no longer manage, so it is dropped rather than kept
+      const keepPreviousDepartments = isBackground && getUserRole() !== 'MANAGER';
+      setDepartments((prev) => (Array.isArray(departmentsData) ? departmentsData : keepPreviousDepartments ? prev : []));
       setAllStaff((prev) => (Array.isArray(staffData) ? staffData : isBackground ? prev : []));
       lastFetchRef.current = Date.now();
     } catch (err) {
@@ -145,20 +149,29 @@ export default function WorkloadPage() {
     };
   }, [fetchData]);
 
+  // A Manager's page is about the departments they manage only. The server already sends only those (rows and departments); this keeps the
+  // cards, totals, table and pages consistent with the department list even if the two answers were read at slightly different moments, and
+  // never lets a row of any other department count.
+  const isManager = getUserRole() === 'MANAGER';
+  const visibleWorkload = useMemo(
+    () => (isManager ? restrictWorkloadToDepartments(workload, departments) : workload),
+    [isManager, workload, departments]
+  );
+
   // Dynamic summary across active staff workload (complete dataset)
   const summary = useMemo(() => {
-    return calculateWorkloadSummary(workload);
-  }, [workload]);
+    return calculateWorkloadSummary(visibleWorkload);
+  }, [visibleWorkload]);
 
   // Aggregated department workload distribution (complete dataset)
   const departmentWorkloads = useMemo(() => {
-    return calculateDepartmentWorkloads(workload, departments);
-  }, [workload, departments]);
+    return calculateDepartmentWorkloads(visibleWorkload, departments, { strict: isManager });
+  }, [visibleWorkload, departments, isManager]);
 
   // Sort complete staff workload list alphabetically (A–Z) before pagination
   const sortedWorkload = useMemo(() => {
-    return sortWorkloadAlphabetically(workload);
-  }, [workload]);
+    return sortWorkloadAlphabetically(visibleWorkload);
+  }, [visibleWorkload]);
 
   const totalPages = Math.max(1, Math.ceil(sortedWorkload.length / pageSize));
 

@@ -108,6 +108,16 @@ export const getDashboardSummary = () => {
 };
 
 /**
+ * The departments the Workload page shows as cards, decided by the server: everything an Admin or a Staff member has always seen
+ * (the same list as getDepartments), and for a Manager ONLY the departments they manage. Read-only.
+ */
+export const getWorkloadDepartments = async () => {
+  const departments = await apiFetch('/api/workload/departments');
+  registerDepartments(departments);
+  return departments;
+};
+
+/**
  * Get all departments with staff and active task metrics.
  */
 export const getDepartments = async () => {

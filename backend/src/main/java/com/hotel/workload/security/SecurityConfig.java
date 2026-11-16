@@ -135,7 +135,7 @@ public class SecurityConfig {
         authz.requestMatchers(HttpMethod.PATCH, "/api/tasks/*/status").hasRole(STAFF);
 
         // ── Workload and dashboard ────────────────────────────────────────────────────────────────────────────────────────────
-        allowGet(authz, new String[]{"/api/workload", "/api/dashboard/summary"}, ADMIN, MANAGER, STAFF);
+        allowGet(authz, new String[]{"/api/workload", "/api/workload/departments", "/api/dashboard/summary"}, ADMIN, MANAGER, STAFF);
         allowGet(authz, new String[]{"/api/workload/recommendations"}, ADMIN, MANAGER);
 
         // ── Departments: everyone may read (how much each role sees is decided by the service); managing them is Admin only ───

@@ -195,6 +195,7 @@ public class ResponseStabilityRegressionTest {
         check("admin", HttpMethod.GET, "/api/tasks", admin, null);
         check("admin", HttpMethod.GET, "/api/assignments", admin, null);
         check("admin", HttpMethod.GET, "/api/workload", admin, null);
+        check("admin", HttpMethod.GET, "/api/workload/departments", admin, null);
         check("admin", HttpMethod.GET, "/api/workload/recommendations", admin, null);
         check("admin", HttpMethod.GET, "/api/dashboard/summary", admin, null);
         check("admin", HttpMethod.GET, "/api/departments", admin, null);
@@ -228,6 +229,7 @@ public class ResponseStabilityRegressionTest {
         check("staff", HttpMethod.GET, "/api/tasks", staffA1, null);
         check("staff", HttpMethod.GET, "/api/assignments", staffA1, null);
         check("staff", HttpMethod.GET, "/api/workload", staffA1, null);
+        check("staff", HttpMethod.GET, "/api/workload/departments", staffA1, null);
         check("staff", HttpMethod.GET, "/api/dashboard/summary", staffA1, null);
         check("staff", HttpMethod.GET, "/api/departments", staffA1, null);
         check("staff", HttpMethod.GET, "/api/profile", staffA1, null);
@@ -259,6 +261,7 @@ public class ResponseStabilityRegressionTest {
         check("manager", HttpMethod.GET, "/api/tasks", managerA, null);
         check("manager", HttpMethod.GET, "/api/assignments", managerA, null);
         check("manager", HttpMethod.GET, "/api/workload", managerA, null);
+        check("manager", HttpMethod.GET, "/api/workload/departments", managerA, null);
         check("manager", HttpMethod.GET, "/api/workload/recommendations", managerA, null);
         check("manager", HttpMethod.GET, "/api/dashboard/summary", managerA, null);
         check("manager", HttpMethod.GET, "/api/departments", managerA, null);
