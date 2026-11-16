@@ -33,6 +33,14 @@ public class TaskServiceImpl implements TaskService {
     private final DepartmentResolver departmentResolver;
     private final SupportLifecycle supportLifecycle;
     private final CurrentUserScopeResolver scopeResolver;
+    /** Tracks workload changes for alert emails. Optional: a service built by hand in a unit test tracks nothing. */
+    private com.hotel.workload.notification.WorkloadAlertService workloadAlerts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setWorkloadAlertService(com.hotel.workload.notification.WorkloadAlertService workloadAlerts) {
+        this.workloadAlerts = workloadAlerts;
+    }
+
     /** Tells the people concerned by email when a task's status really changes (after commit). Optional: a service built by hand sends nothing. */
     private com.hotel.workload.notification.TaskEmailNotifier taskEmails;
 
@@ -178,6 +186,15 @@ public class TaskServiceImpl implements TaskService {
         rejectDepartmentChangeThatConflictsWithAssignee(task, requestedDepartment);
         rejectStatusChangeThatConflictsWithAssignment(task, request.getStatus());
 
+        // Workload alert emails: only when this edit can change the holders' workload (a finished task no longer counts): a different
+        // duration, the task finishing, or a department change (which decides whether the work counts for a Manager's department view)
+        if (workloadAlerts != null && !isFinished(task.getStatus())
+                && (!Objects.equals(task.getEstimatedDuration(), request.getEstimatedDuration())
+                || (request.getStatus() != null && request.getStatus().isTerminal())
+                || !Objects.equals(task.getDepartment(), requestedDepartment))) {
+            workloadAlerts.track(workloadAlerts.holdersOf(task.getId()));
+        }
+
         task.setTitle(request.getTitle());
         task.setDescription(request.getDescription());
         task.setCategory(request.getCategory());
@@ -316,6 +333,7 @@ public class TaskServiceImpl implements TaskService {
                     : String.format("A task that is %s can only be moved to %s, not %s.", current.getDisplayName(), allowed.getDisplayName(), requested.getDisplayName()));
         }
 
+        if (workloadAlerts != null && requested == TaskStatus.COMPLETED) workloadAlerts.track(workloadAlerts.holdersOf(task.getId())); // the task stops counting
         task.setStatus(requested);
         task = taskRepository.saveAndFlush(task);
         // The same follow-up as the full update: temporary cross-department support ends when its task is completed
@@ -329,6 +347,7 @@ public class TaskServiceImpl implements TaskService {
     public void deleteTask(UUID id) {
         DepartmentScope scope = requireTaskManagementScope();
         Task task = lockTask(scope, id); // see updateTask
+        if (workloadAlerts != null && !isFinished(task.getStatus())) workloadAlerts.track(workloadAlerts.holdersOf(id)); // read before the assignments go
         supportLifecycle.onTaskDeleted(id);
         List<Assignment> assignments = assignmentRepository.findAllByTaskId(id);
         if (!assignments.isEmpty()) {
@@ -337,6 +356,10 @@ public class TaskServiceImpl implements TaskService {
         }
         taskRepository.delete(task);
         taskRepository.flush();
+    }
+
+    private static boolean isFinished(TaskStatus status) {
+        return status != null && status.isTerminal();
     }
 
     private static boolean isCurrentDepartment(Task task, String requestedCode) {

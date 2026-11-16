@@ -74,6 +74,14 @@ public class StaffServiceImpl implements StaffService {
         this.managerAuditRecorder = managerAuditRecorder;
     }
 
+    /** Tracks workload changes for alert emails. Optional: a service built by hand in a unit test tracks nothing. */
+    private com.hotel.workload.notification.WorkloadAlertService workloadAlerts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setWorkloadAlertService(com.hotel.workload.notification.WorkloadAlertService workloadAlerts) {
+        this.workloadAlerts = workloadAlerts;
+    }
+
     /** Tells an account's owner by email when it is deactivated or reactivated. Optional: a service built by hand sends nothing. */
     private com.hotel.workload.notification.SecurityEmailNotifier securityEmails;
 
@@ -289,6 +297,9 @@ public class StaffServiceImpl implements StaffService {
             // The same rule the dedicated Manager department assignment uses (StaffTransferRules)
             StaffTransferRules.requireNoConflictingTasks(assignmentRepository, staff, targetDepartment);
         }
+
+        // Workload alert emails: a department transfer of someone who holds active work changes which work counts as "home" work
+        if (workloadAlerts != null && departmentChanged && hasActiveAssignments(staff.getId())) workloadAlerts.track(List.of(staff.getId()));
 
         staff.setName(request.getFullName());
         staff.setPhone(request.getPhone());

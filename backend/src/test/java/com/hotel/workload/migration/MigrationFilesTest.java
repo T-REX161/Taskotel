@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V23 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V24 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -92,7 +92,8 @@ public class MigrationFilesTest {
                 "V20__manager_department_changes_nullable.sql",
                 "V21__department_constraints_reconcile.sql",
                 "V22__manager_view_access.sql",
-                "V23__manager_view_access_full_management.sql"), names);
+                "V23__manager_view_access_full_management.sql",
+                "V24__workload_alert_state.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -100,7 +101,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23), versions, "Versions must be 1 to 23 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), versions, "Versions must be 1 to 24 with no gaps or duplicates");
     }
 
     @Test
@@ -185,6 +186,37 @@ public class MigrationFilesTest {
         assertTrue(executable.contains("REFERENCES users (id) ON DELETE CASCADE") && executable.contains("REFERENCES departments (id) ON DELETE CASCADE"));
         assertTrue(executable.contains("UNIQUE (manager_user_id, department_id)"));
         assertTrue(file.contains("Not applied automatically") && file.contains("Rollback"));
+    }
+
+    @Test
+    @DisplayName("V24 only adds the workload alert state table: guarded, lock timeout, unique (staff, audience), cascading foreign key, CHECKs, rollback stated, not applied automatically")
+    public void testV24AddsTheStateTable() throws IOException {
+        String file = read(MIGRATIONS.resolve("V24__workload_alert_state.sql"));
+        String executable = withoutLineComments(file);
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertTrue(executable.indexOf("to_regclass") >= 0 && executable.indexOf("to_regclass") < executable.indexOf("CREATE TABLE"), "it checks before creating anything");
+        assertEquals(1, Pattern.compile("(?i)CREATE TABLE").matcher(executable).results().count(), "exactly one new table");
+        assertTrue(executable.contains("CREATE TABLE workload_alert_state ("));
+        assertFalse(Pattern.compile("(?i)(?<!ON )\\b(ALTER|DROP|UPDATE|DELETE|INSERT|TRUNCATE)\\b").matcher(executable).find(), "no existing table or row is changed");
+        assertTrue(executable.contains("UNIQUE (staff_id, audience)"));
+        assertTrue(executable.contains("REFERENCES staff (id) ON DELETE CASCADE"));
+        assertTrue(executable.contains("audience IN ('STAFF', 'MANAGER')") && executable.contains("level IN ('LOW', 'NORMAL', 'HIGH', 'AT_RISK')"));
+        assertTrue(file.contains("Not applied automatically") && file.contains("Rollback") && file.contains("psql -1 -v ON_ERROR_STOP=1"));
+    }
+
+    @Test
+    @DisplayName("The production-profile test schema for V24 matches it, and both production tests load it")
+    public void testV24TestSchemaMatches() throws IOException {
+        String h2 = withoutLineComments(read(Path.of("src/test/resources/db/h2-workload-alert-state.sql")));
+        String v24 = withoutLineComments(read(MIGRATIONS.resolve("V24__workload_alert_state.sql")));
+        for (String part : new String[] {"id          UUID        PRIMARY KEY", "staff_id    UUID        NOT NULL", "audience    VARCHAR(8)  NOT NULL",
+                "level       VARCHAR(16) NOT NULL", "changed_at  TIMESTAMP   NOT NULL", "UNIQUE (staff_id, audience)", "ON DELETE CASCADE",
+                "audience IN ('STAFF', 'MANAGER')", "level IN ('LOW', 'NORMAL', 'HIGH', 'AT_RISK')"}) {
+            assertTrue(h2.contains(part) && v24.contains(part), part);
+        }
+        for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
+            assertTrue(read(Path.of("src/test/java/com/hotel/workload/config").resolve(test)).contains("classpath:db/h2-workload-alert-state.sql"), test);
+        }
     }
 
     @Test

@@ -52,6 +52,34 @@ public final class NotificationEmailTemplates {
                 facts);
     }
 
+    /** To the Staff member: their own (global) workload. No task titles. */
+    public static EmailContent workloadAlertForStaff(String level, long minutes, long tasks) {
+        String shown = levelName(level);
+        return compose("Taskotel - Your workload is now " + shown,
+                "Your workload has increased",
+                "Your active workload has increased to " + shown + ".",
+                List.of(new Fact("Workload level", shown),
+                        new Fact("Active workload", minutes + " minutes"),
+                        new Fact("Active tasks", String.valueOf(tasks))));
+    }
+
+    /** To a Manager of the home department: the figures are those of the department's own work only. No task titles. */
+    public static EmailContent workloadAlertForManager(String staffName, String departmentName, String level, long minutes, long tasks) {
+        String shown = levelName(level);
+        return compose("Taskotel - Workload alert: " + oneLine(staffName) + " is now " + shown,
+                "A team member's workload has increased",
+                "The active workload of a member of your department has increased to " + shown + ".",
+                List.of(new Fact("Staff member", staffName),
+                        new Fact("Department", departmentName),
+                        new Fact("Workload level", shown),
+                        new Fact("Active workload (department tasks)", minutes + " minutes"),
+                        new Fact("Active tasks (department)", String.valueOf(tasks))));
+    }
+
+    private static String levelName(String level) {
+        return level == null ? "" : level.replace('_', ' ');
+    }
+
     private static List<Fact> taskFacts(TaskInfo task) {
         List<Fact> facts = new ArrayList<>();
         facts.add(new Fact("Task", task.title()));

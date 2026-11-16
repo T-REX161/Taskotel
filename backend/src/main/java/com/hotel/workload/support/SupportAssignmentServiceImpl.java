@@ -56,6 +56,13 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     private final SupportAssignmentRepository supportRepository;
     private final UserRepository userRepository;
     private final com.hotel.workload.security.CurrentUserScopeResolver scopeResolver;
+    /** Tracks workload changes for alert emails. Optional: a service built by hand in a unit test tracks nothing. */
+    private com.hotel.workload.notification.WorkloadAlertService workloadAlerts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setWorkloadAlertService(com.hotel.workload.notification.WorkloadAlertService workloadAlerts) {
+        this.workloadAlerts = workloadAlerts;
+    }
 
     public SupportAssignmentServiceImpl(DepartmentRepository departmentRepository,
                                         StaffRepository staffRepository,
@@ -715,6 +722,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                     resolved.problems);
         }
 
+        // Workload alert emails: the helpers who are about to take the tasks (before anything is created)
+        if (workloadAlerts != null) workloadAlerts.track(resolved.pairs.stream().map(pair -> pair.staff().getId()).toList());
         UUID planId = UUID.randomUUID();
         UUID approverId = userRepository.findByUsername(username).map(User::getId).orElse(null);
         List<SupportAssignment> created = new ArrayList<>();
@@ -907,6 +916,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             support.end(SupportStatus.CANCELLED, SupportEndReason.TASK_REASSIGNED, now);
         } else {
             // Release the temporary assignment and put the task back in its department's waiting list
+            if (workloadAlerts != null) workloadAlerts.track(List.of(support.getStaffId())); // workload alert emails: before it is released
             assignmentRepository.deleteAll(mine);
             task.setStatus(TaskStatus.PENDING);
             taskRepository.save(task);

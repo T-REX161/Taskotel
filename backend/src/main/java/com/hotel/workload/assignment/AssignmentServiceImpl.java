@@ -49,6 +49,14 @@ public class AssignmentServiceImpl implements AssignmentService {
         this.scopeResolver = scopeResolver;
     }
 
+    /** Tracks workload changes for alert emails. Optional: a service built by hand in a unit test tracks nothing. */
+    private com.hotel.workload.notification.WorkloadAlertService workloadAlerts;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setWorkloadAlertService(com.hotel.workload.notification.WorkloadAlertService workloadAlerts) {
+        this.workloadAlerts = workloadAlerts;
+    }
+
     /** Tells assignees by email (after commit). Optional, so a service built by hand in a unit test simply sends nothing. */
     private com.hotel.workload.notification.TaskEmailNotifier taskEmails;
 
@@ -209,6 +217,7 @@ public class AssignmentServiceImpl implements AssignmentService {
             }
         }
 
+        if (workloadAlerts != null) workloadAlerts.track(requestedIds); // workload alert emails: before anything changes
         // Everything passed: one assignment per person (returned in the order they were sent), and the task becomes ASSIGNED once
         List<Assignment> created = new java.util.ArrayList<>();
         for (UUID id : requestedIds) {
@@ -333,6 +342,9 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
 
         Staff previousHolder = assignment.getStaff();
+        if (workloadAlerts != null) {
+            workloadAlerts.track(previousHolder == null ? List.of(targetStaff.getId()) : List.of(previousHolder.getId(), targetStaff.getId()));
+        }
         assignment.setStaff(targetStaff);
         assignment.setAssignedAt(LocalDateTime.now());
         assignment = assignmentRepository.saveAndFlush(assignment);

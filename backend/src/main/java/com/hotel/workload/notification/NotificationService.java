@@ -115,6 +115,57 @@ public class NotificationService {
     }
 
     /**
+     * Runs {@code work} on the notification worker once the current transaction has committed (or now, when there is none): the same
+     * after-commit, bounded, best-effort hand-off as the emails, for work that decides FOR ITSELF whom to tell (workload alerts). A full
+     * queue or a shutdown drops it and logs; a failure inside it is logged and contained. Never throws.
+     */
+    public void runAfterCommit(String label, Runnable work) {
+        try {
+            if (work == null) return;
+            if (TransactionSynchronizationManager.isSynchronizationActive() && TransactionSynchronizationManager.isActualTransactionActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        dispatchWork(label, work);
+                    }
+                });
+            } else {
+                dispatchWork(label, work);
+            }
+        } catch (RuntimeException e) {
+            log.error("Could not schedule {}: {}", label, e.getClass().getSimpleName());
+        }
+    }
+
+    private void dispatchWork(String label, Runnable work) {
+        Runnable guarded = () -> {
+            try {
+                work.run();
+            } catch (RuntimeException e) {
+                log.error("{} failed: {}", label, e.getClass().getSimpleName());
+            }
+        };
+        if (!async) {
+            guarded.run();
+            return;
+        }
+        try {
+            executor.execute(guarded);
+        } catch (RuntimeException e) {
+            log.warn("A {} event was dropped: the delivery queue is full or the application is shutting down", label);
+        }
+    }
+
+    /**
+     * For code that is ALREADY running on the worker after its own commit: resolves the recipients (active, verified address, preference)
+     * and sends, right here. It must be called with no transaction or lock held.
+     */
+    public void sendNow(NotificationCategory category, Collection<Notice> notices) {
+        if (category == null || notices == null || notices.isEmpty()) return;
+        deliver(category, () -> notices);
+    }
+
+    /**
      * Hands the delivery to the notification worker (see {@link NotificationDeliveryConfig}), so the calling thread returns at once. If the
      * queue is full, or the application is shutting down, the event is dropped and logged: it is never run on the calling thread. With
      * {@code taskotel.notifications.async=false} (the tests) it runs right here, as before.

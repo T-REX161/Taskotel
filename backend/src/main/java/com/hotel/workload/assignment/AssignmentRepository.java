@@ -93,6 +93,19 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     long sumSupportAttributedMinutes(@Param("department") com.hotel.workload.staff.Department department, @Param("code") String code,
                                      @Param("statuses") List<TaskStatus> statuses);
 
+    /** {minutes, task count} of one staff member's ACTIVE assignments, all of them (loan work included): the global workload. */
+    @Query("SELECT COALESCE(SUM(COALESCE(t.estimatedDuration, 0)), 0), COUNT(a) FROM Assignment a JOIN a.task t "
+            + "WHERE a.staff.id = :staffId AND t.status IN :statuses")
+    List<Object[]> activeWorkloadOfStaff(@Param("staffId") UUID staffId, @Param("statuses") List<TaskStatus> statuses);
+
+    /**
+     * As {@link #activeWorkloadOfStaff}, but only the tasks of the staff member's HOME department: the workload a Manager of that department
+     * sees. Loan work and tasks with no department are not counted.
+     */
+    @Query("SELECT COALESCE(SUM(COALESCE(t.estimatedDuration, 0)), 0), COUNT(a) FROM Assignment a JOIN a.task t JOIN a.staff s "
+            + "WHERE s.id = :staffId AND t.status IN :statuses AND s.department IS NOT NULL AND t.department = s.department")
+    List<Object[]> activeHomeDepartmentWorkloadOfStaff(@Param("staffId") UUID staffId, @Param("statuses") List<TaskStatus> statuses);
+
     /** The ids of staff who hold at least one active assignment (ids only, no assignment or task detail). */
     @Query("SELECT DISTINCT a.staff.id FROM Assignment a WHERE a.task.status IN :statuses")
     List<UUID> findBusyStaffIds(@Param("statuses") List<TaskStatus> statuses);
