@@ -12,10 +12,13 @@ public class StaffController {
 
     private final StaffService staffService;
     private final com.hotel.workload.security.ClientAddressResolver clientAddress;
+    private final AccountInvitationService invitations;
 
-    public StaffController(StaffService staffService, com.hotel.workload.security.ClientAddressResolver clientAddress) {
+    public StaffController(StaffService staffService, com.hotel.workload.security.ClientAddressResolver clientAddress,
+                           AccountInvitationService invitations) {
         this.staffService = staffService;
         this.clientAddress = clientAddress;
+        this.invitations = invitations;
     }
 
     @GetMapping
@@ -33,7 +36,10 @@ public class StaffController {
 
     @org.springframework.web.bind.annotation.PostMapping
     public ResponseEntity<StaffDto> createStaff(@jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody CreateStaffRequest request) {
-        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(staffService.createStaff(request));
+        // The account is committed when createStaff returns; a refused or rolled-back creation throws and never reaches the invitation
+        StaffDto created = staffService.createStaff(request);
+        created.setInvitationEmailSent(invitations.send(request.getEmail(), request.getUsername(), request.getTemporaryPassword()));
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(created);
     }
 
     @org.springframework.web.bind.annotation.PutMapping("/{id}")

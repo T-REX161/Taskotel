@@ -52,11 +52,17 @@ app:
 # Notification emails are handed, after the database commit, to one bounded in-memory worker (see NotificationDeliveryConfig): the request
 # does not wait for SendGrid. A full queue drops (and logs) the event; queued events are lost if the process is killed. Best effort only.
 taskotel:
+  # The address of the web app, used for the login link in account invitation emails. Set FRONTEND_BASE_URL in every deployment
+  # (for example https://taskotel.example.com); the default is the local development frontend.
+  frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
   notifications:
     async: ${NOTIFICATIONS_ASYNC:true}
     queue-capacity: ${NOTIFICATIONS_QUEUE_CAPACITY:1000}
 
 auth:
+  # How long the temporary password given to a new account stays valid, in hours (0 = no limit). After that the user signs in through
+  # "Forgot password". The password is replaced by the first-password setup, so it can never be used after that.
+  temporary-password-lifetime-hours: ${TEMPORARY_PASSWORD_LIFETIME_HOURS:24}
   login-rate-limit:
     enabled: ${LOGIN_RATE_LIMIT_ENABLED:true}
     window-seconds: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:900}

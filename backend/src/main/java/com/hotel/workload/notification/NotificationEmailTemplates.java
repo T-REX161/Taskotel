@@ -80,6 +80,23 @@ public final class NotificationEmailTemplates {
         return level == null ? "" : level.replace('_', ' ');
     }
 
+    /**
+     * The welcome email for a new account. It carries the username and the TEMPORARY password (sensitive: only ever put in this one
+     * message, never logged), a prominent link to the existing login page, and the first-login steps. No ids and no internal details.
+     */
+    public static EmailContent accountInvitation(String username, String temporaryPassword, String loginUrl) {
+        List<Fact> facts = List.of(new Fact("Username", username), new Fact("Temporary password", temporaryPassword));
+        List<String> steps = List.of(
+                "Open the Taskotel login page with the button below.",
+                "Sign in with the username and temporary password above.",
+                "Taskotel emails you a verification code: enter it to confirm your email address.",
+                "Choose your own permanent password. The temporary password stops working once you have.");
+        return compose("Welcome to Taskotel \u2014 Your Account Details",
+                "Welcome to Taskotel | Hotel Operations",
+                "An account has been created for you. Use the details below to sign in for the first time.",
+                facts, ACCOUNT_FOOTER, "Open Taskotel Login", loginUrl, steps);
+    }
+
     private static List<Fact> taskFacts(TaskInfo task) {
         List<Fact> facts = new ArrayList<>();
         facts.add(new Fact("Task", task.title()));
@@ -92,6 +109,9 @@ public final class NotificationEmailTemplates {
     }
 
     private static final String PREFERENCES_FOOTER = "You receive this email because of your notification settings (Settings > Notification Preferences).";
+    private static final String ACCOUNT_FOOTER = "You are receiving this email because an account was created for you in Taskotel. "
+            + "The temporary password is valid for a limited time and must be changed at your first sign-in. Do not share it. "
+            + "If you were not expecting this, contact your administrator.";
     private static final String SECURITY_FOOTER = "This is a required security notice from Taskotel. It cannot be turned off.";
     private static final String CONTACT_ADVICE = "Contact an administrator immediately";
 
@@ -142,6 +162,12 @@ public final class NotificationEmailTemplates {
     }
 
     private static EmailContent compose(String subject, String heading, String intro, List<Fact> facts, String footer) {
+        return compose(subject, heading, intro, facts, footer, null, null, List.of());
+    }
+
+    /** The layout, optionally with a prominent action button (label and an http(s) link) and numbered steps. */
+    private static EmailContent compose(String subject, String heading, String intro, List<Fact> facts, String footer,
+                                        String actionLabel, String actionUrl, List<String> steps) {
         StringBuilder text = new StringBuilder();
         text.append("Taskotel\n\n").append(heading).append("\n\n").append(intro).append("\n\n");
         StringBuilder rows = new StringBuilder();
@@ -153,6 +179,25 @@ public final class NotificationEmailTemplates {
                     .append(escape(fact.value()))
                     .append("</td></tr>");
         }
+        StringBuilder extra = new StringBuilder();
+        if (steps != null && !steps.isEmpty()) {
+            text.append("\nHow to get started:\n");
+            extra.append("<p style=\"margin:18px 0 6px;font-weight:bold;\">How to get started</p><ol style=\"margin:0 0 0 18px;padding:0;font-size:14px;\">");
+            int number = 1;
+            for (String step : steps) {
+                text.append(number++).append(". ").append(oneLine(step)).append('\n');
+                extra.append("<li style=\"margin:0 0 4px;\">").append(escape(step)).append("</li>");
+            }
+            extra.append("</ol>");
+        }
+        // The button's link must be a plain http(s) address (the caller validates it); it is escaped for the attribute as well
+        if (actionLabel != null && actionUrl != null && (actionUrl.startsWith("http://") || actionUrl.startsWith("https://"))) {
+            text.append('\n').append(actionLabel).append(": ").append(oneLine(actionUrl)).append('\n');
+            extra.append("<p style=\"margin:22px 0 6px;\"><a href=\"").append(escape(actionUrl))
+                    .append("\" style=\"display:inline-block;background:#059669;color:#ffffff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;\">")
+                    .append(escape(actionLabel)).append("</a></p>")
+                    .append("<p style=\"margin:0;font-size:12px;color:#6b7280;word-break:break-all;\">").append(escape(actionUrl)).append("</p>");
+        }
         text.append("\nRegards,\nTaskotel Team\n\n")
                 .append(footer).append('\n');
 
@@ -162,6 +207,7 @@ public final class NotificationEmailTemplates {
                 + "<h2 style=\"margin:0 0 12px;font-size:18px;\">" + escape(heading) + "</h2>"
                 + "<p style=\"margin:0 0 16px;\">" + escape(intro) + "</p>"
                 + "<table style=\"border-collapse:collapse;font-size:14px;\">" + rows + "</table>"
+                + extra
                 + "<p style=\"margin:20px 0 0;\">Regards,<br>Taskotel Team</p>"
                 + "<p style=\"margin:16px 0 0;font-size:12px;color:#6b7280;\">" + escape(footer) + "</p>"
                 + "</div></div>";

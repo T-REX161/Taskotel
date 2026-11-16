@@ -28,6 +28,7 @@ import {
 import { getPaginationState } from '../utils/assignmentUtils';
 // Accounts are created and managed through the existing staff flows; these are the same dialogs the Staff page uses
 import AddStaffModal from '../components/staff/AddStaffModal';
+import { withInvitationOutcome } from '../utils/staffCreationNotice';
 import EditStaffModal from '../components/staff/EditStaffModal';
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
@@ -255,7 +256,7 @@ export default function UsersPage() {
   const handleAddSuccess = async (newStaff, fullName) => {
     setIsAddOpen(false);
     await fetchUsers(false);
-    notify(`User "${newStaff?.username || fullName}" created.`);
+    notify(withInvitationOutcome(`User "${newStaff?.username || fullName}" created.`, newStaff));
   };
 
   const handleEditSuccess = async () => {

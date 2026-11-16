@@ -48,8 +48,8 @@ describe('LoginPage result indicators', () => {
       assert.deepStrictEqual(getLoginOutcome({ ok: false, status: 401, data: { success: false, message: emailFailed } }).kind, 'invalid', 'a 401 is still invalid credentials');
     });
 
-    it('LoginPage reads the body of a 5xx so that message can be shown', () => {
-      assert.ok(/response\.ok \|\| response\.status === 429 \|\| response\.status >= 500 \? await response\.json\(\)/.test(fs.readFileSync(new URL('./LoginPage.jsx', import.meta.url), 'utf8')));
+    it('LoginPage reads the body of a 5xx so that message can be shown (and of a 401, only for the expired-temporary-password code)', () => {
+      assert.ok(/response\.ok \|\| response\.status === 429 \|\| response\.status === 401 \|\| response\.status >= 500 \? await response\.json\(\)/.test(fs.readFileSync(new URL('./LoginPage.jsx', import.meta.url), 'utf8')));
     });
 
     it('rate limited: a 429 shows the backend message, not the generic server error', () => {
@@ -169,8 +169,10 @@ describe('LoginPage result indicators', () => {
       assert.ok(handleSubmit.includes('await response.json().catch(() => null)'), 'An unreadable OK body is a server error, not a network error');
     });
 
-    it('reads the response body only for a success, a 429 or a 5xx (never for a 401), shows server messages as text without the ✕, and never stores anything', () => {
-      assert.ok(handleSubmit.includes('response.ok || response.status === 429 || response.status >= 500 ? await response.json().catch(() => null) : null'), 'Only OK, 429 and 5xx bodies are read');
+    it('reads the response body only for a success, a 429, a 401 or a 5xx, shows server messages as text without the ✕, and never stores anything', () => {
+      // A 401 body is read ONLY so that the one explained 401 (the expired temporary password) can show its message: getLoginOutcome
+      // uses it for that exact code and ignores it for every other 401
+      assert.ok(handleSubmit.includes('response.ok || response.status === 429 || response.status === 401 || response.status >= 500 ? await response.json().catch(() => null) : null'), 'Only OK, 429, 401 and 5xx bodies are read');
       assert.ok(pageSource.includes("loginError.kind === 'invalid' && ("), 'the ✕ is for invalid credentials only, so a 429 is text only');
       assert.ok(pageSource.includes('<span>{loginError.message}</span>'), 'the message is rendered as escaped text');
       assert.ok(!/localStorage\.setItem[^\n]*loginError/.test(pageSource));

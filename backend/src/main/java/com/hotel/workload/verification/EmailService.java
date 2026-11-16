@@ -63,6 +63,13 @@ public interface EmailService {
     void sendAdministratorEmailChangeUnavailableNotice(String toOldEmail, String maskedProposedEmail);
 
     /**
+     * The invitation sent when an Admin or Manager has created an account: the username, the TEMPORARY password and the link to the login
+     * page. The temporary password is sensitive: implementations must never log it. Throws {@link EmailSendingException} when it cannot
+     * be sent.
+     */
+    void sendAccountInvitationEmail(String toEmail, String username, String temporaryPassword, String loginUrl);
+
+    /**
      * Sends one notification email (a task, workload or security event) with a plain-text and an HTML body. Throws
      * {@link EmailSendingException} when it cannot be sent; the notification layer logs and swallows that, so it never reaches a user's request.
      */

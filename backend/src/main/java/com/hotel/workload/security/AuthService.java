@@ -25,6 +25,30 @@ public class AuthService {
     private final PasswordValidatorService passwordValidatorService;
     // A hash of a random value nobody knows, only used to spend the same time on a username that does not exist
     private final String unknownUserHash;
+    // How long the TEMPORARY password an Admin or Manager gave a new account stays valid, in hours (0 = no limit). A service built by hand
+    // in a unit test keeps 0; Spring sets it from auth.temporary-password-lifetime-hours (24 by default).
+    private long temporaryPasswordLifetimeHours = 0;
+
+    @org.springframework.beans.factory.annotation.Value("${auth.temporary-password-lifetime-hours:24}")
+    public void setTemporaryPasswordLifetimeHours(long temporaryPasswordLifetimeHours) {
+        this.temporaryPasswordLifetimeHours = Math.max(0, temporaryPasswordLifetimeHours);
+    }
+
+    static final String TEMPORARY_PASSWORD_EXPIRED =
+            "Your temporary password has expired. Use \"Forgot password\" on the login page to set a new one.";
+
+    /**
+     * True while an account still has the TEMPORARY password it was created with (its first password is not set yet and nothing has
+     * changed the password since: a reset or the first-password setup both record passwordChangedAt) and that password is older than the
+     * allowed lifetime.
+     */
+    private boolean temporaryPasswordExpired(User user) {
+        return temporaryPasswordLifetimeHours > 0
+                && user.isCredentialsSetupRequired()
+                && user.getPasswordChangedAt() == null
+                && user.getCreatedAt() != null
+                && user.getCreatedAt().plusHours(temporaryPasswordLifetimeHours).isBefore(java.time.LocalDateTime.now());
+    }
 
     @Autowired
     public AuthService(UserRepository userRepository,
@@ -67,6 +91,11 @@ public class AuthService {
 
         if (!user.isActive()) {
             throw new InvalidCredentialsException("User account is disabled");
+        }
+
+        // Only someone who knows the temporary password learns that it has expired; "Forgot password" gives them a new one by email
+        if (temporaryPasswordExpired(user)) {
+            throw new TemporaryPasswordExpiredException(TEMPORARY_PASSWORD_EXPIRED);
         }
 
         // Every role must verify its email before it gets a session: no token is issued until it has

@@ -14,6 +14,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));
     }
 
+    // A refused sign-in is a plain 401 with no body; this one case explains itself, so the user knows to use "Forgot password"
+    @ExceptionHandler(TemporaryPasswordExpiredException.class)
+    public ResponseEntity<Map<String, String>> handleTemporaryPasswordExpired(TemporaryPasswordExpiredException ex) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED)
+                .body(Map.of("message", ex.getMessage(), "code", TemporaryPasswordExpiredException.CODE));
+    }
+
     @ExceptionHandler(CredentialsSetupException.class)
     public ResponseEntity<Map<String, String>> handleCredentialsSetupException(CredentialsSetupException ex) {
         return ResponseEntity.badRequest().body(Map.of("message", ex.getMessage()));

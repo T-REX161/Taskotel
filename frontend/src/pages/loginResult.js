@@ -38,6 +38,8 @@ export function getLoginOutcome({ ok = false, status = 0, data = null, networkEr
     return { kind: 'server', message: LOGIN_MESSAGES.server };
   }
   if (status === 429) return { kind: 'rateLimited', message: safeMessage(data?.message) || LOGIN_MESSAGES.rateLimited };
+  // The one 401 that explains itself: the right temporary password, after its lifetime. Only that exact code shows the server's message.
+  if (status === 401 && data?.code === 'TEMPORARY_PASSWORD_EXPIRED' && safeMessage(data.message)) return { kind: 'invalid', message: safeMessage(data.message) };
   if (status === 401) return { kind: 'invalid', message: LOGIN_MESSAGES.invalid };
   // The server's own fixed message for a failure it understands (e.g. the verification email could not be sent: {success:false, message}).
   // Only that exact shape is shown; any other server error keeps the generic text.

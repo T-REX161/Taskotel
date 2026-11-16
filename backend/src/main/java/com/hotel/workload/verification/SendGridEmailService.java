@@ -374,6 +374,14 @@ public class SendGridEmailService implements EmailService {
     }
 
     @Override
+    public void sendAccountInvitationEmail(String toEmail, String username, String temporaryPassword, String loginUrl) {
+        com.hotel.workload.notification.EmailContent content =
+                com.hotel.workload.notification.NotificationEmailTemplates.accountInvitation(username, temporaryPassword, loginUrl);
+        // dispatch() logs only the kind and the masked recipient, never the content
+        dispatch(toEmail, content.subject(), content.text(), content.html(), "account invitation");
+    }
+
+    @Override
     public void sendNotificationEmail(String toEmail, String subject, String text, String html) {
         dispatch(toEmail, subject, text, html, "notification");
     }

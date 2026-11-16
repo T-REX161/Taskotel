@@ -22,6 +22,7 @@ import StaffFilters from '../components/staff/StaffFilters';
 import StaffTable from '../components/staff/StaffTable';
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import AddStaffModal from '../components/staff/AddStaffModal';
+import { withInvitationOutcome } from '../utils/staffCreationNotice';
 import EditStaffModal from '../components/staff/EditStaffModal';
 import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
@@ -213,7 +214,7 @@ export default function StaffPage() {
     setIsAddModalOpen(false);
     await fetchStaffData(false);
     showNotification(
-      `Staff member "${newStaff?.name || fullName}" created successfully!`
+      withInvitationOutcome(`Staff member "${newStaff?.name || fullName}" created successfully!`, newStaff)
     );
   };
 

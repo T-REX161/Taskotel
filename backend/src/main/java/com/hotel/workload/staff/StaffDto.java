@@ -5,6 +5,12 @@ import java.util.UUID;
 public class StaffDto {
     /** Kept for API compatibility and always false: Administrator grants give full management, so nothing is view-only any more. */
     private boolean viewOnly;
+    /**
+     * Only in the answer to creating an account: whether the invitation email (username, temporary password, login link) was sent. False
+     * when it could not be sent, so the creator knows to pass the credentials on another way. Null, and so left out, everywhere else.
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private Boolean invitationEmailSent;
     private UUID id;
     private String name;
     private String email;
@@ -82,6 +88,9 @@ public class StaffDto {
     public void setRole(String role) { this.role = role; }
     public String getProfileImageUrl() { return profileImageUrl; }
     public void setProfileImageUrl(String profileImageUrl) { this.profileImageUrl = profileImageUrl; }
+
+    public Boolean getInvitationEmailSent() { return invitationEmailSent; }
+    public void setInvitationEmailSent(Boolean invitationEmailSent) { this.invitationEmailSent = invitationEmailSent; }
 
     public boolean isViewOnly() { return viewOnly; }
     public void setViewOnly(boolean viewOnly) { this.viewOnly = viewOnly; }
