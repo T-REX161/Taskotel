@@ -49,6 +49,13 @@ app:
 
 # Failed-login limit (per application instance, in memory). Defaults: 5 attempts per client+account, 20 per client,
 # 30 per account, inside a 15 minute window; attempts age out of the window, nothing is locked permanently.
+# Notification emails are handed, after the database commit, to one bounded in-memory worker (see NotificationDeliveryConfig): the request
+# does not wait for SendGrid. A full queue drops (and logs) the event; queued events are lost if the process is killed. Best effort only.
+taskotel:
+  notifications:
+    async: ${NOTIFICATIONS_ASYNC:true}
+    queue-capacity: ${NOTIFICATIONS_QUEUE_CAPACITY:1000}
+
 auth:
   login-rate-limit:
     enabled: ${LOGIN_RATE_LIMIT_ENABLED:true}

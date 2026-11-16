@@ -25,6 +25,12 @@ jwt:
 
 # The in-memory client limits are shared by every test in a cached Spring context; the verification tests all call from one address, so
 # they are off here and the tests that exercise them switch them on with their own property source (a separate context).
+# Notification delivery runs inline in the tests, so assertions made right after a request are deterministic. NotificationAsyncDeliveryTest
+# switches the asynchronous worker on with its own property source.
+taskotel:
+  notifications:
+    async: false
+
 auth:
   verification-send-rate-limit:
     enabled: false

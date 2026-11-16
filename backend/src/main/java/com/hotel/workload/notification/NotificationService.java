@@ -5,6 +5,9 @@ import com.hotel.workload.security.UserRepository;
 import com.hotel.workload.verification.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -62,13 +65,19 @@ public class NotificationService {
     private final NotificationPreferenceService preferences;
     private final EmailService emailService;
     private final PlatformTransactionManager transactionManager;
+    private final TaskExecutor executor;
+    private final boolean async;
 
     public NotificationService(UserRepository userRepository, NotificationPreferenceService preferences, EmailService emailService,
-                               PlatformTransactionManager transactionManager) {
+                               PlatformTransactionManager transactionManager,
+                               @Qualifier(NotificationDeliveryConfig.EXECUTOR_BEAN) TaskExecutor executor,
+                               @Value("${taskotel.notifications.async:true}") boolean async) {
         this.userRepository = userRepository;
         this.preferences = preferences;
         this.emailService = emailService;
         this.transactionManager = transactionManager;
+        this.executor = executor;
+        this.async = async;
     }
 
     /**
@@ -94,14 +103,31 @@ public class NotificationService {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        deliver(category, recipients);
+                        dispatch(category, recipients);
                     }
                 });
             } else {
-                deliver(category, recipients);
+                dispatch(category, recipients);
             }
         } catch (RuntimeException e) {
             log.error("Could not schedule {} notification emails: {}", category, e.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Hands the delivery to the notification worker (see {@link NotificationDeliveryConfig}), so the calling thread returns at once. If the
+     * queue is full, or the application is shutting down, the event is dropped and logged: it is never run on the calling thread. With
+     * {@code taskotel.notifications.async=false} (the tests) it runs right here, as before.
+     */
+    private void dispatch(NotificationCategory category, Supplier<Collection<Notice>> recipients) {
+        if (!async) {
+            deliver(category, recipients);
+            return;
+        }
+        try {
+            executor.execute(() -> deliver(category, recipients));
+        } catch (RuntimeException e) {
+            log.warn("A {} notification was dropped: the delivery queue is full or the application is shutting down", category);
         }
     }
 
