@@ -8,27 +8,28 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * How much of the data the current user may reach, as decided by {@link CurrentUserScopeResolver}.
  *
  * <ul>
  *   <li>{@link Kind#ALL}: every department (Administrators).</li>
- *   <li>{@link Kind#DEPARTMENT}: exactly one department (a valid Manager).</li>
+ *   <li>{@link Kind#DEPARTMENT}: a valid Manager: their primary department plus any additional departments an Administrator granted.</li>
  *   <li>{@link Kind#OWN}: no department-level access at all; the caller only reaches their own records (Staff). It is deliberately
  *       a separate kind so a Staff member can never be mistaken for a department-scoped or global user.</li>
  * </ul>
  *
- * <p><b>Two separate kinds of department access.</b> {@link #department()}, {@link #includes(Department)} and
- * {@link #includesCode(String)} describe the Manager's PRIMARY department only: they are the authority for every write and every
- * management decision, and they are never widened. A Manager may in addition hold view-only access to other departments, granted by an
- * Administrator ({@link #viewOnlyDepartments()}); that access is answered only by {@link #canView(Department)} and
- * {@link #viewableDepartments()}, which read paths use to list data. A read path that does not ask for it simply shows the primary
- * department, so missing it under-exposes rather than over-exposes, and no write path can be reached through it.
+ * <p><b>The departments a Manager manages.</b> {@link #managedDepartments()} is the primary department (the department of the Manager's own
+ * Staff record) followed by the active departments an Administrator granted ({@link #additionalDepartments()}). Every one of them gives the
+ * same, full Manager-level operational access: {@link #canManage(Department)} is the authority for every read and write a Manager makes.
+ * {@link #primaryDepartment()} identifies the primary department, for defaults and labels only. The grants never widen anything else:
+ * Administrator-only operations are refused by role, and moving a record between departments stays Administrator-only in the services.
  *
- * <p><b>Authorized-department API (being introduced).</b> {@link #primaryDepartment()}, {@link #managedDepartments()} and
- * {@link #canManage(Department)} are the methods every call site will use for the multi-department Manager change. In this phase they give
- * exactly the same answers as {@link #department()} and {@link #includes(Department)} (the primary department only), so nothing changes yet.
+ * <p>{@link #department()}, {@link #departmentCode()}, {@link #includes(Department)} and {@link #includesCode(String)} are the older
+ * primary-department-only methods. No production code uses them for authorization any more; they still answer for the primary
+ * department only, so a call that slipped back in could only under-grant.
  *
  * A scope never carries information supplied by the client: it is built only from database records.
  */
@@ -41,13 +42,13 @@ public final class DepartmentScope {
 
     private final Kind kind;
     private final Department department;
-    /** Additional departments a Manager may VIEW (never manage). Empty for every other kind. Never contains the primary department. */
-    private final List<Department> viewOnly;
+    /** The Administrator-granted departments a Manager also manages. Empty for every other kind. Never contains the primary department. */
+    private final List<Department> additional;
 
-    private DepartmentScope(Kind kind, Department department, List<Department> viewOnly) {
+    private DepartmentScope(Kind kind, Department department, List<Department> additional) {
         this.kind = kind;
         this.department = department;
-        this.viewOnly = viewOnly;
+        this.additional = additional;
     }
 
     /** Every department. */
@@ -69,13 +70,14 @@ public final class DepartmentScope {
     }
 
     /**
-     * This DEPARTMENT scope with view-only access to {@code departments} as well. The primary department, departments without a code
-     * and duplicates are dropped. Only a DEPARTMENT scope can carry view-only access; asking for it on another kind is a programming error.
-     * The primary department and every write authority ({@link #department()}, {@link #includes(Department)}) are unchanged.
+     * This DEPARTMENT scope with {@code departments} as additional managed departments (the active departments an Administrator granted).
+     * The primary department, departments without a code and duplicates are dropped. Only a DEPARTMENT scope can carry additional
+     * departments; asking for it on another kind is a programming error. The caller ({@link CurrentUserScopeResolver}) passes only active
+     * departments granted to this Manager's own account.
      */
-    public DepartmentScope withViewOnly(List<Department> departments) {
+    public DepartmentScope withAdditionalDepartments(List<Department> departments) {
         if (kind != Kind.DEPARTMENT) {
-            throw new IllegalStateException("Only a department scope can carry view-only departments");
+            throw new IllegalStateException("Only a department scope can carry additional departments");
         }
         Map<String, Department> byCode = new LinkedHashMap<>();
         if (departments != null) {
@@ -105,7 +107,9 @@ public final class DepartmentScope {
         return kind == Kind.OWN;
     }
 
-    /** The one (primary) department of a {@link Kind#DEPARTMENT} scope; any other kind has none, and asking for it is a programming error. */
+    // ── the older primary-department-only methods (no production authorization uses them) ────────────────────────────────
+
+    /** The primary department of a {@link Kind#DEPARTMENT} scope; any other kind has none, and asking for it is a programming error. */
     public Department department() {
         if (kind != Kind.DEPARTMENT) {
             throw new IllegalStateException("A " + kind + " scope has no single department");
@@ -113,16 +117,12 @@ public final class DepartmentScope {
         return department;
     }
 
-    /** The department code of a {@link Kind#DEPARTMENT} scope. */
+    /** The primary department code of a {@link Kind#DEPARTMENT} scope. */
     public String departmentCode() {
         return department().getCode();
     }
 
-    /**
-     * Whether data belonging to {@code other} is inside this scope FOR MANAGEMENT. ALL includes everything (also records with no
-     * department); DEPARTMENT includes only the primary department (never a view-only one); OWN includes no department; a missing
-     * department is never inside a DEPARTMENT scope.
-     */
+    /** Whether {@code other} is this scope's PRIMARY department (ALL: any; OWN: none). Use {@link #canManage(Department)} for authorization. */
     public boolean includes(Department other) {
         return includesCode(other == null ? null : other.getCode());
     }
@@ -136,56 +136,7 @@ public final class DepartmentScope {
         };
     }
 
-    /** The departments this Manager may only view (never the primary one). Empty for ALL and OWN. */
-    public List<Department> viewOnlyDepartments() {
-        return viewOnly;
-    }
-
-    /** For a DEPARTMENT scope: the primary department first, then the view-only ones. Asking on another kind is a programming error. */
-    public List<Department> viewableDepartments() {
-        Department primary = department();
-        List<Department> result = new ArrayList<>(viewOnly.size() + 1);
-        result.add(primary);
-        result.addAll(viewOnly);
-        return Collections.unmodifiableList(result);
-    }
-
-    /** Whether data of {@code other} may be READ: ALL any; DEPARTMENT the primary or a view-only department; OWN none. */
-    public boolean canView(Department other) {
-        return canViewCode(other == null ? null : other.getCode());
-    }
-
-    /** Same as {@link #canView(Department)}, for a department code. */
-    public boolean canViewCode(String departmentCode) {
-        return switch (kind) {
-            case ALL -> true;
-            case DEPARTMENT -> departmentCode != null && (departmentCode.equals(department.getCode()) || isViewOnlyCode(departmentCode));
-            case OWN -> false;
-        };
-    }
-
-    /** True only when {@code other} is visible to this scope through a view-only grant (so its data must be shown read-only). */
-    public boolean isViewOnly(Department other) {
-        return other != null && isViewOnlyCode(other.getCode());
-    }
-
-    /** Same as {@link #isViewOnly(Department)}, for a department code. */
-    public boolean isViewOnlyCode(String departmentCode) {
-        if (kind != Kind.DEPARTMENT || departmentCode == null) {
-            return false;
-        }
-        for (Department other : viewOnly) {
-            if (departmentCode.equals(other.getCode())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // ── the authorized-department API (multi-department Manager change, P1) ─────────────────────────────────────────────────
-    //
-    // Call sites move to these methods in P2; in P3 the Admin-granted departments join managedDepartments() in this one place. Until then
-    // they answer exactly like the primary-department methods above, so adopting them changes no behaviour.
+    // ── the authorized-department API ──────────────────────────────────────────────────────────────────────────────────
 
     /**
      * The Manager's primary department: the department of their own Staff record. Only for defaults and labels (for example the department
@@ -196,12 +147,21 @@ public final class DepartmentScope {
         return department();
     }
 
+    /** The Administrator-granted departments this Manager also manages (never the primary one). Empty for ALL and OWN. */
+    public List<Department> additionalDepartments() {
+        return additional;
+    }
+
     /**
-     * The departments this DEPARTMENT scope may MANAGE, primary first: in this phase the primary department only (Administrator grants are
-     * still view-only). Asking on another kind is a programming error: ALL manages every department and OWN none.
+     * The departments this DEPARTMENT scope may MANAGE: the primary department first, then the additional ones. Asking on another kind is
+     * a programming error: ALL manages every department and OWN none.
      */
     public List<Department> managedDepartments() {
-        return List.of(department());
+        Department primary = department();
+        List<Department> result = new ArrayList<>(additional.size() + 1);
+        result.add(primary);
+        result.addAll(additional);
+        return Collections.unmodifiableList(result);
     }
 
     /** The codes of {@link #managedDepartments()}, in the same order. */
@@ -223,15 +183,14 @@ public final class DepartmentScope {
         };
     }
 
-    /** The codes of the Administrator-granted departments, as a set (order does not matter for equality). */
-    private java.util.Set<String> grantedCodes() {
-        return viewOnly.stream().map(Department::getCode).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    /** The codes of the additional departments, as a set (order does not matter for equality). */
+    private Set<String> additionalCodes() {
+        return additional.stream().map(Department::getCode).collect(Collectors.toUnmodifiableSet());
     }
 
     /**
-     * Two scopes are equal only when they grant the same access: the same kind, the same primary department and the same set of
-     * Administrator-granted departments. (Before P1 the granted departments were ignored, so a Manager with grants compared equal to the
-     * same Manager without them.)
+     * Two scopes are equal only when they grant the same access: the same kind, the same primary department and the same set of additional
+     * departments.
      */
     @Override
     public boolean equals(Object other) {
@@ -239,12 +198,12 @@ public final class DepartmentScope {
         if (!(other instanceof DepartmentScope that)) return false;
         return kind == that.kind
                 && Objects.equals(kind == Kind.DEPARTMENT ? department.getCode() : null, that.kind == Kind.DEPARTMENT ? that.department.getCode() : null)
-                && grantedCodes().equals(that.grantedCodes());
+                && additionalCodes().equals(that.additionalCodes());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(kind, kind == Kind.DEPARTMENT ? department.getCode() : null, grantedCodes());
+        return Objects.hash(kind, kind == Kind.DEPARTMENT ? department.getCode() : null, additionalCodes());
     }
 
     @Override
@@ -252,9 +211,9 @@ public final class DepartmentScope {
         if (kind != Kind.DEPARTMENT) {
             return "DepartmentScope[" + kind + "]";
         }
-        if (viewOnly.isEmpty()) {
+        if (additional.isEmpty()) {
             return "DepartmentScope[" + department.getCode() + "]";
         }
-        return "DepartmentScope[" + department.getCode() + ", view-only " + viewOnly.stream().map(Department::getCode).toList() + "]";
+        return "DepartmentScope[" + department.getCode() + ", additional " + additional.stream().map(Department::getCode).toList() + "]";
     }
 }

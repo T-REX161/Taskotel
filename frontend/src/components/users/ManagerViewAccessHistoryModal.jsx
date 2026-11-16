@@ -16,7 +16,7 @@ import {
 const EMPTY_COUNTS = { all: 0, granted: 0, revoked: 0 };
 
 /**
- * The whole access history of one Manager (Admin only), opened from the Department View Access dialog: All / Granted / Revoked and a
+ * The whole access history of one Manager (Admin only), opened from the Department Access dialog: All / Granted / Revoked and a
  * department filter, newest first, in a fixed-height list that loads older records 20 at a time from the paged endpoint. Strictly
  * read-only: the history is append-only, so there is no delete or clear action anywhere. The server refuses everyone but an Admin.
  *

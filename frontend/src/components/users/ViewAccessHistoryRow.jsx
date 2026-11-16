@@ -13,6 +13,7 @@ export const formatWhen = (value) => {
 const TONE = {
   granted: { dot: 'bg-emerald-500', text: 'text-emerald-700' },
   revoked: { dot: 'bg-rose-500', text: 'text-rose-700' },
+  upgraded: { dot: 'bg-sky-500', text: 'text-sky-700' },
   other: { dot: 'bg-gray-400', text: 'text-gray-600' },
 };
 

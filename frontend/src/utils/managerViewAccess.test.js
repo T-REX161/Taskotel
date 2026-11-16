@@ -5,6 +5,7 @@ import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
   VIEW_ACCESS_ADMIN_ONLY_MESSAGE,
+  ADDITIONAL_DEPARTMENTS_LABEL,
   HISTORY_FILTERS,
   HISTORY_PAGE_SIZE,
   HISTORY_PREVIEW_SIZE,
@@ -87,9 +88,10 @@ describe('the dialog choices', () => {
 
   it('wording of the summary, the history and the errors', () => {
     assert.equal(viewAccessSummary({ departments: [] }), 'Own department only.');
-    assert.equal(viewAccessSummary(access), 'Own department, plus view-only access to Security.');
-    assert.equal(describeViewAccessChange({ action: 'GRANTED', departmentName: 'Front Desk' }), 'View access to Front Desk granted');
-    assert.equal(describeViewAccessChange({ action: 'REVOKED', departmentName: 'Front Desk' }), 'View access to Front Desk removed');
+    assert.equal(viewAccessSummary(access), 'Own department, plus full management of Security.');
+    assert.equal(describeViewAccessChange({ action: 'GRANTED', departmentName: 'Front Desk' }), 'Access to Front Desk granted');
+    assert.equal(describeViewAccessChange({ action: 'REVOKED', departmentName: 'Front Desk' }), 'Access to Front Desk removed');
+    assert.equal(describeViewAccessChange({ action: 'UPGRADED', departmentName: 'Front Desk' }), 'Access to Front Desk upgraded from view only to full management');
     assert.match(describeViewAccessChange({ action: 'REVOKED', departmentName: 'Front Desk', changeSource: 'PRIMARY_DEPARTMENT_CHANGE' }), /became the Manager’s own department/);
     assert.equal(viewAccessErrorMessage({ status: 403, message: 'x' }), VIEW_ACCESS_ADMIN_ONLY_MESSAGE);
     assert.equal(viewAccessErrorMessage({ status: 400, message: 'Unknown department: Z. Nothing was changed.' }), 'Unknown department: Z. Nothing was changed.');
@@ -247,13 +249,14 @@ describe('a Manager’s details on the Users page: Additional Department Access'
     assert.deepEqual(additionalAccessRows(null), []);
   });
 
-  it('the row reads the existing Admin-only endpoint each time the details open, labels each department View only, and shows no history', () => {
+  it('the row reads the existing Admin-only endpoint each time the details open, labels each department Full management, and shows no history', () => {
     const row = read('components', 'users', 'ManagerAdditionalAccess.jsx');
     assert.ok(row.includes('const allowed = showsAdditionalAccess(getUserRole(), staff);'));
     assert.ok(row.includes('if (!allowed) return null;'));
     assert.ok(row.includes('getManagerViewAccess(userId)'), 'the existing view-access read, nothing new');
     assert.ok(!/getManagerViewAccessHistory|updateManagerViewAccess|history/i.test(row.replace(/\/\*[\s\S]*?\*\//g, '')), 'read-only, no audit history');
-    assert.ok(row.includes('<ViewOnlyBadge size="compact" />'), 'each department keeps its View only label, in the compact size');
+    assert.ok(row.includes('>Full management</span>') && !row.includes('ViewOnlyBadge') && !/view only/i.test(row.replace(/\/\*[\s\S]*?\*\//g, '')), 'each department says Full management, never View only');
+    assert.ok(row.includes('aria-label="Additional departments this Manager manages"'));
     assert.ok(row.includes('divide-y divide-gray-100') && !row.includes('bg-gray-50'), 'a plain list with hairline separators, no card per department');
     assert.ok(row.includes('No additional department access'));
     assert.ok(row.includes('<DetailRow icon={EyeIcon} label="Additional Department Access" note={list}>'), 'the modal’s own row design; the list sits in its note area');
@@ -309,7 +312,7 @@ describe('the Admin dialog: revoking one department', () => {
   it('asks for confirmation, uses the existing endpoint, and offers Revoke only on saved grants (never the primary row)', () => {
     const modal = read('components', 'users', 'ManagerViewAccessModal.jsx');
     const grantedBranch = modal.indexOf("{state === 'granted' && (");
-    const revokeButton = modal.indexOf('aria-label={`Revoke view access to ${choice.name}`}');
+    const revokeButton = modal.indexOf('aria-label={`Revoke access to ${choice.name}`}');
     assert.ok(grantedBranch > modal.indexOf("{state === 'primary' && ("));
     assert.ok(revokeButton > grantedBranch && revokeButton < modal.indexOf("{state === 'adding' &&"), 'the button sits inside the saved-grant branch only');
     assert.ok(modal.includes('setRevoking({ code: choice.code, name: choice.name });'), 'the button only opens the confirmation');
@@ -433,9 +436,9 @@ describe('access history: preview, full history, filters and Load more', () => {
 
 describe("the Manager's own profile header: Departments", () => {
   const profile = { username: 'mgr', role: 'MANAGER', departmentCode: 'FRONT_DESK', departmentName: 'Front Desk' };
-  const own = { code: 'FRONT_DESK', name: 'Front Desk', active: true };
-  const basic = (code, name) => ({ code, name, active: true }); // a department the Manager cannot see (identity only, not view-only)
-  const granted = (code, name, active = true) => ({ code, name, active, viewOnly: true });
+  const own = { code: 'FRONT_DESK', name: 'Front Desk', active: true, managed: true };
+  const basic = (code, name) => ({ code, name, active: true, managed: false }); // a department the Manager does not manage (identity only)
+  const granted = (code, name, active = true) => ({ code, name, active, managed: true });
 
   it('is shown for a Manager only, never for an Admin or Staff', () => {
     assert.equal(showsProfileDepartments('MANAGER'), true);
@@ -449,9 +452,9 @@ describe("the Manager's own profile header: Departments", () => {
     assert.deepEqual(shown.additional, []);
   });
 
-  it('a Manager with several grants: the view-only departments by name, never the primary one, never twice', () => {
+  it('a Manager with several grants: the managed additional departments by name, never the primary one, never twice', () => {
     const list = [own, granted('SECURITY', 'Security'), basic('SPA', 'Spa'), granted('MAINTENANCE', 'Maintenance', false),
-      granted('SECURITY', 'Security'), { ...own, viewOnly: true }];
+      granted('SECURITY', 'Security'), { ...own, managed: true }];
     const shown = profileDepartments(profile, list);
     assert.equal(shown.primary.name, 'Front Desk');
     assert.deepEqual(shown.additional, [
@@ -460,7 +463,7 @@ describe("the Manager's own profile header: Departments", () => {
     ]);
   });
 
-  it('after a revocation the server no longer marks the department view-only, so it is no longer listed', () => {
+  it('after a revocation the server no longer marks the department managed, so it is no longer listed', () => {
     const before = profileDepartments(profile, [own, granted('SECURITY', 'Security'), granted('SPA', 'Spa')]);
     const after = profileDepartments(profile, [own, basic('SECURITY', 'Security'), granted('SPA', 'Spa')]);
     assert.deepEqual(before.additional.map((d) => d.code), ['SECURITY', 'SPA']);
@@ -471,7 +474,8 @@ describe("the Manager's own profile header: Departments", () => {
     assert.equal(profileDepartments({ departmentCode: null }, [own]).primary, null);
     assert.equal(profileDepartments(null, null).primary, null);
     assert.deepEqual(profileDepartments(profile, 'nope').additional, []);
-    assert.deepEqual(profileDepartments(profile, [{ code: 'X', viewOnly: 'true' }, { viewOnly: true }, null]).additional, []);
+    assert.deepEqual(profileDepartments(profile, [{ code: 'X', managed: 'true' }, { managed: true }, { code: 'Y', viewOnly: true }, null]).additional, [],
+      'only a real true for managed counts, and a code is needed; the old viewOnly flag means nothing');
     assert.equal(profileDepartments({ departmentCode: 'FRONT_DESK' }, []).primary.name, 'FRONT_DESK');
   });
 
@@ -487,14 +491,45 @@ describe("the Manager's own profile header: Departments", () => {
     assert.ok(component.includes('if (!shown) return null;'), 'renders nothing (and fetches nothing) for an Admin or Staff');
   });
 
-  it("shows one compact text line under the badges: Primary and View only labels, no chips, badges or cards", () => {
+  it("shows one compact text line under the badges: Primary and Additional labels, no chips, badges or cards", () => {
     assert.ok(component.includes("<p data-testid=\"profile-departments\"") && component.includes("text-xs") && component.includes(">Departments:</span>"));
     assert.ok(component.includes("data-kind=\"primary\"") && component.includes("&nbsp;(Primary)") && component.includes("font-medium text-gray-700"));
-    assert.ok(component.includes("data-kind=\"view-only\"") && component.includes("'View only'") && component.includes(">·</span>"));
+    assert.ok(component.includes("data-kind=\"additional\"") && component.includes("'Additional'") && component.includes(">·</span>"));
+    assert.ok(!/view[- ]only/i.test(component.replace(/\/\*[\s\S]*?\*\//g, '')), 'no View only wording remains');
     for (const chip of ["ViewOnlyBadge", "rounded-md", "border", "bg-gray-50", "<ul", "<li"]) assert.ok(!component.includes(chip), chip);
     assert.ok(!component.includes("whitespace-nowrap"), "long names may wrap on a narrow screen");
     const header = page.slice(page.indexOf('aria-label="Profile summary"'), page.indexOf('title="Personal Information"'));
     const at = (s) => header.indexOf(s);
     assert.ok(at('{accessScope}') > 0 && at('<ProfileDepartments role={role} profile={profile}') > at('{accessScope}'));
+  });
+});
+
+describe('the Admin dialog after the access-model change: additional departments are fully managed', () => {
+  const modal = read('components', 'users', 'ManagerViewAccessModal.jsx');
+  const rowComponent = read('components', 'users', 'ViewAccessHistoryRow.jsx');
+  const table = read('components', 'users', 'UsersTable.jsx');
+
+  it('says Full management where it used to say View only, and explains what a grant gives and what stays Admin-only', () => {
+    assert.equal(ADDITIONAL_DEPARTMENTS_LABEL, 'Additional departments (full management)');
+    assert.ok(modal.includes('{ADDITIONAL_DEPARTMENTS_LABEL}') && modal.includes('{FULL_MANAGEMENT_LABEL}'));
+    assert.ok(modal.includes('Full management: in each additional department the Manager can see and manage staff (including contact details), tasks,'));
+    assert.ok(modal.includes('settings stay Admin-only.'));
+    const visible = modal.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    assert.ok(!/View only|view-only|ViewOnlyBadge|can view|view access/i.test(visible), 'no view-only wording or badge remains in the dialog');
+    assert.ok(modal.includes('>Department access</h3>') && table.includes("viewAccess: 'Department Access',"));
+    assert.ok(modal.includes('will no longer manage {revoking.name} from their next request.'), 'the revoke confirmation says what is lost');
+  });
+
+  it('history rows: an UPGRADED record reads "Upgraded to full management", sorted among the others, under All only', () => {
+    const rows = viewAccessHistoryRows([
+      { id: 'a', action: 'GRANTED', departmentName: 'Maintenance', changedByUsername: 'admin', changedAt: '2026-11-15T10:00:00Z' },
+      { id: 'b', action: 'UPGRADED', departmentName: 'Maintenance', changeSource: 'ACCESS_MODEL_V23', changedByUsername: 'SYSTEM (V23 migration)', changedAt: '2026-11-17T10:00:00Z' },
+    ]);
+    assert.deepEqual(rows.map((r) => r.id), ['b', 'a'], 'newest first');
+    assert.equal(rows[0].action, 'Upgraded to full management');
+    assert.equal(rows[0].tone, 'upgraded');
+    assert.equal(rows[0].actor, 'SYSTEM (V23 migration)');
+    assert.ok(rowComponent.includes("upgraded: { dot: 'bg-sky-500', text: 'text-sky-700' }"));
+    assert.deepEqual(HISTORY_FILTERS.map((f) => f.key), ['ALL', 'GRANTED', 'REVOKED'], 'no separate filter for UPGRADED: it appears under All only');
   });
 });

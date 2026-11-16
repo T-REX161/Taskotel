@@ -4,8 +4,8 @@ import { profileDepartments, showsProfileDepartments } from '../../utils/manager
 
 /**
  * The 'Departments' line in the signed-in Manager's own profile header: the primary department labelled Primary, then any department an
- * Administrator lets this Manager view, labelled View only. The primary department comes from the profile; the view-only ones from the
- * Manager's own department list (GET /api/departments), which the server scopes to the caller and marks view-only. It is read each time the
+ * Administrator granted this Manager, labelled Additional. The primary department comes from the profile; the additional ones from the
+ * Manager's own department list (GET /api/departments), which the server scopes to the caller and marks managed. It is read each time the
  * page opens, so a grant or a revocation shows on the next visit. No Admin-only endpoint is used, and nothing is shown for Admins or Staff.
  *
  * Props: role (normalized role of the signed-in user), profile (the shared profile, or null), profileUnavailable.
@@ -49,8 +49,8 @@ export default function ProfileDepartments({ role, profile, profileUnavailable =
       {additional.map((department) => (
         <React.Fragment key={department.code}>
           <span aria-hidden="true" className="mx-1.5 text-gray-300">·</span>
-          <span data-testid="profile-department" data-kind="view-only">
-            {department.name}&nbsp;({department.active ? 'View only' : 'View only, inactive'})
+          <span data-testid="profile-department" data-kind="additional">
+            {department.name}&nbsp;({department.active ? 'Additional' : 'Additional, inactive'})
           </span>
         </React.Fragment>
       ))}

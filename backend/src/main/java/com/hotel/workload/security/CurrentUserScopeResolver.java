@@ -30,10 +30,11 @@ import java.util.stream.Collectors;
  *       database on every call: the account exists, is active and is a MANAGER; a linked Staff record exists and is active; and that
  *       Staff record has a department that is active. If any of them fails the call is refused with HTTP 403 (fail closed), with one
  *       generic message that does not say which check failed.</li>
- *   <li>A valid Manager may also hold <b>view-only</b> access to other active departments, granted by an Administrator
- *       ({@link ManagerViewGrantRepository}). It is read from the database on every call too, so a revocation applies to the next
- *       request; it is kept apart from the primary department ({@link DepartmentScope#viewOnlyDepartments()}) and never widens
- *       {@link DepartmentScope#department()} or {@link DepartmentScope#includes}, which decide every write.</li>
+ *   <li>A valid Manager also manages the <b>additional</b> active departments an Administrator granted to their own account
+ *       ({@link ManagerViewGrantRepository}), with the same full Manager-level access as the primary department
+ *       ({@link DepartmentScope#managedDepartments()}). The grants are read from the database on every call too, never cached, so a
+ *       revocation applies to the next request; an inactive granted department is left out. They are only read once every check
+ *       above has passed, so a Manager whose primary department is inactive gets nothing, whatever they were granted.</li>
  *   <li><b>STAFF</b> gets {@link DepartmentScope#own()}: no department-level access. Existing Staff behaviour is unchanged.</li>
  *   <li>No authenticated user: HTTP 401. Any other or missing role: HTTP 403.</li>
  * </ul>
@@ -61,7 +62,7 @@ public class CurrentUserScopeResolver {
         this.staffRepository = staffRepository;
     }
 
-    /** View-only grants. Optional (setter) so a hand-built resolver in a unit test simply has none. */
+    /** Administrator grants of additional departments. Optional (setter) so a hand-built resolver in a unit test simply has none. */
     private ManagerViewGrantRepository viewGrantRepository;
 
     @Autowired(required = false)
@@ -165,9 +166,10 @@ public class CurrentUserScopeResolver {
         if (viewGrantRepository == null) {
             return scope;
         }
-        // Active granted departments only; the primary one is dropped by withViewOnly. Never cached: read again on every request.
-        List<Department> viewOnly = viewGrantRepository.findActiveGrantedDepartments(account.get().getId());
-        return viewOnly.isEmpty() ? scope : scope.withViewOnly(viewOnly);
+        // The active departments granted to THIS account only (looked up by its own id); the primary one is dropped by
+        // withAdditionalDepartments. Never cached: read again on every request.
+        List<Department> additional = viewGrantRepository.findActiveGrantedDepartments(account.get().getId());
+        return additional.isEmpty() ? scope : scope.withAdditionalDepartments(additional);
     }
 
     /** Always throws 403. The reason goes to the log only (no username, no personal data), never to the caller. */

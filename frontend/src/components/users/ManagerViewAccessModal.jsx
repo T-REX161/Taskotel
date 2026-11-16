@@ -8,11 +8,12 @@ import {
   updateManagerViewAccess,
 } from '../../services/api';
 import { CloseIcon, LockIcon } from '../icons/Icons';
-import ViewOnlyBadge from '../common/ViewOnlyBadge';
 import ViewAccessHistoryRow from './ViewAccessHistoryRow';
 import ManagerViewAccessHistoryModal from './ManagerViewAccessHistoryModal';
 import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import {
+  ADDITIONAL_DEPARTMENTS_LABEL,
+  FULL_MANAGEMENT_LABEL,
   HISTORY_PREVIEW_SIZE,
   canManageViewAccess,
   choiceState,
@@ -173,7 +174,7 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
       const updated = await updateManagerViewAccess(userId, remaining);
       setAccess(updated);
       setSelected((current) => current.filter((code) => code !== target.code));
-      setSaved(`View access to ${target.name} revoked. Applies on the Manager’s next request.`);
+      setSaved(`Access to ${target.name} revoked. Applies on the Manager’s next request.`);
       await loadHistory();
     } catch (err) {
       setSubmitError(viewAccessErrorMessage(err, 'The access could not be revoked. Please try again.'));
@@ -205,7 +206,7 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
         {/* A. Header: always visible */}
         <header className="shrink-0 flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 pb-4 border-b border-gray-100">
           <div className="min-w-0">
-            <h3 id="manager-view-access-title" className="text-lg font-bold text-gray-900">Department view access</h3>
+            <h3 id="manager-view-access-title" className="text-lg font-bold text-gray-900">Department access</h3>
             <p className="text-sm text-gray-700 break-words">
               {user.fullName || user.username} <span className="text-gray-500">({user.username})</span>
             </p>
@@ -231,13 +232,15 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
           {access && (
             <fieldset disabled={submitting} className="min-w-0">
               <legend className="w-full flex items-baseline justify-between gap-3">
-                <span className="text-sm font-semibold text-gray-900">Departments this Manager can view</span>
+                <span className="text-sm font-semibold text-gray-900">{ADDITIONAL_DEPARTMENTS_LABEL}</span>
                 <span className="shrink-0 text-xs font-normal text-gray-500" data-testid="granted-count">
                   {grantedCount} additional
                 </span>
               </legend>
               <p className="mt-1 text-xs text-gray-500">
-                View only: staff, workload, tasks and assignments are visible but cannot be changed. Contact details stay hidden.
+                Full management: in each additional department the Manager can see and manage staff (including contact details), tasks,
+                assignments and workload, as in their own department. Moving staff or tasks between departments, accounts, roles, access and
+                settings stay Admin-only.
               </p>
               {!access.primaryDepartmentCode && (
                 <p className="mt-2 text-xs text-amber-800">This Manager has no department yet, so no access applies until one is assigned.</p>
@@ -277,7 +280,12 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
                         )}
                         {state === 'granted' && (
                           <>
-                            <ViewOnlyBadge size="compact" />
+                            <span
+                              className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1 py-px text-[9px] font-semibold uppercase leading-3 tracking-wide text-emerald-700"
+                              title="Full Manager-level management of this department"
+                            >
+                              {FULL_MANAGEMENT_LABEL}
+                            </span>
                             <button
                               type="button"
                               onClick={() => {
@@ -285,7 +293,7 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
                                 setSaved('');
                                 setRevoking({ code: choice.code, name: choice.name });
                               }}
-                              aria-label={`Revoke view access to ${choice.name}`}
+                              aria-label={`Revoke access to ${choice.name}`}
                               className="px-2 py-1 rounded-md text-xs font-medium text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer disabled:opacity-50"
                             >
                               Revoke
@@ -381,7 +389,7 @@ function ManagerViewAccessModal({ isOpen, user, onClose, closing = false }) {
             >
               <h4 id="revoke-view-access-title" className="text-base font-bold text-gray-900 break-words">Revoke access to {revoking.name}?</h4>
               <p id="revoke-view-access-text" className="text-sm text-gray-600">
-                {user.fullName || user.username} will no longer see {revoking.name} from their next request. Other access is kept. The change is
+                {user.fullName || user.username} will no longer manage {revoking.name} from their next request. Other access is kept. The change is
                 recorded in the access history.
               </p>
               <div className="flex justify-end gap-2 pt-1">

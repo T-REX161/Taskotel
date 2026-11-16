@@ -15,9 +15,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * P1 of the multi-department Manager change: the authorized-department API on {@link DepartmentScope} and its equality. In this phase the
- * new methods must answer exactly like the primary-department methods they will replace (no behaviour change); Administrator grants are
- * still view-only and are NOT manageable.
+ * The authorized-department API on {@link DepartmentScope} and its equality (multi-department Manager change). Without grants the new
+ * methods answer exactly like the primary-department methods; since P3, Administrator grants are manageable as well.
  */
 class DepartmentScopeAuthorizedSetTest {
 
@@ -45,17 +44,18 @@ class DepartmentScopeAuthorizedSetTest {
     }
 
     @Test
-    @DisplayName("A Manager with view-only grants: in this phase a granted department is still NOT manageable")
-    void grantsAreNotManageableYet() {
+    @DisplayName("A Manager with grants (P3): every granted department is manageable, and nothing outside the primary and granted ones is")
+    void grantsAreManageable() {
         Department home = dept("HOME");
         Department granted = dept("GRANTED");
-        DepartmentScope scope = DepartmentScope.department(home).withViewOnly(List.of(granted));
-        assertEquals(List.of(home), scope.managedDepartments());
-        assertFalse(scope.canManage(granted));
-        assertFalse(scope.canManageCode("GRANTED"));
-        assertTrue(scope.canView(granted), "still readable, exactly as before");
+        Department second = dept("SECOND");
+        DepartmentScope scope = DepartmentScope.department(home).withAdditionalDepartments(List.of(granted, second));
+        assertEquals(List.of(home, granted, second), scope.managedDepartments());
+        assertTrue(scope.canManage(granted));
+        assertTrue(scope.canManageCode("SECOND"));
         for (String code : CODES) {
-            assertEquals(scope.includesCode(code), scope.canManageCode(code), String.valueOf(code));
+            boolean expected = "HOME".equals(code) || "GRANTED".equals(code);
+            assertEquals(expected, DepartmentScope.department(home).withAdditionalDepartments(List.of(granted)).canManageCode(code), String.valueOf(code));
         }
     }
 
@@ -83,16 +83,16 @@ class DepartmentScopeAuthorizedSetTest {
         Department a = dept("A");
         Department b = dept("B");
         DepartmentScope none = DepartmentScope.department(home);
-        DepartmentScope ab = DepartmentScope.department(home).withViewOnly(List.of(a, b));
-        DepartmentScope ba = DepartmentScope.department(dept("HOME")).withViewOnly(List.of(dept("B"), dept("A")));
-        DepartmentScope onlyA = DepartmentScope.department(home).withViewOnly(List.of(a));
+        DepartmentScope ab = DepartmentScope.department(home).withAdditionalDepartments(List.of(a, b));
+        DepartmentScope ba = DepartmentScope.department(dept("HOME")).withAdditionalDepartments(List.of(dept("B"), dept("A")));
+        DepartmentScope onlyA = DepartmentScope.department(home).withAdditionalDepartments(List.of(a));
 
         assertEquals(ab, ba, "same primary department and same grants, listed in another order");
         assertEquals(ab.hashCode(), ba.hashCode());
         assertNotEquals(none, ab, "grants are part of a scope's identity");
         assertNotEquals(ab, none);
         assertNotEquals(onlyA, ab);
-        assertNotEquals(DepartmentScope.department(dept("OTHER")).withViewOnly(List.of(a, b)), ab, "a different primary department");
+        assertNotEquals(DepartmentScope.department(dept("OTHER")).withAdditionalDepartments(List.of(a, b)), ab, "a different primary department");
         assertEquals(none, DepartmentScope.department(dept("HOME")), "without grants: equal by primary department, as before");
         assertEquals(none.hashCode(), DepartmentScope.department(dept("HOME")).hashCode());
         assertEquals(DepartmentScope.all(), DepartmentScope.all());

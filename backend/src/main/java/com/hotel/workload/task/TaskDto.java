@@ -6,10 +6,7 @@ import java.time.LocalTime;
 import java.util.UUID;
 
 public class TaskDto {
-    /**
-     * True when this record is visible to the signed-in Manager only through an Administrator view-only grant for another department:
-     * it may be looked at, never managed (every write is refused by the server for it anyway). False for everyone else.
-     */
+    /** Kept for API compatibility and always false: Administrator grants give full management, so nothing is view-only any more. */
     private boolean viewOnly;
     private UUID id;
     private String title;

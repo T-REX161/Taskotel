@@ -170,7 +170,7 @@ public class AssignmentStaffPictureTest {
         Set<String> fields = new TreeSet<>();
         rowFor(list("apic_admin", "ADMIN"), taskWith).fieldNames().forEachRemaining(fields::add);
         assertEquals(new TreeSet<>(List.of("id", "taskId", "taskTitle", "taskStatus", "staffId", "staffName", "staffProfileImageUrl", "assignedAt", "viewOnly")), fields);
-        // viewOnly is true only for a Manager reading another department through an Administrator grant; never for an Admin
+        // viewOnly is kept for API compatibility and is always false (Administrator grants give full management)
         assertFalse(rowFor(list("apic_admin", "ADMIN"), taskWith).get("viewOnly").asBoolean());
 
         Staff orphan = new Staff();

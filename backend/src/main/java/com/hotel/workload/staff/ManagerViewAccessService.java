@@ -23,12 +23,13 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Admin-only: which additional departments a Manager may VIEW (never manage).
+ * Admin-only: which additional departments a Manager manages, besides their primary department.
  *
  * <p>Every operation, including the reads, asks the scope resolver first, so no sign-in is 401 and a Manager (whoever's grants they
- * name), a Staff member or an invalid Manager is 403, whatever the URL rules say. A grant changes only what the Manager can read
- * ({@code DepartmentScope.canView}); it never reaches write authorization, which looks at the primary department alone.
- * Grants and revocations are audited in the same transaction.
+ * name, their own included), a Staff member or an invalid Manager is 403, whatever the URL rules say. An active grant gives the Manager
+ * full Manager-level operational access to that department ({@code DepartmentScope.managedDepartments}); it never gives anything an
+ * Administrator alone may do. Grants and revocations are audited in the same transaction. (The class, table and URL names still say
+ * "view" from the earlier view-only model; they are kept so existing data, history and clients stay valid.)
  */
 @Service
 public class ManagerViewAccessService {

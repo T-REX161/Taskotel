@@ -46,19 +46,20 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional(readOnly = true)
     public List<DepartmentDto> getAllDepartments() {
         // Who is asking decides how much of each department is returned (no sign-in is 401, an invalid Manager 403):
-        // an Admin gets everything; a Manager gets the full details of their own department only; everyone else, and every
-        // other department, gets the basic identity a selector needs. The figures for a department that is not shown in full
-        // are never computed, so they cannot leak. A department an Administrator lets the Manager VIEW is shown in full as well, marked
-        // view-only (department changes are Admin-only anyway).
+        // an Admin gets everything; a Manager gets the full details of the departments they manage (primary and Administrator-granted);
+        // everyone else, and every other department, gets the basic identity a selector needs. The figures for a department that is not
+        // shown in full are never computed, so they cannot leak. A Manager's answer also says, for every department, whether they manage it
+        // ("managed"); Admin and Staff answers do not carry that field at all.
         DepartmentScope scope = scopeResolver.resolve();
         return departmentRepository.findAllByOrderByCreatedAtAscNameAsc().stream()
                 .map(department -> {
-                    if (scope.isAll() || (scope.isDepartment() && scope.canManage(department))) {
+                    if (scope.isAll()) {
                         return toDto(department);
                     }
-                    if (scope.isDepartment() && scope.isViewOnly(department)) {
-                        DepartmentDto dto = toDto(department);
-                        dto.setViewOnly(true);
+                    if (scope.isDepartment()) {
+                        boolean managed = scope.canManage(department);
+                        DepartmentDto dto = managed ? toDto(department) : toBasicDto(department);
+                        dto.setManaged(managed);
                         return dto;
                     }
                     return toBasicDto(department);

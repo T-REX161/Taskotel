@@ -235,17 +235,6 @@ public class AssignmentServiceImpl implements AssignmentService {
                     .map(AssignmentDto::fromEntity)
                     .collect(Collectors.toList());
         }
-        if (scope.isDepartment() && !scope.viewOnlyDepartments().isEmpty()) {
-            // Also the assignments of the departments an Administrator lets this Manager VIEW, marked view-only. Assigning, reassigning
-            // and every other assignment write check the managed departments only, so none of them can be changed through this.
-            return assignmentRepository.findByTaskDepartmentInOrderByAssignedAtDesc(scope.viewableDepartments()).stream()
-                    .map(assignment -> {
-                        AssignmentDto dto = AssignmentDto.fromEntity(assignment);
-                        dto.setViewOnly(scope.isViewOnly(assignment.getTask().getDepartment()));
-                        return dto;
-                    })
-                    .collect(Collectors.toList());
-        }
         if (scope.isDepartment()) {
             // Database-side filter on the task's department (the departments this Manager manages): others' assignments are never loaded
             return assignmentRepository.findByTaskDepartmentInOrderByAssignedAtDesc(scope.managedDepartments()).stream()

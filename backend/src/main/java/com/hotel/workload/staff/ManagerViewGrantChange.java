@@ -29,6 +29,12 @@ public class ManagerViewGrantChange {
     public static final String SOURCE_ADMIN = "ADMIN_VIEW_ACCESS";
     /** A grant made redundant because the Manager's primary department became that department. */
     public static final String SOURCE_PRIMARY_CHANGE = "PRIMARY_DEPARTMENT_CHANGE";
+    /**
+     * A grant that existed under the earlier view-only model and became full management with the access-model change. Written only by the
+     * hand-run migration V23 (never by the application), with the change source {@link #SOURCE_ACCESS_MODEL_V23}.
+     */
+    public static final String ACTION_UPGRADED = "UPGRADED";
+    public static final String SOURCE_ACCESS_MODEL_V23 = "ACCESS_MODEL_V23";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

@@ -10,7 +10,7 @@ const MENU_LABELS = {
   view: 'View Details',
   edit: 'Edit User',
   department: 'Manager Department',
-  viewAccess: 'Department View Access',
+  viewAccess: 'Department Access',
   deactivate: 'Deactivate',
   activate: 'Activate',
   remove: 'Remove User',

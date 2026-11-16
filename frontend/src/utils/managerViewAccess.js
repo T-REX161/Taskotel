@@ -1,4 +1,4 @@
-// Pure helpers for Admin-controlled, view-only department access for Managers.
+// Pure helpers for Admin-controlled additional departments for Managers (full management since the multi-department change).
 //
 // The server decides everything that matters: only an Admin may read or change grants; a grant only lets a Manager SEE another
 // department's staff, workload, tasks and assignments; every write (create, edit, assign, reassign, status, delete...) is still checked
@@ -6,6 +6,9 @@
 // decide what the pages offer and how answers are worded. Hiding is convenience, not the control.
 
 export const VIEW_ACCESS_ADMIN_ONLY_MESSAGE = 'Only an Admin can view or change a Manager’s department access.';
+/** What the Admin dialog calls a department a Manager manages besides their own. */
+export const ADDITIONAL_DEPARTMENTS_LABEL = 'Additional departments (full management)';
+export const FULL_MANAGEMENT_LABEL = 'Full management';
 export const VIEW_ONLY_LABEL = 'View only';
 export const VIEW_ONLY_HINT = 'You can view this department’s records but not change them. Access was granted by an Administrator.';
 
@@ -101,20 +104,21 @@ export function additionalAccessRows(access, staffDepartmentCode = '') {
 /** One line for an audit record. */
 export function describeViewAccessChange(change) {
   const name = change?.departmentName || change?.departmentCode || 'A department';
-  if (change?.action === 'GRANTED') return `View access to ${name} granted`;
+  if (change?.action === 'GRANTED') return `Access to ${name} granted`;
   if (change?.action === 'REVOKED') {
     return change?.changeSource === 'PRIMARY_DEPARTMENT_CHANGE'
-      ? `View access to ${name} removed (it became the Manager’s own department)`
-      : `View access to ${name} removed`;
+      ? `Access to ${name} removed (it became the Manager’s own department)`
+      : `Access to ${name} removed`;
   }
-  return `View access to ${name} changed`;
+  if (change?.action === 'UPGRADED') return `Access to ${name} upgraded from view only to full management`;
+  return `Access to ${name} changed`;
 }
 
 /** What the dialog says about the saved access. */
 export function viewAccessSummary(access) {
   const names = (Array.isArray(access?.departments) ? access.departments : []).map((grant) => grant.departmentName || grant.departmentCode);
   if (names.length === 0) return 'Own department only.';
-  return `Own department, plus view-only access to ${names.join(', ')}.`;
+  return `Own department, plus full management of ${names.join(', ')}.`;
 }
 
 export function viewAccessErrorMessage(error, fallback = 'The department access could not be saved. Please try again.') {
@@ -140,7 +144,7 @@ export function revokeSelection(access, code) {
 }
 
 /**
- * How a department row of the dialog reads: 'primary' (own department, locked), 'granted' (saved view-only grant), 'adding' (ticked, not
+ * How a department row of the dialog reads: 'primary' (own department, locked), 'granted' (saved grant), 'adding' (ticked, not
  * saved yet), 'removing' (granted, unticked, not saved yet) or 'none'.
  */
 export function choiceState(choice, savedCodes, selectedCodes) {
@@ -166,8 +170,11 @@ export function viewAccessHistoryRows(history) {
     .sort((a, b) => time(b.change) - time(a.change) || a.index - b.index)
     .map(({ change }) => ({
       id: change.id,
-      action: change.action === 'GRANTED' ? 'Access granted' : change.action === 'REVOKED' ? 'Access revoked' : 'Access changed',
-      tone: change.action === 'GRANTED' ? 'granted' : change.action === 'REVOKED' ? 'revoked' : 'other',
+      action: change.action === 'GRANTED' ? 'Access granted'
+        : change.action === 'REVOKED' ? 'Access revoked'
+        : change.action === 'UPGRADED' ? 'Upgraded to full management'
+        : 'Access changed',
+      tone: change.action === 'GRANTED' ? 'granted' : change.action === 'REVOKED' ? 'revoked' : change.action === 'UPGRADED' ? 'upgraded' : 'other',
       department: change.departmentName || change.departmentCode || 'A department',
       actor: change.changedByUsername || 'Unknown',
       automatic: change.changeSource === 'PRIMARY_DEPARTMENT_CHANGE',
@@ -207,7 +214,7 @@ export function showsProfileDepartments(role) {
 
 /**
  * The departments in a signed-in Manager's own profile header. The primary one comes from the profile (the department of the Manager's own
- * staff record, null when there is none or it is inactive). The additional ones are those the server marked view-only in the Manager's own
+ * staff record, null when there is none or it is inactive). The additional ones are those the server marks `managed` in the Manager's own
  * department list (GET /api/departments, scoped to the caller): never the primary department, never twice, sorted by name.
  */
 export function profileDepartments(profile, departments) {
@@ -217,7 +224,7 @@ export function profileDepartments(profile, departments) {
   const additional = [];
   for (const department of Array.isArray(departments) ? departments : []) {
     const code = department?.code;
-    if (!code || !isViewOnly(department) || seen.has(code)) continue;
+    if (!code || department?.managed !== true || seen.has(code)) continue;
     seen.add(code);
     additional.push({ code, name: department.name || code, active: department.active !== false });
   }

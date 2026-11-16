@@ -3,6 +3,8 @@ package com.hotel.workload.security;
 import com.hotel.workload.staff.Availability;
 import com.hotel.workload.staff.Department;
 import com.hotel.workload.staff.DepartmentRepository;
+import com.hotel.workload.staff.ManagerViewGrant;
+import com.hotel.workload.staff.ManagerViewGrantRepository;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
 import org.junit.jupiter.api.AfterEach;
@@ -37,6 +39,7 @@ public class CurrentUserScopeResolverDatabaseTest {
     @Autowired private StaffRepository staffRepository;
     @Autowired private DepartmentRepository departmentRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private ManagerViewGrantRepository grantRepository;
 
     private Department alpha;
     private Department beta;
@@ -265,5 +268,89 @@ public class CurrentUserScopeResolverDatabaseTest {
     public void unauthenticated() {
         ResponseStatusException error = assertThrows(ResponseStatusException.class, () -> resolver.resolve());
         assertEquals(HttpStatus.UNAUTHORIZED, error.getStatusCode());
+    }
+
+    // ── Administrator-granted additional departments (P3): built from the database on every call, for this account only ──────────
+
+    private void grant(User manager, Department department) {
+        ManagerViewGrant grant = new ManagerViewGrant();
+        grant.setManager(manager);
+        grant.setDepartment(department);
+        grant.setGrantedByUserId(java.util.UUID.randomUUID());
+        grant.setGrantedByUsername("an_admin");
+        grantRepository.saveAndFlush(grant);
+    }
+
+    @Test
+    @DisplayName("Active grants join the managed departments (primary first); an inactive granted department and another Manager's grants never do")
+    public void grantsJoinTheManagedDepartments() {
+        Department gamma = newDepartment("SCOPE_GAMMA", true);
+        Department shut = newDepartment("SCOPE_SHUT", false);
+        User mia = newManager("scope_mia_g", alpha);
+        User hal = newManager("scope_hal_g", alpha);
+        grant(mia, beta);
+        grant(mia, shut);
+        grant(hal, gamma); // someone else's grant
+
+        signInAs("scope_mia_g", "MANAGER");
+        DepartmentScope scope = resolver.resolve();
+
+        assertEquals(List.of("SCOPE_ALPHA", "SCOPE_BETA"), scope.managedDepartmentCodes(), "primary first, the active grant, not the inactive one");
+        assertEquals("SCOPE_ALPHA", scope.primaryDepartment().getCode());
+        assertTrue(scope.canManage(alpha) && scope.canManage(beta));
+        assertFalse(scope.canManage(gamma), "another Manager's grant is not theirs");
+        assertFalse(scope.canManage(shut), "an inactive department grants nothing");
+
+        signInAs("scope_hal_g", "MANAGER");
+        assertEquals(List.of("SCOPE_ALPHA", "SCOPE_GAMMA"), resolver.resolve().managedDepartmentCodes());
+    }
+
+    @Test
+    @DisplayName("A revocation or a new grant is seen by the very next call (nothing is cached)")
+    public void grantChangesApplyToTheNextCall() {
+        User mia = newManager("scope_mia_c", alpha);
+        signInAs("scope_mia_c", "MANAGER");
+        assertEquals(List.of("SCOPE_ALPHA"), resolver.resolve().managedDepartmentCodes());
+
+        grant(mia, beta);
+        assertEquals(List.of("SCOPE_ALPHA", "SCOPE_BETA"), resolver.resolve().managedDepartmentCodes());
+
+        grantRepository.deleteAll(grantRepository.findByManagerId(mia.getId()));
+        grantRepository.flush();
+        assertEquals(List.of("SCOPE_ALPHA"), resolver.resolve().managedDepartmentCodes());
+    }
+
+    @Test
+    @DisplayName("An inactive primary department refuses the Manager entirely, even with an active grant; so does an inactive Staff record")
+    public void inactivePrimaryRefusesDespiteGrants() {
+        User mia = newManager("scope_mia_p", alpha);
+        grant(mia, beta);
+        signInAs("scope_mia_p", "MANAGER");
+        assertTrue(resolver.resolve().canManage(beta));
+
+        alpha.setActive(false);
+        departmentRepository.saveAndFlush(alpha);
+        assertRefused("scope_mia_p");
+
+        alpha.setActive(true);
+        departmentRepository.saveAndFlush(alpha);
+        Staff record = staffRepository.findByUserUsername("scope_mia_p").orElseThrow();
+        record.setActive(false);
+        staffRepository.saveAndFlush(record);
+        assertRefused("scope_mia_p");
+    }
+
+    @Test
+    @DisplayName("Admin and Staff scopes are unaffected by grants: Admin manages everything, Staff nothing")
+    public void adminAndStaffUnaffected() {
+        newUser("scope_admin_g", Role.ADMIN, true);
+        User staff = newUser("scope_staff_g", Role.STAFF, true);
+        grant(newManager("scope_mia_s", alpha), beta);
+        signInAs("scope_admin_g", "ADMIN");
+        assertTrue(resolver.resolve().isAll() && resolver.resolve().canManage(beta));
+        signInAs("scope_staff_g", "STAFF");
+        assertTrue(resolver.resolve().isOwn());
+        assertFalse(resolver.resolve().canManage(beta));
+        assertNotNull(staff);
     }
 }

@@ -3,10 +3,7 @@ package com.hotel.workload.staff;
 import java.util.UUID;
 
 public class StaffDto {
-    /**
-     * True when this record is visible to the signed-in Manager only through an Administrator view-only grant for another department:
-     * it may be looked at, never managed (every write is refused by the server for it anyway). False for everyone else.
-     */
+    /** Kept for API compatibility and always false: Administrator grants give full management, so nothing is view-only any more. */
     private boolean viewOnly;
     private UUID id;
     private String name;
@@ -53,31 +50,6 @@ public class StaffDto {
                 dto.setPendingEmailExpiresAt(account.getPendingEmailExpiresAt());
             }
         }
-        return dto;
-    }
-
-    /**
-     * A staff member a Manager sees only through a view-only grant for another department: who they are and how they are doing (name,
-     * picture, department, availability, status), never how to reach them or their account (no email, phone, pending email, username or
-     * account id). Marked {@code viewOnly}.
-     */
-    public static StaffDto viewOnlyFromEntity(Staff staff) {
-        StaffDto dto = new StaffDto();
-        dto.setId(staff.getId());
-        dto.setName(staff.getName());
-        if (staff.getDepartment() != null) {
-            dto.setDepartment(staff.getDepartment().getCode());
-            dto.setDepartmentName(staff.getDepartment().getName());
-        }
-        dto.setAvailability(staff.getAvailability());
-        dto.setActive(staff.isActive());
-        if (staff.getUser() != null) {
-            if (staff.getUser().getRole() != null) {
-                dto.setRole(staff.getUser().getRole().name());
-            }
-            dto.setProfileImageUrl(staff.getUser().getProfileImageUrl());
-        }
-        dto.setViewOnly(true);
         return dto;
     }
 

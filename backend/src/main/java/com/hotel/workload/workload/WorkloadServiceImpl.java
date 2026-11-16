@@ -59,27 +59,14 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
 
     /**
      * The workload the signed-in user may see. The scope is resolved once, at the start, from the database ({@link CurrentUserScopeResolver}):
-     * Admin sees every department; a valid Manager sees only the operational STAFF of their own department and only the work of their own
-     * department's tasks; Staff see their own row. An invalid Manager is refused (403) and no sign-in is refused (401) by the resolver.
+     * Admin sees every department; a valid Manager sees only the operational STAFF of the departments they manage and only the work of those
+     * departments' tasks; Staff see their own row. An invalid Manager is refused (403) and no sign-in is refused (401) by the resolver.
      */
     @Override
     @Transactional(readOnly = true)
     public List<WorkloadDto> calculateWorkload() {
         DepartmentScope scope = scopeResolver.resolve();
-        List<WorkloadDto> rows = calculateWorkload(scope);
-        if (!scope.isDepartment() || scope.viewOnlyDepartments().isEmpty()) {
-            return rows;
-        }
-        // The Workload page only: the departments an Administrator lets this Manager VIEW, each calculated exactly like a Manager's own
-        // department and marked view-only. calculateWorkload(scope), which the Dashboard uses, stays the primary department only.
-        List<WorkloadDto> withViewOnly = new ArrayList<>(rows);
-        for (Department department : scope.viewOnlyDepartments()) {
-            for (WorkloadDto row : buildDepartmentRows(department)) {
-                row.setViewOnly(true);
-                withViewOnly.add(row);
-            }
-        }
-        return withViewOnly;
+        return calculateWorkload(scope);
     }
 
     /** The same calculation for a scope the caller already resolved from the resolver (see {@link ScopedWorkloadCalculator}); never resolves again. */

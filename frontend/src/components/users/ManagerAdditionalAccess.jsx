@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getManagerViewAccess, getUserRole } from '../../services/api';
 import { EyeIcon } from '../icons/Icons';
-import ViewOnlyBadge from '../common/ViewOnlyBadge';
 import { DetailRow } from '../staff/StaffDetailsModal';
 import { additionalAccessRows, showsAdditionalAccess } from '../../utils/managerViewAccess';
 
@@ -47,15 +46,15 @@ export default function ManagerAdditionalAccess({ staff }) {
   } else {
     value = `${state.rows.length} ${state.rows.length === 1 ? 'department' : 'departments'}`;
     // A plain list under the title, aligned with the label column (the row's note area): one line per department, name on the left and a
-    // quiet View only badge on the right, separated by hairlines. Long names wrap; the badge never moves over them.
+    // quiet "Full management" label on the right, separated by hairlines. Long names wrap; the label never moves over them.
     list = (
-      <ul className="mt-2.5 ml-11 divide-y divide-gray-100 border-t border-gray-100" aria-label="Departments this Manager can view only">
+      <ul className="mt-2.5 ml-11 divide-y divide-gray-100 border-t border-gray-100" aria-label="Additional departments this Manager manages">
         {state.rows.map((row) => (
           <li key={row.code} data-testid="additional-access-department" className="flex min-h-9 items-center justify-between gap-3 py-2">
             <span className="min-w-0 break-words text-sm font-medium text-gray-900">{row.name}</span>
             <span className="flex shrink-0 items-center gap-2">
               {!row.active && <span className="text-[11px] font-medium text-amber-700">Inactive</span>}
-              <ViewOnlyBadge size="compact" />
+              <span className="text-[11px] font-medium text-emerald-700">Full management</span>
             </span>
           </li>
         ))}

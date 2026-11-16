@@ -1,10 +1,18 @@
 package com.hotel.workload.staff;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.util.UUID;
 
 public class DepartmentDto {
-    /** True when the signed-in Manager sees this department in full only through an Administrator view-only grant. */
+    /** Kept for API compatibility and always false: Administrator grants give full management, so nothing is view-only any more. */
     private boolean viewOnly;
+    /**
+     * For a signed-in Manager only: whether they manage this department (their primary department or one an Administrator granted).
+     * Null, and so left out of the response, for Admin and Staff.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean managed;
     private UUID id;
     private String code;
     private String name;
@@ -64,4 +72,8 @@ public class DepartmentDto {
 
     public boolean isViewOnly() { return viewOnly; }
     public void setViewOnly(boolean viewOnly) { this.viewOnly = viewOnly; }
+
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Boolean getManaged() { return managed; }
+    public void setManaged(Boolean managed) { this.managed = managed; }
 }

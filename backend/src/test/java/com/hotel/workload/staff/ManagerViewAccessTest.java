@@ -43,10 +43,11 @@ import static org.springframework.security.test.web.servlet.setup.SecurityMockMv
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.request;
 
 /**
- * Admin-controlled, view-only department access for Managers, exercised over HTTP with real JWTs (the whole security filter chain, URL
- * rules and services), against real (rolled-back) records.
+ * Admin-controlled additional departments for Managers (full Manager-level management since P3 of the multi-department change), exercised
+ * over HTTP with real JWTs (the whole security filter chain, URL rules and services), against real (rolled-back) records.
  *
- * <p>Fixture: departments HOME (the Manager's own), GRANT (granted for viewing), OTHER (never granted) and SHUT (granted, then inactive).
+ * <p>Fixture: departments HOME (the Manager's primary one), GRANT (granted), OTHER (never granted unless a test says so) and SHUT (granted,
+ * then inactive).
  * HOME: staff sh, task th assigned to sh. GRANT: staff sg, a Manager mg, task tg assigned to sg and an unassigned task tg2. OTHER: staff
  * so and task to.
  */
@@ -277,47 +278,41 @@ public class ManagerViewAccessTest {
     }
 
     @Test
-    @DisplayName("With a grant: granted tasks, staff, assignments and workload are listed and marked view-only; other departments never")
-    void grantedDepartmentIsReadable() throws Exception {
+    @DisplayName("With a grant: the granted department's tasks, staff (with contact details), assignments and workload are listed in full; other departments never")
+    void grantedDepartmentIsListedInFull() throws Exception {
         grantAs(GRANT);
 
         Map<String, JsonNode> tasks = byId("/api/tasks", manager, "id");
         assertEquals(java.util.Set.of(th.getId().toString(), tg.getId().toString(), tg2.getId().toString()), tasks.keySet());
-        assertFalse(tasks.get(th.getId().toString()).get("viewOnly").asBoolean());
-        assertTrue(tasks.get(tg.getId().toString()).get("viewOnly").asBoolean());
-        assertTrue(tasks.get(tg2.getId().toString()).get("viewOnly").asBoolean());
+        for (JsonNode task : tasks.values()) assertFalse(task.get("viewOnly").asBoolean(), "nothing is view-only any more");
 
         Map<String, JsonNode> staff = byId("/api/staff", manager, "id");
         assertEquals(java.util.Set.of(sh.getId().toString(), sg.getId().toString()), staff.keySet(), "STAFF-role members only, no Manager rows");
-        JsonNode own = staff.get(sh.getId().toString());
-        assertFalse(own.get("viewOnly").asBoolean());
-        assertEquals("va_sh@scope.test", own.get("email").asText(), "own department keeps its contact details");
         JsonNode granted = staff.get(sg.getId().toString());
-        assertTrue(granted.get("viewOnly").asBoolean());
-        for (String hidden : List.of("email", "phone", "username", "userId", "pendingEmailMasked", "pendingEmailExpiresAt")) {
-            assertTrue(granted.get(hidden) == null || granted.get(hidden).isNull(), hidden + " must not be sent for a view-only member");
-        }
-        assertEquals(sg.getName(), granted.get("name").asText());
+        assertFalse(granted.get("viewOnly").asBoolean());
+        assertEquals("va_sg@scope.test", granted.get("email").asText(), "a granted department's staff are full records, with contact details");
+        assertEquals("555-0100", granted.get("phone").asText());
+        assertEquals("va_sg", granted.get("username").asText());
         assertEquals(GRANT, granted.get("department").asText());
-        assertEquals("AVAILABLE", granted.get("availability").asText());
-        assertTrue(granted.get("active").asBoolean());
 
         Map<String, JsonNode> assignments = byId("/api/assignments", manager, "id");
         assertEquals(java.util.Set.of(ah.getId().toString(), ag.getId().toString()), assignments.keySet());
-        assertTrue(assignments.get(ag.getId().toString()).get("viewOnly").asBoolean());
-        assertFalse(assignments.get(ah.getId().toString()).get("viewOnly").asBoolean());
+        for (JsonNode row : assignments.values()) assertFalse(row.get("viewOnly").asBoolean());
 
         Map<String, JsonNode> workload = byId("/api/workload", manager, "staffId");
         assertEquals(java.util.Set.of(sh.getId().toString(), sg.getId().toString()), workload.keySet());
-        assertTrue(workload.get(sg.getId().toString()).get("viewOnly").asBoolean());
+        assertFalse(workload.get(sg.getId().toString()).get("viewOnly").asBoolean());
         assertEquals(1, workload.get(sg.getId().toString()).get("activeTaskCount").asInt(), "the granted member's own workload");
-        assertFalse(workload.get(sh.getId().toString()).get("viewOnly").asBoolean());
 
         Map<String, JsonNode> departments = byId("/api/departments", manager, "code");
-        assertTrue(departments.get(GRANT).get("viewOnly").asBoolean());
+        assertTrue(departments.get(GRANT).get("managed").asBoolean());
+        assertTrue(departments.get(HOME).get("managed").asBoolean());
+        assertFalse(departments.get(OTHER).get("managed").asBoolean());
+        assertFalse(departments.get(GRANT).get("viewOnly").asBoolean());
         assertTrue(departments.get(GRANT).hasNonNull("staffCount"), "a granted department's figures are shown");
-        assertFalse(departments.get(HOME).get("viewOnly").asBoolean());
         assertTrue(departments.get(OTHER).get("staffCount") == null || departments.get(OTHER).get("staffCount").isNull(), "other departments stay basic");
+        for (JsonNode d : read("/api/departments", admin)) assertFalse(d.has("managed"), "an Admin's answer carries no managed field");
+        for (JsonNode d : read("/api/departments", staffMember)) assertFalse(d.has("managed"), "a Staff member's answer carries no managed field");
     }
 
     @Test
@@ -338,74 +333,105 @@ public class ManagerViewAccessTest {
     // ── no write authority, ever ────────────────────────────────────────────
 
     @Test
-    @DisplayName("Every task, staff and assignment write is refused for granted-department records, and nothing changes")
-    void grantGivesNoWriteAuthority() throws Exception {
+    @DisplayName("A grant gives full Manager operations in the granted department: tasks, staff, availability, (de)activation, assignments")
+    void grantGivesFullOperationalAccessInTheGrantedDepartment() throws Exception {
         grantAs(GRANT);
-        String sgEmail = sg.getEmail();
+        ScopeFixtures fixtures = new ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder);
+        // Tasks: create in the granted department, create without a department (the primary one), edit, delete
+        MvcResult created = call(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA new granted task\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + GRANT + "\"" + "}");
+        assertEquals(201, created.getResponse().getStatus(), created.getResponse().getContentAsString());
+        assertEquals(GRANT, json.readTree(created.getResponse().getContentAsString()).get("department").asText());
+        MvcResult defaulted = call(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA new default task\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + "" + "}");
+        assertEquals(201, defaulted.getResponse().getStatus(), defaulted.getResponse().getContentAsString());
+        assertEquals(HOME, json.readTree(defaulted.getResponse().getContentAsString()).get("department").asText(), "no department: the primary one");
+        String updateGranted = "{\"title\":\"VA changed\",\"priority\":\"HIGH\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\",\"department\":\"" + GRANT + "\",\"status\":\"PENDING\"}";
+        MvcResult edited = call(HttpMethod.PUT, "/api/tasks/" + tg2.getId(), manager, updateGranted);
+        assertEquals(200, edited.getResponse().getStatus(), edited.getResponse().getContentAsString());
+        assertEquals("VA changed", taskRepository.findById(tg2.getId()).orElseThrow().getTitle());
+        UUID createdId = UUID.fromString(json.readTree(created.getResponse().getContentAsString()).get("id").asText());
+        int deleted = status(HttpMethod.DELETE, "/api/tasks/" + createdId, manager, null);
+        assertTrue(deleted == 200 || deleted == 204, "delete a granted department's task: " + deleted);
+
+        // Staff: create in the granted department, edit (including availability), deactivate and activate again
+        String createStaff = "{\"fullName\":\"VA New Granted\",\"email\":\"va.newg@scope.test\",\"phone\":\"555-0199\",\"department\":\"" + GRANT
+                + "\",\"availability\":\"AVAILABLE\",\"username\":\"va_newg\",\"temporaryPassword\":\"Str0ng!Passw0rd#\",\"role\":\"STAFF\"}";
+        MvcResult newStaff = call(HttpMethod.POST, "/api/staff", manager, createStaff);
+        assertEquals(201, newStaff.getResponse().getStatus(), newStaff.getResponse().getContentAsString());
+        assertEquals(GRANT, staffRepository.findByUserUsername("va_newg").orElseThrow().getDepartment().getCode());
+        String editStaff = "{\"fullName\":\"VA Renamed\",\"email\":\"" + sg.getEmail() + "\",\"phone\":\"555-0100\",\"department\":\"" + GRANT + "\",\"availability\":\"UNAVAILABLE\",\"active\":true}";
+        MvcResult staffEdited = call(HttpMethod.PUT, "/api/staff/" + sg.getId(), manager, editStaff);
+        assertEquals(200, staffEdited.getResponse().getStatus(), staffEdited.getResponse().getContentAsString());
+        Staff sgNow = staffRepository.findById(sg.getId()).orElseThrow();
+        assertEquals("VA Renamed", sgNow.getName());
+        assertEquals(Availability.UNAVAILABLE, sgNow.getAvailability());
+        Staff spare = fixtures.staff("va_sg_spare", grant);
+        assertEquals(200, status(HttpMethod.PATCH, "/api/staff/" + spare.getId() + "/deactivate", manager, null));
+        assertFalse(staffRepository.findById(spare.getId()).orElseThrow().isActive());
+        assertEquals(200, status(HttpMethod.PATCH, "/api/staff/" + spare.getId() + "/activate", manager, null));
+
+        // Assignments within the granted department: assign the open task, reassign an existing assignment
+        Staff free = fixtures.staff("va_sg_free", grant);
+        MvcResult assigned = call(HttpMethod.POST, "/api/assignments", manager, Map.of("taskId", tg2.getId(), "staffId", free.getId()));
+        assertTrue(assigned.getResponse().getStatus() < 300, assigned.getResponse().getContentAsString());
+        Staff other = fixtures.staff("va_sg_other", grant);
+        MvcResult reassigned = call(HttpMethod.PUT, "/api/assignments/" + ag.getId(), manager, Map.of("staffId", other.getId()));
+        assertEquals(200, reassigned.getResponse().getStatus(), reassigned.getResponse().getContentAsString());
+        assertEquals(other.getId(), assignmentRepository.findById(ag.getId()).orElseThrow().getStaff().getId());
+    }
+
+    @Test
+    @DisplayName("A grant widens nothing else: no transfers between departments, no cross-department assignments, no Admin-only operations, no Manager accounts")
+    void grantGivesNothingBeyondDepartmentManagement() throws Exception {
+        grantAs(GRANT);
+        Staff mg = staffRepository.findByUserUsername("va_mgr_grant").orElseThrow();
         int tasksBefore = (int) taskRepository.count();
         int staffBefore = (int) staffRepository.count();
         int assignmentsBefore = (int) assignmentRepository.count();
-
         List<String> problems = new ArrayList<>();
-        java.util.function.BiConsumer<String, Integer> expectRefused = (label, code) -> {
-            if (!refused(code)) problems.add(label + " -> " + code);
+        java.util.function.BiConsumer<String, Integer> expect = (label, code) -> {
+            if (!label.startsWith(code + " ")) problems.add(label + " -> " + code);
         };
-
-        // Tasks
-        String createBody = "{\"title\":\"VA sneaky\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\",\"department\":\"" + GRANT + "\"}";
-        expectRefused.accept("create task in granted department", status(HttpMethod.POST, "/api/tasks", manager, createBody));
-        String updateGranted = "{\"title\":\"VA changed\",\"priority\":\"HIGH\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\",\"department\":\"" + GRANT + "\",\"status\":\"PENDING\"}";
-        expectRefused.accept("edit granted task", status(HttpMethod.PUT, "/api/tasks/" + tg2.getId(), manager, updateGranted));
-        String completeGranted = "{\"title\":\"VA granted task\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\",\"department\":\"" + GRANT + "\",\"status\":\"COMPLETED\"}";
-        expectRefused.accept("complete granted task", status(HttpMethod.PUT, "/api/tasks/" + tg.getId(), manager, completeGranted));
+        // Moving records between departments stays Admin-only, even between two departments the Manager manages (403)
         String moveOwnIntoGrant = "{\"title\":\"VA home task\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\",\"department\":\"" + GRANT + "\",\"status\":\"ASSIGNED\"}";
-        expectRefused.accept("move own task into granted department", status(HttpMethod.PUT, "/api/tasks/" + th.getId(), manager, moveOwnIntoGrant));
-        expectRefused.accept("status of granted task", status(HttpMethod.PATCH, "/api/tasks/" + tg.getId() + "/status", manager, Map.of("status", "COMPLETED")));
-        expectRefused.accept("delete granted task", status(HttpMethod.DELETE, "/api/tasks/" + tg2.getId(), manager, null));
-
-        // Staff
-        String createStaff = "{\"fullName\":\"VA Sneaky\",\"email\":\"va.sneaky@scope.test\",\"phone\":\"555-0199\",\"department\":\"" + GRANT
-                + "\",\"availability\":\"AVAILABLE\",\"username\":\"va_sneaky\",\"temporaryPassword\":\"Str0ng!Passw0rd#\",\"role\":\"STAFF\"}";
-        expectRefused.accept("create staff in granted department", status(HttpMethod.POST, "/api/staff", manager, createStaff));
-        String editStaff = "{\"fullName\":\"VA Renamed\",\"email\":\"" + sgEmail + "\",\"phone\":\"555-0100\",\"department\":\"" + GRANT + "\",\"availability\":\"UNAVAILABLE\",\"active\":true}";
-        expectRefused.accept("edit granted staff", status(HttpMethod.PUT, "/api/staff/" + sg.getId(), manager, editStaff));
-        String moveIntoHome = "{\"fullName\":\"" + sg.getName() + "\",\"email\":\"" + sgEmail + "\",\"phone\":\"555-0100\",\"department\":\"" + HOME + "\",\"availability\":\"AVAILABLE\",\"active\":true}";
-        expectRefused.accept("pull granted staff into own department", status(HttpMethod.PUT, "/api/staff/" + sg.getId(), manager, moveIntoHome));
+        expect.accept("403 move own task into the granted department", status(HttpMethod.PUT, "/api/tasks/" + th.getId(), manager, moveOwnIntoGrant));
+        String moveGrantedHome = "{\"title\":\"VA granted open task\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\",\"department\":\"" + HOME + "\",\"status\":\"PENDING\"}";
+        expect.accept("403 move a granted task into the primary department", status(HttpMethod.PUT, "/api/tasks/" + tg2.getId(), manager, moveGrantedHome));
+        String moveIntoHome = "{\"fullName\":\"" + sg.getName() + "\",\"email\":\"" + sg.getEmail() + "\",\"phone\":\"555-0100\",\"department\":\"" + HOME + "\",\"availability\":\"AVAILABLE\",\"active\":true}";
+        expect.accept("403 pull granted staff into the primary department", status(HttpMethod.PUT, "/api/staff/" + sg.getId(), manager, moveIntoHome));
         String pushOwnOut = "{\"fullName\":\"" + sh.getName() + "\",\"email\":\"" + sh.getEmail() + "\",\"phone\":\"555-0100\",\"department\":\"" + GRANT + "\",\"availability\":\"AVAILABLE\",\"active\":true}";
-        expectRefused.accept("move own staff into granted department", status(HttpMethod.PUT, "/api/staff/" + sh.getId(), manager, pushOwnOut));
-        expectRefused.accept("email change for granted staff", status(HttpMethod.POST, "/api/staff/" + sg.getId() + "/email-change", manager, Map.of("newEmail", "va.new@scope.test")));
-        expectRefused.accept("deactivate granted staff", status(HttpMethod.PATCH, "/api/staff/" + sg.getId() + "/deactivate", manager, null));
-        expectRefused.accept("activate granted staff", status(HttpMethod.PATCH, "/api/staff/" + sg.getId() + "/activate", manager, null));
-        expectRefused.accept("remove granted staff", status(HttpMethod.DELETE, "/api/staff/" + sg.getId(), manager, null));
-
-        // Assignments
-        expectRefused.accept("assign granted task to granted staff", status(HttpMethod.POST, "/api/assignments", manager, Map.of("taskId", tg2.getId(), "staffId", sg.getId())));
-        expectRefused.accept("assign granted task to own staff", status(HttpMethod.POST, "/api/assignments", manager, Map.of("taskId", tg2.getId(), "staffId", sh.getId())));
+        expect.accept("403 push own staff into the granted department", status(HttpMethod.PUT, "/api/staff/" + sh.getId(), manager, pushOwnOut));
+        // Assignments must stay within one department (400), even when the Manager manages both
+        expect.accept("400 assign a granted task to own staff", status(HttpMethod.POST, "/api/assignments", manager, Map.of("taskId", tg2.getId(), "staffId", sh.getId())));
         Task homeOpen = task("VA home open task", home, TaskStatus.PENDING);
-        expectRefused.accept("assign own task to granted staff", status(HttpMethod.POST, "/api/assignments", manager, Map.of("taskId", homeOpen.getId(), "staffIds", List.of(sg.getId()))));
-        expectRefused.accept("reassign granted assignment", status(HttpMethod.PUT, "/api/assignments/" + ag.getId(), manager, Map.of("staffId", sh.getId())));
-        expectRefused.accept("reassign own assignment to granted staff", status(HttpMethod.PUT, "/api/assignments/" + ah.getId(), manager, Map.of("staffId", sg.getId())));
-
-        // Departments (Admin only, as before)
-        expectRefused.accept("edit granted department", status(HttpMethod.PUT, "/api/departments/" + GRANT, manager, "{\"name\":\"VA renamed\",\"iconKey\":\"building\",\"colorKey\":\"emerald\",\"active\":true}"));
-
-        assertTrue(problems.isEmpty(), "writes that were not refused: " + problems);
+        expect.accept("400 assign own task to granted staff", status(HttpMethod.POST, "/api/assignments", manager, Map.of("taskId", homeOpen.getId(), "staffIds", List.of(sg.getId()))));
+        expect.accept("400 reassign own assignment to granted staff", status(HttpMethod.PUT, "/api/assignments/" + ah.getId(), manager, Map.of("staffId", sg.getId())));
+        // Manager and Admin accounts, Admin-only and Staff-only operations
+        String editManager = "{\"fullName\":\"VA Manager Renamed\",\"email\":\"" + mg.getEmail() + "\",\"phone\":\"555-0100\",\"department\":\"" + GRANT + "\",\"availability\":\"AVAILABLE\",\"active\":true}";
+        expect.accept("403 edit the granted department's Manager", status(HttpMethod.PUT, "/api/staff/" + mg.getId(), manager, editManager));
+        expect.accept("403 deactivate the granted department's Manager", status(HttpMethod.PATCH, "/api/staff/" + mg.getId() + "/deactivate", manager, null));
+        expect.accept("403 remove granted staff (Admin only)", status(HttpMethod.DELETE, "/api/staff/" + sg.getId(), manager, null));
+        expect.accept("403 Staff-only status endpoint", status(HttpMethod.PATCH, "/api/tasks/" + tg.getId() + "/status", manager, Map.of("status", "COMPLETED")));
+        expect.accept("403 edit the granted department (Admin only)", status(HttpMethod.PUT, "/api/departments/" + GRANT, manager, "{\"name\":\"VA renamed\",\"iconKey\":\"building\",\"colorKey\":\"emerald\",\"active\":true}"));
+        expect.accept("403 create a Manager account", status(HttpMethod.POST, "/api/staff", manager, "{\"fullName\":\"VA Boss\",\"email\":\"va.boss@scope.test\",\"phone\":\"555-0198\",\"department\":\"" + GRANT
+                + "\",\"availability\":\"AVAILABLE\",\"username\":\"va_boss\",\"temporaryPassword\":\"Str0ng!Passw0rd#\",\"role\":\"MANAGER\"}"));
+        // The department that is NOT granted: refused, and its ids answer like ids that do not exist
+        expect.accept("403 create a task in an ungranted department", status(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA sneaky\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + OTHER + "\"" + "}"));
+        expect.accept("403 create a task in an unknown department", status(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA sneaky\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + "VA_NO_SUCH" + "\"" + "}"));
+        expect.accept("404 delete an ungranted task", status(HttpMethod.DELETE, "/api/tasks/" + to.getId(), manager, null));
+        expect.accept("404 deactivate ungranted staff", status(HttpMethod.PATCH, "/api/staff/" + so.getId() + "/deactivate", manager, null));
+        expect.accept("404 assign ungranted staff", status(HttpMethod.POST, "/api/assignments", manager, Map.of("taskId", tg2.getId(), "staffId", so.getId())));
+        assertTrue(problems.isEmpty(), "unexpected answers: " + problems);
 
         // Nothing changed
         taskRepository.flush();
         assertEquals(tasksBefore + 1, taskRepository.count(), "only the fixture task added above");
         assertEquals(staffBefore, staffRepository.count());
         assertEquals(assignmentsBefore, assignmentRepository.count());
-        Task tgNow = taskRepository.findById(tg.getId()).orElseThrow();
-        assertEquals(TaskStatus.ASSIGNED, tgNow.getStatus());
-        Task tg2Now = taskRepository.findById(tg2.getId()).orElseThrow();
-        assertEquals("VA granted open task", tg2Now.getTitle());
         assertEquals(HOME, taskRepository.findById(th.getId()).orElseThrow().getDepartment().getCode());
-        Staff sgNow = staffRepository.findById(sg.getId()).orElseThrow();
-        assertEquals(GRANT, sgNow.getDepartment().getCode());
-        assertTrue(sgNow.isActive());
-        assertEquals(Availability.AVAILABLE, sgNow.getAvailability());
+        assertEquals(GRANT, taskRepository.findById(tg2.getId()).orElseThrow().getDepartment().getCode());
+        assertEquals(GRANT, staffRepository.findById(sg.getId()).orElseThrow().getDepartment().getCode());
         assertEquals(HOME, staffRepository.findById(sh.getId()).orElseThrow().getDepartment().getCode());
+        assertTrue(staffRepository.findById(mg.getId()).orElseThrow().isActive());
         assertEquals(sg.getId(), assignmentRepository.findById(ag.getId()).orElseThrow().getStaff().getId());
         assertEquals(sh.getId(), assignmentRepository.findById(ah.getId()).orElseThrow().getStaff().getId());
     }
@@ -426,10 +452,12 @@ public class ManagerViewAccessTest {
     // ── revocation and inactive departments ─────────────────────────────────
 
     @Test
-    @DisplayName("Revocation applies to the very next request with the same token, through every list")
+    @DisplayName("Revocation applies to the very next request with the same token: every list, and every write")
     void revocationIsImmediate() throws Exception {
         grantAs(GRANT);
         assertTrue(byId("/api/tasks", manager, "id").containsKey(tg.getId().toString()));
+        String editStaff = "{\"fullName\":\"VA Renamed\",\"email\":\"" + sg.getEmail() + "\",\"phone\":\"555-0100\",\"department\":\"" + GRANT + "\",\"availability\":\"AVAILABLE\",\"active\":true}";
+        assertEquals(200, status(HttpMethod.PUT, "/api/staff/" + sg.getId(), manager, editStaff), "allowed while granted");
         grantAs();
         assertFalse(byId("/api/tasks", manager, "id").containsKey(tg.getId().toString()));
         assertFalse(byId("/api/staff", manager, "id").containsKey(sg.getId().toString()));
@@ -437,10 +465,15 @@ public class ManagerViewAccessTest {
         assertFalse(byId("/api/workload", manager, "staffId").containsKey(sg.getId().toString()));
         JsonNode grantDept = byId("/api/departments", manager, "code").get(GRANT);
         assertTrue(grantDept.get("staffCount") == null || grantDept.get("staffCount").isNull());
+        assertFalse(grantDept.get("managed").asBoolean());
+        // The very next writes are refused as for any department the Manager does not manage
+        assertEquals(404, status(HttpMethod.PUT, "/api/staff/" + sg.getId(), manager, editStaff));
+        assertEquals(403, status(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA after revoke\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + GRANT + "\"" + "}"));
+        assertEquals(404, status(HttpMethod.DELETE, "/api/tasks/" + tg2.getId(), manager, null));
     }
 
     @Test
-    @DisplayName("A granted department that becomes inactive shows nothing until it is active again; the grant itself is kept")
+    @DisplayName("A granted department that becomes inactive gives nothing (no reads, no writes) until it is active again; the grant itself is kept")
     void inactiveGrantedDepartmentIgnored() throws Exception {
         grantAs(GRANT, SHUT);
         Task shutTask = taskRepository.findByDepartment(shut).get(0);
@@ -448,12 +481,49 @@ public class ManagerViewAccessTest {
         shut.setActive(false);
         departmentRepository.saveAndFlush(shut);
         assertFalse(byId("/api/tasks", manager, "id").containsKey(shutTask.getId().toString()));
+        assertEquals(404, status(HttpMethod.DELETE, "/api/tasks/" + shutTask.getId(), manager, null), "no write either");
+        assertEquals(403, status(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA shut new\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + SHUT + "\"" + "}"));
         assertTrue(byId("/api/tasks", manager, "id").containsKey(tg.getId().toString()), "the active grant still applies");
         assertTrue(grantedCodes().contains(SHUT));
         // Keeping an existing inactive grant is allowed; removing it too
         assertEquals(200, status(HttpMethod.PUT, viewUrl(managerUser), admin, Map.of("departments", List.of(GRANT, SHUT))));
         grantAs(GRANT);
         assertEquals(List.of(GRANT), grantedCodes());
+    }
+
+    @Test
+    @DisplayName("An inactive primary department refuses the Manager everything, even with active grants")
+    void inactivePrimaryRefusesEverythingDespiteGrants() throws Exception {
+        grantAs(GRANT);
+        assertEquals(200, status(HttpMethod.GET, "/api/tasks", manager, null));
+        home.setActive(false);
+        departmentRepository.saveAndFlush(home);
+        for (String url : List.of("/api/tasks", "/api/staff", "/api/assignments", "/api/workload", "/api/dashboard/summary", "/api/departments")) {
+            assertEquals(403, status(HttpMethod.GET, url, manager, null), url);
+        }
+        assertEquals(403, status(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA no primary\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + GRANT + "\"" + "}"));
+        assertEquals(403, status(HttpMethod.DELETE, "/api/tasks/" + tg2.getId(), manager, null));
+        assertEquals(GRANT, taskRepository.findById(tg2.getId()).orElseThrow().getDepartment().getCode());
+    }
+
+    @Test
+    @DisplayName("Several grants are all managed; each Manager gets only their own grants")
+    void multipleGrantsAndOtherManagers() throws Exception {
+        grantAs(GRANT, OTHER);
+        Map<String, JsonNode> tasks = byId("/api/tasks", manager, "id");
+        assertEquals(java.util.Set.of(th.getId().toString(), tg.getId().toString(), tg2.getId().toString(), to.getId().toString()), tasks.keySet());
+        assertEquals(200, status(HttpMethod.PUT, "/api/tasks/" + to.getId(), manager,
+                "{\"title\":\"VA other task, edited\",\"priority\":\"LOW\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\",\"department\":\"" + OTHER + "\",\"status\":\"PENDING\"}"));
+        assertEquals(201, status(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA in other\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + OTHER + "\"" + "}"));
+        // The Manager of GRANT (no grants of their own) still reaches only GRANT: va_mgr's grants are not theirs
+        Map<String, JsonNode> theirs = byId("/api/tasks", otherManager, "id");
+        assertFalse(theirs.containsKey(th.getId().toString()) || theirs.containsKey(to.getId().toString()), "grants are per Manager");
+        assertEquals(403, status(HttpMethod.POST, "/api/tasks", otherManager, "{\"title\":\"VA sneaky\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + HOME + "\"" + "}"));
+        assertEquals(404, status(HttpMethod.DELETE, "/api/tasks/" + to.getId(), otherManager, null));
+        // A grant to the other Manager does not reach va_mgr
+        Staff mg = staffRepository.findByUserUsername("va_mgr_grant").orElseThrow();
+        assertEquals(200, status(HttpMethod.PUT, viewUrl(mg.getUser()), admin, Map.of("departments", List.of(SHUT))));
+        assertFalse(byId("/api/tasks", manager, "id").values().stream().anyMatch(t -> SHUT.equals(t.get("department").asText())));
     }
 
     @Test
@@ -521,32 +591,40 @@ public class ManagerViewAccessTest {
                 .filter(c -> c.getAction().equals(ManagerViewGrantChange.ACTION_REVOKED)).findFirst().orElseThrow();
         assertEquals(GRANT, latest.getDepartmentCode());
         assertEquals(ManagerViewGrantChange.SOURCE_PRIMARY_CHANGE, latest.getChangeSource());
-
-        // Now GRANT is fully theirs (not view-only) and OTHER is view-only; HOME is gone
+        // Now GRANT is the primary department and OTHER is the one additional department; HOME is gone
         Map<String, JsonNode> tasks = byId("/api/tasks", manager, "id");
-        assertFalse(tasks.get(tg.getId().toString()).get("viewOnly").asBoolean());
-        assertTrue(tasks.get(to.getId().toString()).get("viewOnly").asBoolean());
+        assertTrue(tasks.containsKey(tg.getId().toString()) && tasks.containsKey(to.getId().toString()));
         assertFalse(tasks.containsKey(th.getId().toString()));
+        for (JsonNode task : tasks.values()) assertFalse(task.get("viewOnly").asBoolean());
+        Map<String, JsonNode> departments = byId("/api/departments", manager, "code");
+        assertTrue(departments.get(GRANT).get("managed").asBoolean() && departments.get(OTHER).get("managed").asBoolean());
+        assertFalse(departments.get(HOME).get("managed").asBoolean());
     }
 
     // ── nothing else is widened ─────────────────────────────────────────────
 
     @Test
-    @DisplayName("Dashboard, support recommendations and Cross-Department Assistance planning stay primary-department only")
-    void unrelatedEndpointsUnchanged() throws Exception {
-        String dashboardBefore = call(HttpMethod.GET, "/api/dashboard/summary", manager, null).getResponse().getContentAsString();
+    @DisplayName("Dashboard covers the granted department; recommendations stay primary-only (P4); support planning follows the grants; Admin-only stays Admin-only")
+    void otherEndpointsFollowTheGrants() throws Exception {
+        long tasksBefore = json.readTree(call(HttpMethod.GET, "/api/dashboard/summary", manager, null).getResponse().getContentAsString()).get("totalTasks").asLong();
         MvcResult recommendationsBefore = call(HttpMethod.GET, "/api/workload/recommendations", manager, null);
-        grantAs(GRANT, OTHER);
-        String dashboardAfter = call(HttpMethod.GET, "/api/dashboard/summary", manager, null).getResponse().getContentAsString();
-        assertEquals(withoutTimes(dashboardBefore), withoutTimes(dashboardAfter), "the Manager dashboard is the same with or without grants");
+        int homeOptions = status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + HOME, manager, null);
+        assertTrue(status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + GRANT, manager, null) >= 400, "not yet granted");
+        grantAs(GRANT);
+        long tasksAfter = json.readTree(call(HttpMethod.GET, "/api/dashboard/summary", manager, null).getResponse().getContentAsString()).get("totalTasks").asLong();
+        assertEquals(tasksBefore + 2, tasksAfter, "the dashboard totals now include the granted department's two tasks");
         MvcResult recommendationsAfter = call(HttpMethod.GET, "/api/workload/recommendations", manager, null);
         assertEquals(recommendationsBefore.getResponse().getStatus(), recommendationsAfter.getResponse().getStatus());
-        assertEquals(withoutTimes(recommendationsBefore.getResponse().getContentAsString()), withoutTimes(recommendationsAfter.getResponse().getContentAsString()));
-
-        int options = status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + GRANT, manager, null);
-        assertTrue(options >= 400, "planning support for a granted department is refused: " + options);
+        assertEquals(withoutTimes(recommendationsBefore.getResponse().getContentAsString()), withoutTimes(recommendationsAfter.getResponse().getContentAsString()),
+                "recommendations stay the primary department's until P4");
+        assertEquals(homeOptions, status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + GRANT, manager, null),
+                "support planning for a granted department is answered like for the primary one");
+        assertEquals(404, status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + OTHER, manager, null), "an ungranted department is not found");
+        assertEquals(403, status(HttpMethod.POST, "/api/support/assignments", manager, Map.of("receivingDepartment", GRANT, "items", List.of())),
+                "confirming support stays Admin-only");
         assertTrue(refused(status(HttpMethod.GET, "/api/users", manager, null)));
         assertTrue(refused(status(HttpMethod.GET, "/api/system-settings", manager, null)));
+        assertEquals(403, status(HttpMethod.GET, viewUrl(managerUser) + "/history/page", manager, null), "the grant history stays Admin-only");
     }
 
     /** The JSON with every date-time value blanked, so two reads moments apart compare equal. */
