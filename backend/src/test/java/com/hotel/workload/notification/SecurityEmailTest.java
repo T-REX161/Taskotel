@@ -343,7 +343,8 @@ public class SecurityEmailTest {
         assertEquals(List.of(mail("n3_s1")), recipients());
         String[] r = sent().get(0);
         assertEquals("Taskotel - Your account was reactivated", r[1]);
-        assertTrue(r[2].contains("sign in with your existing password"));
+        assertTrue(r[2].contains("Your Taskotel account is active again.") && r[2].contains("complete the setup steps when you next sign in"), r[2]);
+        assertFalse(r[2].contains("existing password"), "never assumes the first-time password setup is complete");
         assertFalse(r[2].contains("Deactivated by"));
         assertNoSecrets(r, "n3_s1", "n3_admin");
     }

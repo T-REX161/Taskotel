@@ -225,7 +225,9 @@ public class SecurityNotificationRulesTest {
         assertTrue(changed.text().contains("previously") || changed.text().contains("signed out"));
         assertTrue(reset.text().contains("verification code"));
         assertTrue(off.text().contains("Deactivated by: Administrator") && off.text().contains("no longer sign in"));
-        assertTrue(on.text().contains("existing password"));
+        assertTrue(on.text().contains("Your Taskotel account is active again.") && on.text().contains("You can use your account as before."));
+        assertTrue(on.text().contains("If you had not finished setting up your account yet, complete the setup steps when you next sign in."));
+        assertFalse((on.text() + on.html()).contains("existing password"), "never assumes the first-time password setup is complete");
 
         for (EmailContent content : List.of(changed, reset, off, on)) {
             String all = content.subject() + content.text() + content.html();

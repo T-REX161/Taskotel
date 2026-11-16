@@ -93,10 +93,14 @@ public final class NotificationEmailTemplates {
                 facts);
     }
 
+    /**
+     * Worded for every account state: it never assumes the owner already has a password (an account can be reactivated while its
+     * first-time setup is still pending).
+     */
     public static EmailContent accountReactivated() {
         return composeSecurity("Taskotel - Your account was reactivated",
                 "Your account was reactivated",
-                "Your Taskotel account is active again. You can sign in with your existing password.",
+                "Your Taskotel account is active again. You can use your account as before. If you had not finished setting up your account yet, complete the setup steps when you next sign in.",
                 List.of(new Fact("If this is unexpected", CONTACT_ADVICE)));
     }
 
