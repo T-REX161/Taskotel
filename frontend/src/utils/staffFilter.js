@@ -58,7 +58,6 @@ export function filterEligibleStaff({
 
   return (Array.isArray(allStaff) ? allStaff : []).filter((s) => {
     if (!s) return false;
-    if (s.viewOnly === true) return false;
 
     // 0. Role: only operational Staff (the backend already refuses ADMIN and MANAGER targets; this keeps them out of the picker)
     const isOperationalStaff = s.role === 'STAFF';

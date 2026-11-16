@@ -1,8 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createElement as h } from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
 import {
   VIEW_ACCESS_ADMIN_ONLY_MESSAGE,
   ADDITIONAL_DEPARTMENTS_LABEL,
@@ -17,24 +15,21 @@ import {
   revokeSelection,
   viewAccessHistoryRows,
   grantedCodes,
-  isViewOnly,
   showsAdditionalAccess,
   additionalAccessRows,
   selectionChanged,
   viewAccessChoices,
   viewAccessErrorMessage,
   viewAccessSummary,
-  withoutViewOnly,
   profileDepartments,
   showsProfileDepartments,
 } from './managerViewAccess.js';
 import { filterEligibleStaff } from './staffFilter.js';
 import { getEligibleUnassignedTasks } from './assignmentUtils.js';
 import { getUserActions } from '../components/users/userListUtils.js';
-import ViewOnlyBadge from '../components/common/ViewOnlyBadge.js';
 
-// Admin-controlled, view-only department access for Managers. The server is the control (grants are Admin only; every write checks
-// the Manager's own department only); these tests cover what the pages offer, and that they never offer a change for a view-only record.
+// Admin-controlled additional departments for Managers (full management). The server is the control (grants are Admin only; every
+// operation checks the Manager's authorized departments); these tests cover what the pages offer and how answers are worded.
 const read = (...parts) => readFileSync(new URL(`../${parts.join('/')}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 describe('who can grant', () => {
@@ -99,96 +94,61 @@ describe('the dialog choices', () => {
   });
 });
 
-describe('view-only records', () => {
-  it('only a real true from the server marks a record view-only', () => {
-    assert.equal(isViewOnly({ viewOnly: true }), true);
-    for (const record of [null, undefined, {}, { viewOnly: false }, { viewOnly: 'true' }, { viewOnly: 1 }]) assert.equal(isViewOnly(record), false);
+describe('no view-only gating remains: an additional department is managed like the primary one', () => {
+  const sources = {
+    tasksTable: read('components', 'tasks', 'TasksTable.jsx'),
+    tasksPage: read('pages', 'TasksPage.jsx'),
+    staffTable: read('components', 'staff', 'StaffTable.jsx'),
+    staffPage: read('pages', 'StaffPage.jsx'),
+    staffDetails: read('components', 'staff', 'StaffDetailsModal.jsx'),
+    assignments: read('pages', 'AssignmentsPage.jsx'),
+    workload: read('pages', 'WorkloadPage.jsx'),
+    dashboard: read('pages', 'Dashboard.jsx'),
+    assignmentUtils: read('utils', 'assignmentUtils.js'),
+    staffFilter: read('utils', 'staffFilter.js'),
+  };
+
+  it('no page, table, modal or helper reads a view-only flag, offers a badge or imports the removed helpers', () => {
+    for (const [name, source] of Object.entries(sources)) {
+      assert.ok(!/isViewOnly|withoutViewOnly|ViewOnlyBadge|viewOnly|view-only-contact-note/.test(source), name);
+    }
+    assert.throws(() => read('components', 'common', 'ViewOnlyBadge.js'), 'the badge component is gone');
   });
 
-  it('the Dashboard leaves them out, so a Manager’s figures stay about their own department', () => {
-    assert.deepEqual(withoutViewOnly([{ id: 1 }, { id: 2, viewOnly: true }, { id: 3, viewOnly: false }]).map((r) => r.id), [1, 3]);
-    assert.equal(withoutViewOnly(null), null);
-    const dashboard = read('pages', 'Dashboard.jsx');
-    assert.ok(dashboard.includes("data: withoutViewOnly(await getWorkload())"));
-    assert.ok(dashboard.includes("data: withoutViewOnly(await getTasks())"));
+  it('Tasks: edit, assign and delete follow canManageTasks alone, for every task the Manager can see', () => {
+    assert.equal(sources.tasksTable.split('{canManageTasks && (').length - 1, 3, 'Edit, Assign/Reassign and Delete');
+    for (const [handler, first] of [['handleOpenEditModal', 'setEditModalTask(task);'], ['handleOpenDeleteModal', 'setDeleteModalTask(task);'], ['handleOpenAssignModal', 'setAssignModalTask(task);']]) {
+      const at = sources.tasksPage.indexOf('const ' + handler + ' = (task) => {');
+      assert.ok(at > 0 && sources.tasksPage.slice(at, at + 120).includes(first), handler);
+    }
   });
 
-  it('they are never offered for assignment: not as staff, not as tasks', () => {
+  it('Staff: every change is offered after View Details, with no gate; the email line is always shown', () => {
+    const table = sources.staffTable;
+    for (const control of ['onEdit && onEdit(staff)', 'onDeactivate && onDeactivate(staff)', 'onActivate && onActivate(staff)', 'onRemove && onRemove(staff)']) {
+      assert.ok(table.indexOf(control) > table.indexOf('onView && onView(staff)'), control);
+    }
+    assert.ok(table.includes("{staff.email || '-'}"));
+    assert.ok(sources.staffDetails.includes("@{staff.username || 'staff'}") && sources.staffDetails.includes('staff-details-contact'));
+  });
+
+  it('Assignments: Reassign and navigation from a task work for every task the Manager can see', () => {
+    assert.ok(sources.assignments.includes('onClick={handleMenuReassign}'));
+    assert.ok(sources.assignments.includes('if (found) {'));
+  });
+
+  it('assignment pickers do not look at a flag: a record is eligible on its own merits (the server decides access)', () => {
     const staff = [
       { id: 's1', role: 'STAFF', department: 'FD', active: true, availability: 'AVAILABLE' },
-      { id: 's2', role: 'STAFF', department: 'FD', active: true, availability: 'AVAILABLE', viewOnly: true },
+      { id: 's2', role: 'STAFF', department: 'FD', active: true, availability: 'AVAILABLE', viewOnly: false },
     ];
-    assert.deepEqual(filterEligibleStaff({ allStaff: staff, department: 'FD' }).map((s) => s.id), ['s1']);
-    const tasks = [{ id: 't1', status: 'PENDING' }, { id: 't2', status: 'PENDING', viewOnly: true }];
-    assert.deepEqual(getEligibleUnassignedTasks({ tasks, assignments: [] }).map((t) => t.id), ['t1']);
+    assert.deepEqual(filterEligibleStaff({ allStaff: staff, department: 'FD' }).map((s) => s.id), ['s1', 's2']);
+    const tasks = [{ id: 't1', status: 'PENDING' }, { id: 't2', status: 'PENDING', viewOnly: false }];
+    assert.deepEqual(getEligibleUnassignedTasks({ tasks, assignments: [] }).map((t) => t.id), ['t1', 't2']);
   });
 
-  it('the compact badge keeps the label and the sky colours, only smaller; an unknown size falls back to the default', () => {
-    const compact = renderToStaticMarkup(h(ViewOnlyBadge, { size: 'compact' }));
-    assert.match(compact, />View only</);
-    assert.match(compact, /bg-sky-50/);
-    assert.ok(compact.includes('text-[9px]'));
-    assert.ok(compact.includes('class="w-2.5 h-2.5"'));
-    assert.equal(renderToStaticMarkup(h(ViewOnlyBadge, { size: 'huge' })), renderToStaticMarkup(h(ViewOnlyBadge)));
-    assert.ok(renderToStaticMarkup(h(ViewOnlyBadge)).includes('text-[10px]'), 'tables keep the default size');
-  });
-
-  it('the badge says "View only", with an explanation', () => {
-    const html = renderToStaticMarkup(h(ViewOnlyBadge));
-    assert.match(html, /data-view-only/);
-    assert.match(html, />View only</);
-    assert.match(html, /title="You can view this department’s records but not change them/);
-  });
-});
-
-describe('pages: a view-only record is shown with the badge and offers View Details only', () => {
-  it('Tasks: edit, assign and delete are gated by canManageTasks AND not view-only; the handlers refuse as well', () => {
-    const table = read('components', 'tasks', 'TasksTable.jsx');
-    assert.equal(table.split('{canManageTasks && !isViewOnly(shownMenu.task) && (').length - 1, 3, 'Edit, Assign/Reassign and Delete');
-    assert.ok(!/\{canManageTasks && \(/.test(table), 'no management entry without the view-only check');
-    assert.ok(table.includes('{isViewOnly(task) && <ViewOnlyBadge'));
-    const page = read('pages', 'TasksPage.jsx');
-    for (const handler of ['handleOpenEditModal = (task) => {\n    if (isViewOnly(task)) return;', 'handleOpenDeleteModal = (task) => {\n    if (isViewOnly(task)) return;', 'handleOpenAssignModal = (task) => {\n    if (isViewOnly(task)) return;']) {
-      assert.ok(page.includes(handler), handler);
-    }
-  });
-
-  it('Staff: every change (edit, deactivate, activate, remove) is inside the view-only check; no email line; handlers refuse', () => {
-    const table = read('components', 'staff', 'StaffTable.jsx');
-    const gate = table.indexOf('{!isViewOnly(shownMenu.staff) && (<>');
-    assert.ok(gate > 0);
-    for (const control of ['onEdit && onEdit(staff)', 'onDeactivate && onDeactivate(staff)', 'onActivate && onActivate(staff)', 'onRemove && onRemove(staff)']) {
-      assert.ok(table.indexOf(control) > gate, `${control} is inside the check`);
-    }
-    assert.ok(table.indexOf('onView && onView(staff)') < gate, 'View Details stays for everyone');
-    assert.match(table, /\{isViewOnly\(staff\) \? \(\s*<ViewOnlyBadge/);
-    const page = read('pages', 'StaffPage.jsx');
-    for (const handler of ['handleOpenEditModal', 'handleOpenDeactivateModal', 'handleOpenRemoveModal', 'handleActivate']) {
-      const body = page.slice(page.indexOf(`const ${handler} = `), page.indexOf(`const ${handler} = `) + 260);
-      assert.ok(body.includes('if (isViewOnly(staff)) return;'), handler);
-    }
-  });
-
-  it('Staff details: no username and no contact section for a view-only member, with a note instead', () => {
-    const details = read('components', 'staff', 'StaffDetailsModal.jsx');
-    assert.ok(details.includes('const viewOnly = isViewOnly(staff);'));
-    assert.match(details, /\{viewOnly \? \(\s*<div className="mt-1\.5 flex justify-center"><ViewOnlyBadge \/><\/div>\s*\) : \(\s*<p className="mt-0\.5 text-sm text-gray-500 break-all">@\{staff\.username/);
-    assert.match(details, /\{viewOnly \? \(\s*<p data-testid="view-only-contact-note"[\s\S]*?Contact details are not shown for departments you can only view\.[\s\S]*?\) : \(\s*<section aria-labelledby="staff-details-contact">/);
-  });
-
-  it('Assignments: Reassign (both variants) only outside the view-only check; navigation never opens a view-only task', () => {
-    const page = read('pages', 'AssignmentsPage.jsx');
-    const gate = page.indexOf('{!isViewOnly(shownMenu.assignment) && (<>');
-    assert.ok(gate > 0 && page.indexOf('onClick={handleMenuReassign}') > gate && page.indexOf('data-testid="reassign-finished-disabled"') > gate);
-    assert.ok(page.includes('const handleOpenReassignModal = (assignment) => {\n    // An assignment of a department this Manager may only view (Administrator grant) is never reassigned; the server refuses it too\n    if (isViewOnly(assignment)) return;'));
-    assert.ok(page.includes('if (!isViewOnly(location.state.task)) {') && page.includes('if (found && !isViewOnly(found)) {'));
-    assert.ok(page.includes('{isViewOnly(assignment) && <ViewOnlyBadge />}'));
-  });
-
-  it('Workload: the badge on both layouts; the fallback details record carries the flag', () => {
-    const page = read('pages', 'WorkloadPage.jsx');
-    assert.equal(page.split('{isViewOnly(item) && <ViewOnlyBadge className="mt-1" />}').length - 1, 2);
-    assert.ok(page.includes('viewOnly: isViewOnly(item),'));
+  it('the Dashboard uses the rows exactly as the server sends them (they are already the authorized departments)', () => {
+    assert.ok(sources.dashboard.includes('data: await getWorkload()') && sources.dashboard.includes('data: await getTasks()'));
   });
 });
 

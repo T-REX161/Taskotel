@@ -3,9 +3,10 @@
  * cannot move a task to another one); these helpers only stop the screens from offering what the server would refuse.
  *
  * - Admin: any active department (unchanged).
- * - Manager: their own department, read from their own profile (departmentCode / departmentName), shown locked. Until it is known, or if it
- *   cannot be loaded, the form is not shown at all, so no editable selector is ever exposed. A Manager without an active department cannot
- *   create tasks.
+ * - Manager: a department they manage (their own, plus any an Administrator granted). Their own department, read from their profile
+ *   (departmentCode / departmentName), is preselected; with no additional department it is shown locked, otherwise the Manager chooses
+ *   among their managed departments only. Until the own department is known, or if it cannot be loaded, the form is not shown at all.
+ *   A Manager without an active department cannot create tasks.
  */
 
 export const MANAGER_NO_DEPARTMENT_MESSAGE =
@@ -15,6 +16,8 @@ export const MANAGER_DEPARTMENT_LOAD_FAILED_MESSAGE =
   'Your department could not be loaded, so a task cannot be created right now. Please try again.';
 
 export const MANAGER_DEPARTMENT_LOCKED_HINT = 'Managers create tasks in their own department.';
+
+export const MANAGER_DEPARTMENT_CHOOSE_HINT = 'You can create tasks in any department you manage.';
 
 export const DEPARTMENT_CHANGE_LOCKED_HINT = 'Only an Admin can move a task to another department.';
 
@@ -60,4 +63,21 @@ export function createTaskFormDataNeeded(access) {
 /** Whether the Edit Task modal lets this role change the department (Admin yes; a Manager never). */
 export function canChangeTaskDepartment(role) {
   return role !== 'MANAGER';
+}
+
+/**
+ * The department a Manager's Create Task form shows locked, or null when they choose.
+ * They choose only when more than one managed department can take new tasks; with one (or while the list is still loading) their own
+ * department is shown locked.
+ */
+export function managerLockedDepartment(managerDepartment, managedChoices) {
+  if (managerDepartment?.status !== 'ready') return null;
+  const choices = Array.isArray(managedChoices) ? managedChoices : [];
+  if (choices.length > 1) return null;
+  return { code: managerDepartment.code, name: managerDepartment.name };
+}
+
+/** Whether a Manager may pick this department code in the form: only one of their managed, active departments. */
+export function isManagedChoice(managedChoices, code) {
+  return (Array.isArray(managedChoices) ? managedChoices : []).some((department) => department.code === code);
 }

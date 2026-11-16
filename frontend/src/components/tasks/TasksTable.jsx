@@ -4,8 +4,6 @@ import { TasksIcon, DotsVerticalIcon, EyeIcon } from '../icons/Icons';
 import { staffStatusAction } from '../../utils/taskStatus';
 import { formatAssignees } from '../../utils/assignmentUtils';
 import { menuMotion, usePresence } from '../../theme/presence';
-import ViewOnlyBadge from '../common/ViewOnlyBadge';
-import { isViewOnly } from '../../utils/managerViewAccess';
 import {
   getPriorityColor,
   formatPriority,
@@ -154,7 +152,6 @@ export default function TasksTable({
                         >
                           {task.title}
                         </button>
-                        {isViewOnly(task) && <ViewOnlyBadge className="mt-1 self-start" />}
                         {task.description ? (
                           <span
                             className="text-xs text-gray-500 truncate block mt-0.5"
@@ -354,8 +351,8 @@ export default function TasksTable({
             );
           })()}
 
-          {/* Edit Task (if canManageTasks; never for a task of a department the Manager may only view: the server refuses it anyway) */}
-          {canManageTasks && !isViewOnly(shownMenu.task) && (
+          {/* Edit Task (if canManageTasks) */}
+          {canManageTasks && (
             <button
               type="button"
               onClick={() => {
@@ -379,8 +376,8 @@ export default function TasksTable({
             </button>
           )}
 
-          {/* Assign / Reassign Task (if canManageTasks, and never for a view-only task) */}
-          {canManageTasks && !isViewOnly(shownMenu.task) && (
+          {/* Assign / Reassign Task (if canManageTasks) */}
+          {canManageTasks && (
             (() => {
               const task = shownMenu.task;
               const taskAssignments = assignmentsByTaskId.get(task.id) || [];
@@ -452,8 +449,8 @@ export default function TasksTable({
             })()
           )}
 
-          {/* Delete Task (if canManageTasks, and never for a view-only task) */}
-          {canManageTasks && !isViewOnly(shownMenu.task) && (
+          {/* Delete Task (if canManageTasks) */}
+          {canManageTasks && (
             <>
               <div className="my-1 border-t border-gray-100" />
               <button

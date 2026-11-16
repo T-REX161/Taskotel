@@ -293,8 +293,6 @@ export function getEligibleUnassignedTasks({ tasks = [], assignments = [] } = {}
 
   return safeTasks.filter((task) => {
     if (!task || !task.id) return false;
-    // A task the signed-in Manager may only view (another department, through an Administrator grant) can never be assigned by them
-    if (task.viewOnly === true) return false;
     const taskId = String(task.id);
     if (assignedTaskIds.has(taskId)) return false;
 

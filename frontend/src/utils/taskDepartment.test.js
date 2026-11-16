@@ -8,7 +8,9 @@ import {
   canChangeTaskDepartment,
   createTaskDepartmentAccess,
   createTaskFormDataNeeded,
+  isManagedChoice,
   managerDepartmentFromProfile,
+  managerLockedDepartment,
 } from './taskDepartment.js';
 
 const read = (...parts) => readFileSync(new URL(`../${parts.join('/')}`, import.meta.url), 'utf8');
@@ -69,7 +71,8 @@ test('Create Task: the Manager department is loaded fresh from the profile befor
   // the form (and so any department field) renders only for Admin ('select') or a known Manager department ('locked')
   assert.match(page, /\{\(departmentAccess === 'select' \|\| departmentAccess === 'locked'\) && \(\s*<CreateTaskForm/);
   assert.match(page, /departmentAccess === 'loading' && \(/);
-  assert.match(page, /lockedDepartment=\{departmentAccess === 'locked' \? \{ code: managerDepartment\.code, name: managerDepartment\.name \} : null\}/);
+  assert.match(page, /lockedDepartment=\{lockedDepartment\}/);
+  assert.match(page, /const lockedDepartment = isManager \? managerLockedDepartment\(managerDepartment, activeDepartments\) : null;/);
 });
 
 test('Create Task: Manager without a department sees the message and no form; a failed profile read offers Try again', () => {
@@ -79,9 +82,9 @@ test('Create Task: Manager without a department sees the message and no form; a 
   assert.ok(MANAGER_DEPARTMENT_LOAD_FAILED_MESSAGE.length > 0);
 });
 
-test('Create Task: a Manager cannot change or submit another department (change ignored, submit guarded)', () => {
+test('Create Task: a Manager can only pick a department they manage (anything else ignored, submit guarded)', () => {
   const page = read('pages', 'CreateTaskPage.jsx');
-  assert.match(page, /if \(name === 'department' && isManager\) return;/);
+  assert.match(page, /if \(name === 'department' && isManager && \(lockedDepartment \|\| !isManagedChoice\(activeDepartments, value\)\)\) return;/);
   assert.match(page, /if \(isManager && departmentAccess !== 'locked'\) \{/);
 });
 
@@ -183,4 +186,33 @@ test('useDepartments: optional "enabled" holds the request back; every other cal
   ]) {
     assert.match(read(...file), /= useDepartments\(\);/, file.join('/'));
   }
+});
+
+// ── a Manager of several departments chooses among the departments they manage ───────────────────────────────
+
+const choice = (code) => ({ code, name: code, active: true, managed: true });
+const ready = { status: 'ready', code: 'FRONT_DESK', name: 'Front Desk' };
+
+test('a Manager with one managed department sees it locked; with several they choose; while loading it is locked', () => {
+  assert.deepEqual(managerLockedDepartment(ready, [choice('FRONT_DESK')]), { code: 'FRONT_DESK', name: 'Front Desk' });
+  assert.deepEqual(managerLockedDepartment(ready, []), { code: 'FRONT_DESK', name: 'Front Desk' }, 'the list is still loading, or failed');
+  assert.equal(managerLockedDepartment(ready, [choice('FRONT_DESK'), choice('SECURITY')]), null);
+  for (const status of ['loading', 'none', 'error']) assert.equal(managerLockedDepartment({ status }, [choice('A'), choice('B')]), null, status);
+});
+
+test('only a managed, active department is a valid pick', () => {
+  const choices = [choice('FRONT_DESK'), choice('SECURITY')];
+  assert.equal(isManagedChoice(choices, 'SECURITY'), true);
+  assert.equal(isManagedChoice(choices, 'HOUSEKEEPING'), false);
+  assert.equal(isManagedChoice(choices, ''), false);
+  assert.equal(isManagedChoice(null, 'SECURITY'), false);
+});
+
+test('Create Task: the Manager starts on their own department, explicitly, and a chosen department that is no longer managed falls back to it', () => {
+  const page = read('pages', 'CreateTaskPage.jsx');
+  assert.match(page, /setFormData\(\(prev\) => \(\{ \.\.\.prev, department: resolved\.code \}\)\)/, 'preselected from the profile');
+  assert.match(page, /if \(!isManagedChoice\(activeDepartments, formData\.department\)\) \{/);
+  assert.match(page, /department: managerDepartment\.code, assignTo: ''/);
+  assert.match(page, /department: formData\.department,/, 'the chosen department is always sent');
+  assert.match(page, /departmentHint=\{isManager \? MANAGER_DEPARTMENT_CHOOSE_HINT : ''\}/);
 });

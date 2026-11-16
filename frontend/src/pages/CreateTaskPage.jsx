@@ -8,24 +8,29 @@ import useDepartments from '../hooks/useDepartments';
 import { loadCurrentProfile } from '../utils/currentUserProfile';
 import { STAFF_LOAD_ERROR_MESSAGE, createLatestRequest } from '../utils/loadState';
 import {
+  MANAGER_DEPARTMENT_CHOOSE_HINT,
   MANAGER_DEPARTMENT_LOAD_FAILED_MESSAGE,
   MANAGER_NO_DEPARTMENT_MESSAGE,
   createTaskDepartmentAccess,
   createTaskFormDataNeeded,
+  isManagedChoice,
   managerDepartmentFromProfile,
+  managerLockedDepartment,
 } from '../utils/taskDepartment';
 
 export default function CreateTaskPage() {
   const navigate = useNavigate();
-  // A Manager creates tasks in their own department only (the server refuses any other): it is read from their own profile before the form
-  // is shown, and never defaulted. An Admin keeps the existing selector and default.
+  // A Manager creates tasks in a department they manage (the server refuses any other): their own department is read from their profile
+  // before the form is shown, and preselected. An Admin keeps the existing selector and default.
   const isManager = getUserRole() === 'MANAGER';
   const [managerDepartment, setManagerDepartment] = useState({ status: isManager ? 'loading' : 'not-needed' });
   const departmentAccess = createTaskDepartmentAccess(getUserRole(), managerDepartment);
   // The form's data (departments, staff, tasks, assignments) is loaded only once the form will be shown: at once for an Admin, and for a
   // Manager only after their profile names their department. A Manager without one gets the explanation and no requests at all.
   const formDataNeeded = createTaskFormDataNeeded(departmentAccess);
+  // For a Manager the hook returns only their managed departments, the primary one first
   const { departments, activeDepartments } = useDepartments({ enabled: formDataNeeded });
+  const lockedDepartment = isManager ? managerLockedDepartment(managerDepartment, activeDepartments) : null;
 
   const initialFormState = {
     title: '',
@@ -59,6 +64,14 @@ export default function CreateTaskPage() {
       setFormData((prev) => ({ ...prev, department: activeDepartments[0].code }));
     }
   }, [isManager, activeDepartments, formData.department]);
+
+  // A Manager's chosen department must stay one they manage: if the list (re)loads without it, go back to their own department
+  useEffect(() => {
+    if (!isManager || managerDepartment.status !== 'ready' || activeDepartments.length === 0) return;
+    if (!isManagedChoice(activeDepartments, formData.department)) {
+      setFormData((prev) => ({ ...prev, department: managerDepartment.code, assignTo: '' }));
+    }
+  }, [isManager, managerDepartment, activeDepartments, formData.department]);
 
   // A Manager's own department, read fresh from their profile (an Admin may have changed it since the profile was cached)
   const loadManagerDepartment = React.useCallback(async () => {
@@ -140,8 +153,8 @@ export default function CreateTaskPage() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    // A Manager's department is locked to their own; any change event for it is ignored
-    if (name === 'department' && isManager) return;
+    // A Manager may only pick a department they manage; any other value, or a change while the department is locked, is ignored
+    if (name === 'department' && isManager && (lockedDepartment || !isManagedChoice(activeDepartments, value))) return;
     if (name === 'department') {
       setFormData((prev) => {
         const nextEligible = filterEligibleStaff({
@@ -338,7 +351,8 @@ export default function CreateTaskPage() {
           onInputChange={handleInputChange}
           staffList={eligibleStaff}
           departments={departments}
-          lockedDepartment={departmentAccess === 'locked' ? { code: managerDepartment.code, name: managerDepartment.name } : null}
+          lockedDepartment={lockedDepartment}
+          departmentHint={isManager ? MANAGER_DEPARTMENT_CHOOSE_HINT : ''}
           isLoadingStaff={isLoadingStaff}
           staffLoadError={staffLoadError}
           onRetryStaff={loadFormData}

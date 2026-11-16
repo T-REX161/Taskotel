@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { isViewOnly } from '../utils/managerViewAccess';
 import { useNavigate } from 'react-router-dom';
 import { PlusIcon } from '../components/icons/Icons';
 import PageSizeToggle from '../components/common/PageSizeToggle';
@@ -222,7 +221,6 @@ export default function StaffPage() {
   // A member of a department this Manager may only view (Administrator grant) is never opened for a change; the menu does not offer
   // it and the server refuses it anyway
   const handleOpenEditModal = (staff) => {
-    if (isViewOnly(staff)) return;
     setEditingStaff(staff);
     setIsEditModalOpen(true);
   };
@@ -253,7 +251,6 @@ export default function StaffPage() {
   // Deactivate modal handlers
   const handleOpenDeactivateModal = (staff) => {
     if (!canOfferDeactivation(staff, getUsername())) return; // your own account (the server refuses it too)
-    if (isViewOnly(staff)) return;
     setDeactivateError('');
     setDeactivatingStaff(staff);
   };
@@ -290,7 +287,6 @@ export default function StaffPage() {
 
   // Remove modal handlers
   const handleOpenRemoveModal = (staff) => {
-    if (isViewOnly(staff)) return;
     setRemoveError('');
     setRemovingStaff(staff);
   };
@@ -327,7 +323,6 @@ export default function StaffPage() {
 
   // Activate handler via API
   const handleActivate = async (staff) => {
-    if (isViewOnly(staff)) return;
     try {
       await activateStaff(staff.id);
       await fetchStaffData(false);

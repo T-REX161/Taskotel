@@ -37,8 +37,6 @@ import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
 import AssignmentFilters from '../components/assignments/AssignmentFilters';
 import AssignmentStatusBadge from '../components/assignments/AssignmentStatusBadge';
 import UserAvatar from '../components/common/UserAvatar';
-import ViewOnlyBadge from '../components/common/ViewOnlyBadge';
-import { isViewOnly } from '../utils/managerViewAccess';
 import { assignmentDepartmentTile, staffInitials } from '../components/assignments/assignmentTableStyles';
 import DepartmentIcon from '../components/common/DepartmentIcon';
 import { menuMotion, toastMotion, usePresence } from '../theme/presence';
@@ -159,15 +157,13 @@ export default function AssignmentsPage() {
     if (!canManageAssignments) return;
 
     if (location.state?.task) {
-      if (!isViewOnly(location.state.task)) {
-        setAssignModalTask(location.state.task);
-        setIsAssignModalOpen(true);
-      }
+      setAssignModalTask(location.state.task);
+      setIsAssignModalOpen(true);
       navigate(location.pathname, { replace: true, state: null });
     } else if (location.state?.taskId) {
       if (tasks.length > 0) {
         const found = tasks.find((t) => String(t.id) === String(location.state.taskId));
-        if (found && !isViewOnly(found)) {
+        if (found) {
           setAssignModalTask(found);
           setIsAssignModalOpen(true);
         }
@@ -284,8 +280,6 @@ export default function AssignmentsPage() {
 
   // Open Reassign workflow for a specific assignment row
   const handleOpenReassignModal = (assignment) => {
-    // An assignment of a department this Manager may only view (Administrator grant) is never reassigned; the server refuses it too
-    if (isViewOnly(assignment)) return;
     setCurrentAssignment(assignment);
     const associatedTask = tasks.find((t) => String(t.id) === String(assignment.taskId)) || {
       id: assignment.taskId,
@@ -791,7 +785,6 @@ export default function AssignmentsPage() {
                           </span>
                           <div className="flex min-w-0 flex-col items-start gap-1">
                             <p className="min-w-0 max-w-[18rem] font-semibold leading-snug text-gray-900 break-words line-clamp-2" title={taskTitle}>{taskTitle}</p>
-                            {isViewOnly(assignment) && <ViewOnlyBadge />}
                           </div>
                         </div>
                       </td>
@@ -943,8 +936,6 @@ export default function AssignmentsPage() {
             <EyeIcon className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
             <span>View Details</span>
           </button>
-          {/* Reassigning is never offered for an assignment of a department this Manager may only view (the server refuses it anyway) */}
-          {!isViewOnly(shownMenu.assignment) && (<>
           {canManageAssignments && isAssignmentTaskFinished(shownMenu.assignment, tasks) && (
             <button
               type="button"
@@ -979,7 +970,6 @@ export default function AssignmentsPage() {
               <span>Reassign</span>
             </button>
           )}
-          </>)}
         </div>,
         document.body
       )}

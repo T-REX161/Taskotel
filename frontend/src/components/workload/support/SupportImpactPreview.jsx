@@ -1,7 +1,7 @@
 import React from 'react';
 import { CONFIRM_ADMIN_ONLY, RESTRICTED_LABEL, beforeAfter, describeProblems, formatMinutes } from '../../../utils/supportPlan';
 
-/** Donor impact rows the server actually sent with figures (an Admin's preview); a Manager's preview sends none. */
+/** Donor impact rows the server actually sent with figures: an Admin's preview sends all of them, a Manager's only the departments they manage. */
 const donorsWithFigures = (donors) =>
   (Array.isArray(donors) ? donors : []).filter((d) => Number.isFinite(d?.before?.freeStaff) && Number.isFinite(d?.after?.freeStaff));
 
@@ -67,6 +67,11 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
     </p>
   );
   const donors = donorsWithFigures(data?.donors);
+  // A Manager's figures are withheld for the lending departments they do not manage: that is every lending department a helper comes
+  // from that has no figures row. Nothing is said about a department when all of them are shown.
+  const donorCodes = new Set(donors.map((d) => d.code));
+  const someFiguresWithheld =
+    donorFiguresRestricted && (data?.items || []).some((item) => item?.homeDepartmentCode && !donorCodes.has(item.homeDepartmentCode));
 
   if (empty) {
     return (
@@ -128,8 +133,12 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
                     value={beforeAfter(donor.before.freeStaff, donor.after.freeStaff)}
                   />
                 ))}
-                {donorFiguresRestricted && donors.length === 0 && (data.items?.length || 0) > 0 && (
-                  <Headline label="Lending departments' figures" value={RESTRICTED_LABEL} hint="The server checks their reserve when the plan is previewed and confirmed." />
+                {someFiguresWithheld && (
+                  <Headline
+                    label={donors.length > 0 ? "Other lending departments' figures" : "Lending departments' figures"}
+                    value={RESTRICTED_LABEL}
+                    hint="The server checks their reserve when the plan is previewed and confirmed."
+                  />
                 )}
               </dl>
               <details className="text-xs">

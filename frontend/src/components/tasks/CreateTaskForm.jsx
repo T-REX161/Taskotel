@@ -20,8 +20,9 @@ import Spinner from '../common/Spinner';
  *   onSubmit           – form submit handler
  *   onCancel           – cancellation handler (navigates back to tasks)
  *   onViewTasks        – fallback navigation to tasks list upon partial failure
- *   lockedDepartment   – { code, name } for a Manager: their own department, shown read-only (cannot be changed); null keeps the
- *                        normal selector (Admin)
+ *   lockedDepartment   – { code, name } for a Manager with no additional department: their own, shown read-only; null keeps the
+ *                        selector (Admin, or a Manager who manages several departments: the list then holds only those)
+ *   departmentHint     – optional small text under the selector (a Manager who chooses among their departments)
  */
 export default function CreateTaskForm({
   formData,
@@ -29,6 +30,7 @@ export default function CreateTaskForm({
   staffList = [],
   departments = [],
   lockedDepartment = null,
+  departmentHint = '',
   isLoadingStaff = false,
   staffLoadError = '',
   onRetryStaff,
@@ -122,6 +124,7 @@ export default function CreateTaskForm({
                 <DepartmentOptions departments={departments} activeOnly />
               </select>
             )}
+            {!lockedDepartment && departmentHint && <p className="text-xs text-gray-500">{departmentHint}</p>}
           </div>
 
           {/* Row 1 - Right: Assign To */}

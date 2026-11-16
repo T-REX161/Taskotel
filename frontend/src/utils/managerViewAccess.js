@@ -1,36 +1,20 @@
 // Pure helpers for Admin-controlled additional departments for Managers (full management since the multi-department change).
 //
 // The server decides everything that matters: only an Admin may read or change grants; a grant only lets a Manager SEE another
-// department's staff, workload, tasks and assignments; every write (create, edit, assign, reassign, status, delete...) is still checked
-// against the Manager's own department alone, so a view-only record is refused by the API whatever the page offers. These helpers only
-// decide what the pages offer and how answers are worded. Hiding is convenience, not the control.
+// department's staff, workload, tasks and assignments AND to manage them (create, edit, assign, reassign, status, delete...) exactly as
+// for their primary department; every operation is checked against the Manager's authorized departments. These helpers only decide how
+// answers are worded. Hiding is convenience, not the control.
 
 export const VIEW_ACCESS_ADMIN_ONLY_MESSAGE = 'Only an Admin can view or change a Manager’s department access.';
 /** What the Admin dialog calls a department a Manager manages besides their own. */
 export const ADDITIONAL_DEPARTMENTS_LABEL = 'Additional departments (full management)';
 export const FULL_MANAGEMENT_LABEL = 'Full management';
-export const VIEW_ONLY_LABEL = 'View only';
-export const VIEW_ONLY_HINT = 'You can view this department’s records but not change them. Access was granted by an Administrator.';
 
 const normalize = (value) => String(value || '').trim().toUpperCase();
 
 /** The view-access control is offered to an Admin, for a Manager account, and to nobody else. */
 export function canManageViewAccess(viewerRole, targetUser) {
   return normalize(viewerRole) === 'ADMIN' && normalize(targetUser?.role) === 'MANAGER';
-}
-
-/** True only for a record the server marked as visible through a view-only grant. Anything else (missing, non-boolean) is not. */
-export function isViewOnly(record) {
-  return record?.viewOnly === true;
-}
-
-/**
- * The records of the Manager's own department only: drops what is visible through a view-only grant. The Dashboard uses it so its figures
- * stay about the primary department (the server's dashboard summary is primary-only as well). Anything that is not an array is returned
- * unchanged.
- */
-export function withoutViewOnly(records) {
-  return Array.isArray(records) ? records.filter((record) => !isViewOnly(record)) : records;
 }
 
 /** The codes currently granted, from the GET/PUT answer. */

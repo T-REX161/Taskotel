@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardSummary, getUserRole, getUsername, getWorkload, getWorkloadRecommendations, getTasks } from '../services/api';
-import { withoutViewOnly } from '../utils/managerViewAccess';
 import { describeUser } from '../components/layout/Header';
 import useCurrentUserProfile from '../hooks/useCurrentUserProfile';
 import { preferredName } from '../utils/displayName';
@@ -13,6 +12,8 @@ import LiveClock from '../components/dashboard/LiveClock';
 import SummaryCards from '../components/dashboard/SummaryCards';
 import WorkloadOverview from '../components/dashboard/WorkloadOverview';
 import TaskStatusSummary from '../components/dashboard/TaskStatusSummary';
+import DepartmentBreakdown from '../components/dashboard/DepartmentBreakdown';
+import { coveringLine } from '../utils/departmentBreakdown';
 import AssignmentsOverview from '../components/dashboard/AssignmentsOverview';
 import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
@@ -61,8 +62,7 @@ export default function Dashboard() {
 
   const loadStaffWorkload = async () => {
     try {
-      // A Manager's dashboard is about their own department only: rows they may merely view (Administrator grant) are left out
-      const next = { status: 'ready', data: withoutViewOnly(await getWorkload()) };
+      const next = { status: 'ready', data: await getWorkload() };
       setStaffWorkload((prev) => keepIfSame(prev, next));
     } catch {
       setStaffWorkload(failed);
@@ -82,7 +82,7 @@ export default function Dashboard() {
 
   const loadTasks = async () => {
     try {
-      const next = { status: 'ready', data: withoutViewOnly(await getTasks()) };
+      const next = { status: 'ready', data: await getTasks() };
       setTasks((prev) => keepIfSame(prev, next));
     } catch {
       setTasks(failed);
@@ -158,6 +158,7 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl sm:text-[1.75rem] font-bold tracking-tight text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-0.5">Welcome back, {welcomeName}!</p>
+          {coveringLine(data) && <p data-testid="dashboard-covering" className="text-sm text-gray-500 mt-0.5">{coveringLine(data)}</p>}
         </div>
         <LiveClock />
       </div>
@@ -175,6 +176,9 @@ export default function Dashboard() {
           <OperationsInsights insights={insights} />
         </div>
       </div>
+
+      {/* A Manager of several departments: each department's own figures (nothing for one department, Admin or Staff) */}
+      <DepartmentBreakdown data={data} />
 
       {/* Staff also see their recent assignments (their summary carries them) */}
       {isStaff && <AssignmentsOverview data={data} isStaff={isStaff} />}

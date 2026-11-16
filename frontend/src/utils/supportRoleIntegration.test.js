@@ -182,7 +182,10 @@ describe('a Manager plans and previews without the donor figures', () => {
     const preview = read('components', 'workload', 'support', 'SupportImpactPreview.jsx');
     assert.ok(preview.includes('donorsWithFigures(data?.donors)') && preview.includes('{donors.map((donor) => ('), 'only donor rows that carry figures are drawn');
     assert.ok(!preview.includes('{data.donors.map('), 'never maps the raw donor list');
-    assert.ok(preview.includes("label=\"Lending departments' figures\" value={RESTRICTED_LABEL}"), 'the withheld figures are labelled');
+    assert.ok(preview.includes("\"Lending departments' figures\"") && preview.includes('value={RESTRICTED_LABEL}'), 'the withheld figures are labelled');
+    // Withheld exactly for the lending departments that have no figures row (a Manager sees the figures of the ones they manage)
+    assert.ok(preview.includes('donorFiguresRestricted && (data?.items || []).some((item) => item?.homeDepartmentCode && !donorCodes.has(item.homeDepartmentCode))'));
+    assert.ok(preview.includes("Other lending departments' figures"), 'mixed case: shown figures plus a withheld line for the rest');
   });
 });
 
