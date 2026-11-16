@@ -93,7 +93,7 @@ public class DashboardServiceImpl implements DashboardService {
         // Assignment metrics
         dto.setTotalActiveAssignments(assignmentRepository.countActiveAssignments(ACTIVE_STATUSES));
 
-        applyWorkloadBuckets(dto, scope);
+        applyWorkloadBuckets(dto, workloadCalculator.calculateWorkload(scope));
         applyCapacityAlerts(dto, scope);
         return dto;
     }
@@ -105,40 +105,53 @@ public class DashboardServiceImpl implements DashboardService {
      */
     private AdminDashboardSummaryDto buildDepartmentDashboardSummary(DepartmentScope scope) {
         AdminDashboardSummaryDto dto = new AdminDashboardSummaryDto();
-        // The totals of every department this Manager manages: the same per-department queries, added up (each staff member, task and
-        // counted assignment belongs to exactly one department, so nothing is counted twice)
-        long totalStaff = 0, availableStaff = 0, unavailableStaff = 0, inactiveStaff = 0;
-        long totalTasks = 0, pending = 0, assigned = 0, inProgress = 0, completed = 0, cancelled = 0, activeAssignments = 0;
-        for (Department department : scope.managedDepartments()) {
-            totalStaff += staffRepository.countOperationalInDepartment(department);
-            availableStaff += staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.AVAILABLE);
-            unavailableStaff += staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.UNAVAILABLE);
-            inactiveStaff += staffRepository.countOperationalInactiveInDepartment(department);
+        // The workload rows of every managed department, calculated once and then split by department
+        List<WorkloadDto> workloads = workloadCalculator.calculateWorkload(scope);
+        java.util.Map<String, List<WorkloadDto>> rowsByDepartment = new java.util.HashMap<>();
+        for (WorkloadDto row : workloads) rowsByDepartment.computeIfAbsent(row.getDepartment(), code -> new java.util.ArrayList<>()).add(row);
 
-            totalTasks += taskRepository.countByDepartment(department);
-            pending += taskRepository.countByDepartmentAndStatus(department, TaskStatus.PENDING);
-            assigned += taskRepository.countByDepartmentAndStatus(department, TaskStatus.ASSIGNED);
-            inProgress += taskRepository.countByDepartmentAndStatus(department, TaskStatus.IN_PROGRESS);
-            completed += taskRepository.countByDepartmentAndStatus(department, TaskStatus.COMPLETED);
-            cancelled += taskRepository.countByDepartmentAndStatus(department, TaskStatus.CANCELLED);
-
-            activeAssignments += assignmentRepository.countActiveByTaskAndStaffDepartment(ACTIVE_STATUSES, department);
+        // The figures of each managed department (the same per-department queries as before), primary first and then the additional ones
+        // by name. The response totals are the sums of the entries: each staff member, task and counted assignment belongs to exactly one
+        // department, so nothing is counted twice.
+        List<Department> managed = new java.util.ArrayList<>(scope.managedDepartments());
+        Department primary = scope.primaryDepartment();
+        managed.sort(java.util.Comparator.comparing((Department d) -> !d.getCode().equals(primary.getCode()))
+                .thenComparing(d -> String.valueOf(d.getName()).toLowerCase()));
+        List<AdminDashboardSummaryDto.DepartmentSummary> breakdown = new java.util.ArrayList<>();
+        for (Department department : managed) {
+            long[] buckets = workloadBuckets(rowsByDepartment.getOrDefault(department.getCode(), List.of()));
+            breakdown.add(new AdminDashboardSummaryDto.DepartmentSummary(department.getCode(), department.getName(),
+                    department.getCode().equals(primary.getCode()),
+                    staffRepository.countOperationalInDepartment(department),
+                    staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.AVAILABLE),
+                    staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.UNAVAILABLE),
+                    staffRepository.countOperationalInactiveInDepartment(department),
+                    taskRepository.countByDepartment(department),
+                    taskRepository.countByDepartmentAndStatus(department, TaskStatus.PENDING),
+                    taskRepository.countByDepartmentAndStatus(department, TaskStatus.ASSIGNED),
+                    taskRepository.countByDepartmentAndStatus(department, TaskStatus.IN_PROGRESS),
+                    taskRepository.countByDepartmentAndStatus(department, TaskStatus.COMPLETED),
+                    taskRepository.countByDepartmentAndStatus(department, TaskStatus.CANCELLED),
+                    assignmentRepository.countActiveByTaskAndStaffDepartment(ACTIVE_STATUSES, department),
+                    buckets[0], buckets[1], buckets[2], buckets[3], buckets[4]));
         }
-        dto.setTotalStaff(totalStaff);
-        dto.setAvailableStaff(availableStaff);
-        dto.setUnavailableStaff(unavailableStaff);
-        dto.setInactiveStaff(inactiveStaff);
+        dto.setDepartmentBreakdown(breakdown);
 
-        dto.setTotalTasks(totalTasks);
-        dto.setPendingTasks(pending);
-        dto.setAssignedTasks(assigned);
-        dto.setInProgressTasks(inProgress);
-        dto.setCompletedTasks(completed);
-        dto.setCancelledTasks(cancelled);
+        dto.setTotalStaff(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::totalStaff).sum());
+        dto.setAvailableStaff(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::availableStaff).sum());
+        dto.setUnavailableStaff(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::unavailableStaff).sum());
+        dto.setInactiveStaff(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::inactiveStaff).sum());
 
-        dto.setTotalActiveAssignments(activeAssignments);
+        dto.setTotalTasks(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::totalTasks).sum());
+        dto.setPendingTasks(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::pendingTasks).sum());
+        dto.setAssignedTasks(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::assignedTasks).sum());
+        dto.setInProgressTasks(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::inProgressTasks).sum());
+        dto.setCompletedTasks(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::completedTasks).sum());
+        dto.setCancelledTasks(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::cancelledTasks).sum());
 
-        applyWorkloadBuckets(dto, scope);
+        dto.setTotalActiveAssignments(breakdown.stream().mapToLong(AdminDashboardSummaryDto.DepartmentSummary::totalActiveAssignments).sum());
+
+        applyWorkloadBuckets(dto, workloads);
         applyCapacityAlerts(dto, scope);
         return dto;
     }
@@ -198,10 +211,18 @@ public class DashboardServiceImpl implements DashboardService {
         dto.setCapacityAlerts(alerts);
     }
 
-    /** Workload buckets from the caller's scoped workload (the same calculation as GET /api/workload). */
-    private void applyWorkloadBuckets(AdminDashboardSummaryDto dto, DepartmentScope scope) {
-        List<WorkloadDto> workloads = workloadCalculator.calculateWorkload(scope);
+    /** Workload buckets from the caller's scoped workload rows (the same calculation as GET /api/workload). */
+    private void applyWorkloadBuckets(AdminDashboardSummaryDto dto, List<WorkloadDto> workloads) {
+        long[] buckets = workloadBuckets(workloads);
+        dto.setTotalStaffWithWorkload(buckets[0]);
+        dto.setLowWorkloadStaff(buckets[1]);
+        dto.setNormalWorkloadStaff(buckets[2]);
+        dto.setHighWorkloadStaff(buckets[3]);
+        dto.setAtRiskStaff(buckets[4]);
+    }
 
+    /** {staff with workload, low, normal, high, at risk} for these rows: the one definition of the dashboard's workload buckets. */
+    private static long[] workloadBuckets(List<WorkloadDto> workloads) {
         long staffWithWorkload = 0;
         long low = 0;
         long normal = 0;
@@ -219,12 +240,7 @@ public class DashboardServiceImpl implements DashboardService {
                 case AT_RISK: atRisk++; break;
             }
         }
-
-        dto.setTotalStaffWithWorkload(staffWithWorkload);
-        dto.setLowWorkloadStaff(low);
-        dto.setNormalWorkloadStaff(normal);
-        dto.setHighWorkloadStaff(high);
-        dto.setAtRiskStaff(atRisk);
+        return new long[]{staffWithWorkload, low, normal, high, atRisk};
     }
 
     /** Staff: their own data only (the username comes from the authentication, never from a request parameter). */

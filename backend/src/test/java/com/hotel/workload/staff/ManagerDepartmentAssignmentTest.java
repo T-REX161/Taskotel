@@ -24,6 +24,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import com.hotel.workload.common.ClockTicks;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -108,7 +109,11 @@ public class ManagerDepartmentAssignmentTest {
     }
 
     private MvcResult call(String username, String role, MockHttpServletRequestBuilder request) throws Exception {
-        return mockMvc.perform(request.with(user(username).roles(role)).contentType(MediaType.APPLICATION_JSON)).andReturn();
+        MvcResult result = mockMvc.perform(request.with(user(username).roles(role)).contentType(MediaType.APPLICATION_JSON)).andReturn();
+        // The next request must be stamped strictly later than this one: the history is listed newest first by changedAt, and the clock ticks in
+        // steps larger than a request takes (see ClockTicks)
+        ClockTicks.awaitNextTick();
+        return result;
     }
 
     private int status(String username, String role, MockHttpServletRequestBuilder request) throws Exception {

@@ -130,7 +130,7 @@ public final class WorkloadRecommendationEngine {
             if (stats != null && !assignedTasks.contains(task.getId())) stats.waiting.add(task);
         }
 
-        return finish(all, null, tasksWithoutDepartment, today, now);
+        return finish(all, null, null, tasksWithoutDepartment, today, now);
     }
 
     private static void classifyStaff(Map<String, Stats> byCode, List<Staff> staff, Set<UUID> busyStaff) {
@@ -186,12 +186,73 @@ public final class WorkloadRecommendationEngine {
         for (Task task : receiverWaitingTasks) {
             if (task.getDepartment() != null && receiving.department.getCode().equals(task.getDepartment().getCode())) receiving.waiting.add(task);
         }
-        return finish(all, receiving.department.getCode(), 0, today, now);
+        Set<String> only = Set.of(receiving.department.getCode());
+        return finish(all, only, only, 0, today, now);
     }
 
-    /** Ranks the pressured departments and suggests donors. {@code receiverCode} null = every department (Admin); otherwise only that one, redacted. */
-    private static WorkloadRecommendationsDto finish(List<Stats> all, String receiverCode, int tasksWithoutDepartment, LocalDate today, LocalDateTime now) {
-        boolean redact = receiverCode != null;
+    /**
+     * The recommendations for EVERY department a Manager manages (their primary department and the active departments an Administrator
+     * granted), ranked together exactly like {@link #recommend} ranks every department for an Admin: the same severity, reserve, lendability
+     * and ranking rules, and one person is never suggested to two departments. Nothing is generated for any other department as a receiver.
+     *
+     * <p>What the result shows about a donor depends on whether the Manager manages the donor's department too:
+     * <ul>
+     *   <li>a managed donor department is shown in full, as an Admin sees it (the person's id and home department code, the donor's before
+     *       and after figures, and the reasons), because the Manager may see all of that department's figures anyway;</li>
+     *   <li>any other donor is redacted exactly as in {@link #recommendForReceiver}: the person's name and home department name only.</li>
+     * </ul>
+     * The inputs stay narrow: the waiting tasks of the MANAGED departments only, and for every other department just the NUMBER of tasks
+     * waiting there (the reserve rule needs it). The count of tasks without a department is not reported.
+     *
+     * @param managed                       the departments the Manager manages (inactive ones are ignored)
+     * @param waitingTasksByManagedDepartment the waiting tasks of each managed department, by department code
+     */
+    public static WorkloadRecommendationsDto recommendForManager(java.util.Collection<Department> managed,
+                                                                 List<Department> departments,
+                                                                 List<Staff> staff,
+                                                                 Map<String, List<Task>> waitingTasksByManagedDepartment,
+                                                                 Map<String, Integer> waitingCountByDepartment,
+                                                                 Set<UUID> busyStaff,
+                                                                 LocalDate today,
+                                                                 LocalDateTime now) {
+        Map<String, Stats> byCode = new HashMap<>();
+        List<Stats> all = new ArrayList<>();
+        for (Department department : departments) {
+            if (department.isActive()) {
+                Stats stats = new Stats(department);
+                byCode.put(department.getCode(), stats);
+                all.add(stats);
+            }
+        }
+        Set<String> managedCodes = new HashSet<>();
+        for (Department department : managed) {
+            // Only a department that is active (it has stats) is a receiver
+            if (department != null && byCode.containsKey(department.getCode())) managedCodes.add(department.getCode());
+        }
+        if (managedCodes.isEmpty()) {
+            return new WorkloadRecommendationsDto(now, List.of(), List.of(), limitations(0));
+        }
+        classifyStaff(byCode, staff, busyStaff);
+        for (Stats stats : all) {
+            String code = stats.department.getCode();
+            if (managedCodes.contains(code)) {
+                for (Task task : waitingTasksByManagedDepartment.getOrDefault(code, List.of())) {
+                    // A task of another department can never count as this department's waiting work
+                    if (task.getDepartment() != null && code.equals(task.getDepartment().getCode())) stats.waiting.add(task);
+                }
+            } else {
+                stats.waitingCountOverride = waitingCountByDepartment.getOrDefault(code, 0);
+            }
+        }
+        return finish(all, managedCodes, managedCodes, 0, today, now);
+    }
+
+    /**
+     * Ranks the pressured departments and suggests donors. {@code receiverCodes} null = every department (Admin, nothing redacted);
+     * otherwise only those departments are receivers, and a donor whose code is not in {@code detailCodes} is redacted.
+     */
+    private static WorkloadRecommendationsDto finish(List<Stats> all, Set<String> receiverCodes, Set<String> detailCodes,
+                                                     int tasksWithoutDepartment, LocalDate today, LocalDateTime now) {
         Comparator<Staff> byName = Comparator.comparing((Staff s) -> String.valueOf(s.getName()).toLowerCase()).thenComparing(s -> String.valueOf(s.getId()));
         Comparator<Task> mostImportantFirst = MOST_IMPORTANT_FIRST;
         for (Stats stats : all) {
@@ -202,7 +263,7 @@ public final class WorkloadRecommendationEngine {
 
         List<Stats> pressured = new ArrayList<>();
         for (Stats stats : all) {
-            if (stats.uncovered() > 0 && (receiverCode == null || receiverCode.equals(stats.department.getCode()))) pressured.add(stats);
+            if (stats.uncovered() > 0 && (receiverCodes == null || receiverCodes.contains(stats.department.getCode()))) pressured.add(stats);
         }
         pressured.sort(Comparator
                 .comparing((Stats s) -> severity(s, today))
@@ -234,7 +295,7 @@ public final class WorkloadRecommendationEngine {
                 ReceiverImpact receiverImpact = new ReceiverImpact(
                         uncoveredBefore - index, uncoveredBefore - index - 1,
                         minutes(uncovered.subList(index, uncovered.size())), minutesAfter);
-                if (redact) {
+                if (receiverCodes != null && !detailCodes.contains(donor.department.getCode())) {
                     // Only the minimum a Manager needs to judge a helper: name and home department name. Nothing about the donor's workload.
                     suggestions.add(new Suggestion(null, chosen.getName(), null, donor.department.getName(), covers.getTitle(), null, receiverImpact,
                             List.of("Currently free and available to help.", couldTakeReason(covers))));

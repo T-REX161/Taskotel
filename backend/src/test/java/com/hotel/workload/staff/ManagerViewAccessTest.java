@@ -604,7 +604,7 @@ public class ManagerViewAccessTest {
     // ── nothing else is widened ─────────────────────────────────────────────
 
     @Test
-    @DisplayName("Dashboard covers the granted department; recommendations stay primary-only (P4); support planning follows the grants; Admin-only stays Admin-only")
+    @DisplayName("Dashboard covers the granted department; support planning follows the grants; Admin-only stays Admin-only (recommendations and donor figures: MultiDepartmentManagerDashboardAndAssistanceTest)")
     void otherEndpointsFollowTheGrants() throws Exception {
         long tasksBefore = json.readTree(call(HttpMethod.GET, "/api/dashboard/summary", manager, null).getResponse().getContentAsString()).get("totalTasks").asLong();
         MvcResult recommendationsBefore = call(HttpMethod.GET, "/api/workload/recommendations", manager, null);
@@ -616,7 +616,7 @@ public class ManagerViewAccessTest {
         MvcResult recommendationsAfter = call(HttpMethod.GET, "/api/workload/recommendations", manager, null);
         assertEquals(recommendationsBefore.getResponse().getStatus(), recommendationsAfter.getResponse().getStatus());
         assertEquals(withoutTimes(recommendationsBefore.getResponse().getContentAsString()), withoutTimes(recommendationsAfter.getResponse().getContentAsString()),
-                "recommendations stay the primary department's until P4");
+                "with no department under pressure in this fixture a grant changes no recommendation (the multi-department behaviour has its own tests)");
         assertEquals(homeOptions, status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + GRANT, manager, null),
                 "support planning for a granted department is answered like for the primary one");
         assertEquals(404, status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + OTHER, manager, null), "an ungranted department is not found");

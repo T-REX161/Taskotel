@@ -16,6 +16,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
+import com.hotel.workload.common.ClockTicks;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -85,7 +86,11 @@ public class ManagerViewAccessHistoryPageTest {
         MockHttpServletRequestBuilder builder = request(method, url);
         if (token != null) builder.header("Authorization", token);
         if (body != null) builder.contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body));
-        return mvc.perform(builder).andReturn();
+        MvcResult result = mvc.perform(builder).andReturn();
+        // The next request must be stamped strictly later than this one: the history is listed newest first by changedAt, and the clock ticks in
+        // steps larger than a request takes (see ClockTicks)
+        ClockTicks.awaitNextTick();
+        return result;
     }
 
     private String pageUrl(String query) {

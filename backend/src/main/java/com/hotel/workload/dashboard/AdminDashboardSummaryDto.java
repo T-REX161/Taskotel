@@ -1,6 +1,29 @@
 package com.hotel.workload.dashboard;
 
 public class AdminDashboardSummaryDto {
+
+    /**
+     * For a signed-in Manager only: the same figures per department the Manager manages, the primary department first (flagged
+     * {@code primary}), then the additional ones by name. The totals of this response are the sums of these entries. Null, and so left out of
+     * the response, for an Admin.
+     */
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    private java.util.List<DepartmentSummary> departmentBreakdown;
+
+    /**
+     * One managed department's figures, defined exactly like the response totals (staff counted as operational Staff of the department, tasks
+     * by status, active assignments whose task and holder are both in the department, workload buckets from the Workload calculation).
+     */
+    public record DepartmentSummary(String departmentCode, String departmentName, boolean primary,
+                                    long totalStaff, long availableStaff, long unavailableStaff, long inactiveStaff,
+                                    long totalTasks, long pendingTasks, long assignedTasks, long inProgressTasks, long completedTasks,
+                                    long cancelledTasks, long totalActiveAssignments,
+                                    long totalStaffWithWorkload, long lowWorkloadStaff, long normalWorkloadStaff, long highWorkloadStaff,
+                                    long atRiskStaff) {}
+
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public java.util.List<DepartmentSummary> getDepartmentBreakdown() { return departmentBreakdown; }
+    public void setDepartmentBreakdown(java.util.List<DepartmentSummary> departmentBreakdown) { this.departmentBreakdown = departmentBreakdown; }
     // Staff metrics
     private long totalStaff;
     private long availableStaff;

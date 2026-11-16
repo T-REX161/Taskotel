@@ -137,6 +137,11 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     private static final class State {
         /** True for a Manager's narrowed load: donor departments carry counts, not tasks, and no donor workload figures exist. */
         boolean narrowed;
+        /**
+         * In a Manager's narrowed load, the donor departments the Manager also manages: they are loaded in full (waiting tasks and assigned
+         * minutes, like the receiving department), so their figures can be shown. Every other donor stays counts-only.
+         */
+        final Set<String> managedDonors = new HashSet<>();
         final LocalDate today = LocalDate.now();
         final Map<String, Stats> byCode = new LinkedHashMap<>();
         final Map<UUID, Staff> staffById = new HashMap<>();
@@ -151,10 +156,12 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
      * The state for a Manager's options and preview, read with queries limited to what the calculation needs: the receiving department's staff
      * and waiting tasks, the people who are active and available anywhere (the possible helpers, and each donor's free count for the reserve
      * rule), the NUMBER of waiting tasks per other department, the ids of busy staff and of held tasks, and one aggregate of assigned minutes.
-     * No other department's task, assignment or support record is loaded. The figures it produces are the same ones {@link #load()} produces
-     * for the receiving department and for the donors' reserve rule, so the algorithm and the stale-plan fingerprint are unchanged.
+     * No other department's task, assignment or support record is loaded, EXCEPT for the departments the Manager manages
+     * ({@code managedCodes}): such a donor is loaded like the receiving department (its waiting tasks and assigned minutes), because the
+     * Manager may see its figures. The figures it produces are the same ones {@link #load()} produces for the receiving department and for
+     * the donors' reserve rule, so the algorithm and the stale-plan fingerprint are unchanged.
      */
-    private State loadForReceiver(String receiverCode, java.util.Collection<UUID> itemStaffIds) {
+    private State loadForReceiver(String receiverCode, java.util.Collection<UUID> itemStaffIds, java.util.Collection<String> managedCodes) {
         State state = new State();
         state.narrowed = true;
         Department receiver = null;
@@ -195,12 +202,21 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             state.activeTasksById.put(task.getId(), task);
             receiving.waiting.add(task);
         }
+        // The donors this Manager also manages: loaded in full, like the receiving department (their tasks are NOT added to the lookup of
+        // plannable tasks: only the receiving department's tasks can be planned, as before)
+        for (String code : managedCodes) {
+            Stats donor = state.byCode.get(code);
+            if (donor == null || donor == receiving) continue;
+            state.managedDonors.add(code);
+            donor.waiting.addAll(taskRepository.findWaitingByDepartment(donor.department, ACTIVE_STATUSES));
+            donor.assignedMinutes = (int) assignmentRepository.sumSupportAttributedMinutes(donor.department, code, ACTIVE_STATUSES);
+        }
         for (Object[] row : taskRepository.countWaitingByDepartmentCode(ACTIVE_STATUSES)) {
             Stats stats = state.byCode.get((String) row[0]);
-            if (stats != null && stats != receiving) stats.waitingCountOverride = ((Number) row[1]).intValue();
+            if (stats != null && stats != receiving && !state.managedDonors.contains((String) row[0])) stats.waitingCountOverride = ((Number) row[1]).intValue();
         }
         for (Stats stats : state.byCode.values()) {
-            if (stats != receiving && stats.waitingCountOverride == null) stats.waitingCountOverride = 0;
+            if (stats != receiving && !state.managedDonors.contains(stats.department.getCode()) && stats.waitingCountOverride == null) stats.waitingCountOverride = 0;
         }
 
         Comparator<Staff> byName = Comparator.comparing((Staff s) -> String.valueOf(s.getName()).toLowerCase()).thenComparing(s -> String.valueOf(s.getId()));
@@ -299,7 +315,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             // A department the Manager does not manage is refused exactly like a department that does not exist
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, DEPARTMENT_NOT_FOUND_MESSAGE);
         }
-        State state = managerCodes == null ? load() : loadForReceiver(requested, List.of());
+        State state = managerCodes == null ? load() : loadForReceiver(requested, List.of(), managerCodes);
         Stats receiving = state.byCode.get(requested);
         if (receiving == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, DEPARTMENT_NOT_FOUND_MESSAGE);
@@ -339,15 +355,16 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         }
 
         Options options = new Options(summary, tasks, receivingMetrics.uncoveredTasks(), donors, limitations());
-        return managerCodes == null ? options : redactOptionsForManager(options);
+        return managerCodes == null ? options : redactOptionsForManager(options, managerCodes);
     }
 
     /**
-     * A Manager sees who could help (department, person's name and id, which the preview needs) but none of the donor department's figures:
-     * no free or available counts, waiting tasks, lendable limits, explanation note, or any person's task count, minutes or workload status.
+     * A Manager sees who could help (department, person's name and id, which the preview needs), and the donor department's figures only
+     * for a donor department the Manager manages too (free and available counts, waiting tasks, lendable limits, explanation note, and each
+     * person's task count, minutes and workload status, exactly as an Admin sees them). For every other donor none of that is shown.
      */
-    private static Options redactOptionsForManager(Options options) {
-        List<DonorDepartment> donors = options.donors().stream().map(d -> new DonorDepartment(d.code(), d.name(), null, null, null, null, null, null, null,
+    private static Options redactOptionsForManager(Options options, List<String> managedCodes) {
+        List<DonorDepartment> donors = options.donors().stream().map(d -> managedCodes.contains(d.code()) ? d : new DonorDepartment(d.code(), d.name(), null, null, null, null, null, null, null,
                 d.staff().stream().map(s -> new DonorStaff(s.staffId(), s.name(), s.availability(), null, null, null, s.profileImageUrl())).toList())).toList();
         return new Options(options.receiving(), options.tasks(), options.maxHelpers(), donors, options.limitations());
     }
@@ -386,6 +403,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         boolean reserveHardBlocked;
         boolean acknowledged;
         Stats receiving;
+        /** The code of the donor department each reserve problem or warning is about (so a Manager's preview can show it for managed donors only). */
+        final Map<Problem, String> donorOf = new HashMap<>();
     }
 
     private Resolved resolve(SupportPlanRequest request, State state) {
@@ -447,13 +466,17 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                 boolean acknowledgeable = freeAfter >= ownWork;
                 if (acknowledgeable && resolved.acknowledged) {
                     resolved.overriddenDonors.add(lend.getKey());
-                    resolved.warnings.add(new Problem("RESERVE_OVERRIDE", donor.department.getName() + " will be left with " + freeAfter
-                            + " free staff, below the " + required + " it normally keeps in reserve. Acknowledged by the manager.", null, null));
+                    Problem warning = new Problem("RESERVE_OVERRIDE", donor.department.getName() + " will be left with " + freeAfter
+                            + " free staff, below the " + required + " it normally keeps in reserve. Acknowledged by the manager.", null, null);
+                    resolved.warnings.add(warning);
+                    resolved.donorOf.put(warning, lend.getKey());
                 } else {
                     if (!acknowledgeable) resolved.reserveHardBlocked = true;
-                    resolved.problems.add(new Problem("DONOR_RESERVE", donor.department.getName() + " would be left with " + Math.max(0, freeAfter)
+                    Problem reserve = new Problem("DONOR_RESERVE", donor.department.getName() + " would be left with " + Math.max(0, freeAfter)
                             + " free staff; it must keep at least " + required + " (a free person in reserve and enough for its own "
-                            + ownWork + " waiting task" + (ownWork == 1 ? "" : "s") + ").", null, null));
+                            + ownWork + " waiting task" + (ownWork == 1 ? "" : "s") + ").", null, null);
+                    resolved.problems.add(reserve);
+                    resolved.donorOf.put(reserve, lend.getKey());
                 }
             }
         }
@@ -532,34 +555,45 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             }
         }
         State state = managerCodes == null ? load()
-                : loadForReceiver(requested, request.getItems().stream().map(SupportPlanRequest.Item::getStaffId).filter(java.util.Objects::nonNull).toList());
+                : loadForReceiver(requested, request.getItems().stream().map(SupportPlanRequest.Item::getStaffId).filter(java.util.Objects::nonNull).toList(), managerCodes);
         Resolved resolved = resolve(request, state);
         Preview preview = buildPreview(state, resolved);
-        return managerCodes == null ? preview : redactPreviewForManager(preview, state, requested);
+        return managerCodes == null ? preview : redactPreviewForManager(preview, state, requested, managerCodes, resolved);
     }
 
     /**
-     * A Manager's preview keeps the receiving department's own impact, the valid pairs and the stale-plan fingerprint, but nothing about donor
-     * departments: no donor impact figures, no reserve explanation, no override hint, and no detail about any person or task that is not a
-     * possible helper or the department's own task (those problems read as "no longer exists", like a record that is not there).
+     * A Manager's preview keeps the receiving department's own impact, the valid pairs and the stale-plan fingerprint. About donor departments
+     * it shows donor impact figures, the reserve explanation and the override hint only for donors the Manager manages too; for every other
+     * donor nothing, and no detail about any person or task that is not a possible helper, a person of a managed department or the receiving
+     * department's own task (those problems read as "no longer exists", like a record that is not there).
      */
-    private Preview redactPreviewForManager(Preview preview, State state, String ownCode) {
+    private Preview redactPreviewForManager(Preview preview, State state, String ownCode, List<String> managedCodes, Resolved resolved) {
         Set<UUID> visibleStaff = new HashSet<>();
         for (Stats stats : state.byCode.values()) {
             if (stats.department.getCode().equals(ownCode)) continue;
             for (Staff s : stats.lendable) visibleStaff.add(s.getId());
         }
         for (Staff s : state.staffById.values()) {
-            if (s.getDepartment() != null && ownCode.equals(s.getDepartment().getCode())) visibleStaff.add(s.getId());
+            if (s.getDepartment() != null && managedCodes.contains(s.getDepartment().getCode())) visibleStaff.add(s.getId());
         }
         Set<UUID> ownWaiting = new HashSet<>();
         Stats own = state.byCode.get(ownCode);
         if (own != null) own.waiting.forEach(t -> ownWaiting.add(t.getId()));
 
-        List<Problem> problems = preview.problems().stream().map(p -> redactProblem(p, visibleStaff, ownWaiting)).toList();
+        // A reserve problem or warning is shown in full only when it concerns a donor this Manager manages (recorded when it was raised)
+        java.util.function.Predicate<Problem> ofManagedDonor = p -> {
+            String donorCode = resolved.donorOf.get(p);
+            return donorCode != null && managedCodes.contains(donorCode);
+        };
+        List<Problem> problems = preview.problems().stream()
+                .map(p -> "DONOR_RESERVE".equals(p.code()) && ofManagedDonor.test(p) ? p : redactProblem(p, visibleStaff, ownWaiting)).toList();
         List<Problem> warnings = preview.warnings().stream()
-                .map(p -> new Problem(p.code(), "The lending department's staffing is tight.", null, null)).toList();
-        return new Preview(preview.valid(), problems, warnings, false, preview.items(), preview.receiving(), List.of(), preview.fingerprint(), preview.limitations());
+                .map(p -> ofManagedDonor.test(p) ? p : new Problem(p.code(), "The lending department's staffing is tight.", null, null)).toList();
+        // The override hint is given only when every reserve problem concerns a donor this Manager manages
+        boolean overrideHint = preview.canOverrideReserve() && preview.problems().stream()
+                .filter(p -> "DONOR_RESERVE".equals(p.code())).allMatch(ofManagedDonor);
+        // preview.donors() already holds the impact of the managed donors only (no other donor's impact is ever computed)
+        return new Preview(preview.valid(), problems, warnings, overrideHint, preview.items(), preview.receiving(), preview.donors(), preview.fingerprint(), preview.limitations());
     }
 
     private static Problem redactProblem(Problem p, Set<UUID> visibleStaff, Set<UUID> ownWaiting) {
@@ -596,7 +630,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         List<DepartmentImpact> donors = new ArrayList<>();
         for (Map.Entry<String, Integer> lend : resolved.lendByDonor.entrySet()) {
             Stats donor = state.byCode.get(lend.getKey());
-            if (donor == null || state.narrowed) continue;   // a Manager's response carries no donor impact, so none is computed
+            // A Manager's response carries donor impact only for donors the Manager manages; for any other donor none is computed
+            if (donor == null || (state.narrowed && !state.managedDonors.contains(lend.getKey()))) continue;
             // The lent person's task minutes are counted under the receiving department, so the donor's minutes do not change
             donors.add(new DepartmentImpact("DONOR", donor.department.getCode(), donor.department.getName(), metrics(donor),
                     metrics(donor, donor.waiting, Math.max(0, donor.free.size() - lend.getValue()), donor.assignedMinutes),
