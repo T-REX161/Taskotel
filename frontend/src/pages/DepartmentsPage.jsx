@@ -228,6 +228,15 @@ export default function DepartmentsPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className="text-lg font-bold text-gray-900 leading-snug break-words">{dept.name}</h3>
+                    {/* A Manager's cards say whether the department is their own or one an Administrator granted (only a Manager's answer carries the field) */}
+                    {typeof dept.primary === 'boolean' && (
+                      <span
+                        data-testid={dept.primary ? 'department-primary-badge' : 'department-additional-badge'}
+                        className={`inline-block mt-0.5 mr-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${dept.primary ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'}`}
+                      >
+                        {dept.primary ? 'Primary' : 'Additional'}
+                      </span>
+                    )}
                     {isInactive && (
                       <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">Inactive</span>
                     )}

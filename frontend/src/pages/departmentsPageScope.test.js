@@ -58,6 +58,12 @@ describe('Departments page: a Manager sees only the departments they manage', ()
     assert.equal(totals(staffList).staff, '—', 'Staff still read the figures as unavailable');
   });
 
+  it('the cards of a Manager say Primary or Additional; Admin and Staff cards carry no such badge', () => {
+    assert.ok(page.includes("{typeof dept.primary === 'boolean' && ("), 'only a Manager answer carries the field');
+    assert.ok(page.includes("data-testid={dept.primary ? 'department-primary-badge' : 'department-additional-badge'}"));
+    assert.ok(page.includes("{dept.primary ? 'Primary' : 'Additional'}"));
+  });
+
   it('the page keeps only the authorized list in state, so cards and totals cannot include anything else', () => {
     assert.ok(page.includes('setDepartments(authorizedDepartments(getUserRole(), data));'));
     assert.ok(page.includes("import { authorizedDepartments } from '../utils/managedDepartments';"));

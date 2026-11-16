@@ -14,6 +14,12 @@ public class DepartmentDto {
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Boolean managed;
+    /**
+     * For a signed-in Manager only: true for their primary department, false for an Administrator-granted additional one. Null, and so
+     * left out of the response, for Admin and Staff.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Boolean primary;
     private UUID id;
     private String code;
     private String name;
@@ -75,6 +81,9 @@ public class DepartmentDto {
     public void setViewOnly(boolean viewOnly) { this.viewOnly = viewOnly; }
 
     @JsonInclude(JsonInclude.Include.NON_NULL)
+    public Boolean getPrimary() { return primary; }
+    public void setPrimary(Boolean primary) { this.primary = primary; }
+
     public Boolean getManaged() { return managed; }
     public void setManaged(Boolean managed) { this.managed = managed; }
 }

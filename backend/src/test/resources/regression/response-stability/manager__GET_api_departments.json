@@ -13,6 +13,7 @@
     "id" : "<dept:RS_A>",
     "managed" : true,
     "name" : "RS_A name",
+    "primary" : true,
     "staffCount" : 4,
     "status" : "Optimal",
     "supervisor" : "Not Assigned",

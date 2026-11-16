@@ -118,6 +118,7 @@ public class ManagerDepartmentsPageScopeTest {
         assertEquals(List.of(HOME), codes(result), "Total Departments is exactly 1");
         JsonNode card = body(result).get(0);
         assertTrue(card.get("managed").asBoolean());
+        assertTrue(card.get("primary").asBoolean(), "the only department is the primary one");
         assertEquals(3, card.get("staffCount").asLong(), "the Manager, one staff member and the staff member");
         String json = result.getResponse().getContentAsString();
         for (Department hidden : List.of(g1, g2, other)) assertNoTrace(json, hidden);
@@ -138,6 +139,9 @@ public class ManagerDepartmentsPageScopeTest {
             assertTrue(card.get("managed").asBoolean());
             assertFalse(card.get("staffCount").isNull(), "every authorized department is shown in full");
             staffTotal += card.get("staffCount").asLong();
+        }
+        for (JsonNode card : body(result)) {
+            assertEquals(HOME.equals(card.get("code").asText()), card.get("primary").asBoolean(), "only the primary department is marked primary: " + card.get("code"));
         }
         assertEquals(3 + 1 + 1, staffTotal, "Active Staff covers only the authorized departments (home 3, grant 1 each, other 1 is NOT counted)");
         assertNoTrace(result.getResponse().getContentAsString(), other);
@@ -192,6 +196,7 @@ public class ManagerDepartmentsPageScopeTest {
             assertFalse(card.get("staffCount").isNull());
         }
         assertTrue(codes(result).containsAll(List.of(HOME, G1, G2, OTHER)));
+        for (JsonNode card : body(result)) assertFalse(card.has("primary"), "no primary flag for Admin");
     }
 
     @Test
@@ -201,6 +206,7 @@ public class ManagerDepartmentsPageScopeTest {
         assertEquals(departmentRepository.count(), body(result).size());
         for (JsonNode card : body(result)) {
             assertFalse(card.has("managed"));
+            assertFalse(card.has("primary"), "no primary flag for Staff");
             assertTrue(card.get("staffCount").isNull(), "no figures for Staff");
         }
     }

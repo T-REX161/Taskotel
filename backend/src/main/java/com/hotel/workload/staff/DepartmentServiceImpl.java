@@ -79,12 +79,14 @@ public class DepartmentServiceImpl implements DepartmentService {
     private List<DepartmentDto> managedDepartmentsFor(DepartmentScope scope) {
         // A Manager: only the departments the scope says they manage. The list is built from the scope itself (which the resolver read from
         // the database for this request, active departments only), never by loading every department and removing some afterwards.
+        Department primary = scope.primaryDepartment();
         List<Department> managed = new ArrayList<>(scope.managedDepartments());
         managed.sort(Comparator.comparing(Department::getCreatedAt, Comparator.nullsLast(Comparator.<java.time.LocalDateTime>naturalOrder()))
                 .thenComparing(Department::getName, String.CASE_INSENSITIVE_ORDER));
         return managed.stream().map(department -> {
             DepartmentDto dto = toDto(department);
             dto.setManaged(true);
+            dto.setPrimary(primary != null && primary.getId().equals(department.getId()));
             return dto;
         }).collect(Collectors.toList());
     }
