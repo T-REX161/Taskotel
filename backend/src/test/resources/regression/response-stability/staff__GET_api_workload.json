@@ -1,0 +1,18 @@
+{
+  "request" : "GET /api/workload",
+  "status" : 200,
+  "body" : [ {
+    "activeTaskCount" : 1,
+    "availability" : "AVAILABLE",
+    "department" : "RS_A",
+    "departmentName" : "RS_A name",
+    "profileImageUrl" : null,
+    "staffId" : "<staff:rs_staff_a1>",
+    "staffName" : "Scope rs_staff_a1",
+    "supportDepartment" : null,
+    "supportDepartmentName" : null,
+    "totalEstimatedDuration" : 45,
+    "viewOnly" : false,
+    "workloadStatus" : "LOW"
+  } ]
+}

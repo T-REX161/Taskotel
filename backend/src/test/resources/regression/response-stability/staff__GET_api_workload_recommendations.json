@@ -1,0 +1,5 @@
+{
+  "request" : "GET /api/workload/recommendations",
+  "status" : 403,
+  "body" : null
+}

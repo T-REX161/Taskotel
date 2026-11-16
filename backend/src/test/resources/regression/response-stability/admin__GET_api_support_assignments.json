@@ -1,0 +1,5 @@
+{
+  "request" : "GET /api/support/assignments",
+  "status" : 200,
+  "body" : [ ]
+}

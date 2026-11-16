@@ -1,0 +1,7 @@
+{
+  "request" : "GET /api/staff/username-availability?username=rs_new_person",
+  "status" : 200,
+  "body" : {
+    "available" : true
+  }
+}

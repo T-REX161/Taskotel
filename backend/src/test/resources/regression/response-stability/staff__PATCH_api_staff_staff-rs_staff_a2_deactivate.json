@@ -1,0 +1,5 @@
+{
+  "request" : "PATCH /api/staff/<staff:rs_staff_a2>/deactivate",
+  "status" : 403,
+  "body" : null
+}

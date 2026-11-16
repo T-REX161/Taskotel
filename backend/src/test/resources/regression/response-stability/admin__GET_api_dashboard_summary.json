@@ -1,0 +1,30 @@
+{
+  "request" : "GET /api/dashboard/summary",
+  "status" : 200,
+  "body" : {
+    "assignedTasks" : 2,
+    "atRiskStaff" : 0,
+    "availableStaff" : 3,
+    "cancelledTasks" : 0,
+    "capacityAlerts" : [ {
+      "departmentCode" : "RS_B",
+      "departmentName" : "RS_B name",
+      "operationalStaff" : 1,
+      "percentInWork" : 100,
+      "staffInWork" : 1,
+      "thresholdPercent" : 85
+    } ],
+    "completedTasks" : 0,
+    "highWorkloadStaff" : 0,
+    "inProgressTasks" : 0,
+    "inactiveStaff" : 0,
+    "lowWorkloadStaff" : 4,
+    "normalWorkloadStaff" : 0,
+    "pendingTasks" : 2,
+    "totalActiveAssignments" : 2,
+    "totalStaff" : 4,
+    "totalStaffWithWorkload" : 2,
+    "totalTasks" : 4,
+    "unavailableStaff" : 1
+  }
+}

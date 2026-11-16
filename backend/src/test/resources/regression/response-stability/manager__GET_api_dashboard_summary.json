@@ -1,0 +1,23 @@
+{
+  "request" : "GET /api/dashboard/summary",
+  "status" : 200,
+  "body" : {
+    "assignedTasks" : 1,
+    "atRiskStaff" : 0,
+    "availableStaff" : 2,
+    "cancelledTasks" : 0,
+    "capacityAlerts" : [ ],
+    "completedTasks" : 0,
+    "highWorkloadStaff" : 0,
+    "inProgressTasks" : 0,
+    "inactiveStaff" : 0,
+    "lowWorkloadStaff" : 3,
+    "normalWorkloadStaff" : 0,
+    "pendingTasks" : 1,
+    "totalActiveAssignments" : 1,
+    "totalStaff" : 3,
+    "totalStaffWithWorkload" : 1,
+    "totalTasks" : 2,
+    "unavailableStaff" : 1
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "request" : "GET /api/support/options?receivingDepartment=RS_A",
+  "status" : 403,
+  "body" : null
+}

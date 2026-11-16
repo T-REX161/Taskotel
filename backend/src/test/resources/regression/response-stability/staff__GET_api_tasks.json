@@ -1,0 +1,20 @@
+{
+  "request" : "GET /api/tasks",
+  "status" : 200,
+  "body" : [ {
+    "category" : null,
+    "createdAt" : "<datetime>",
+    "deadlineTime" : null,
+    "department" : "RS_A",
+    "departmentName" : "RS_A name",
+    "description" : null,
+    "dueDate" : "<today+2>",
+    "estimatedDuration" : 45,
+    "id" : "<task:RS A assigned>",
+    "priority" : "MEDIUM",
+    "status" : "ASSIGNED",
+    "title" : "RS A assigned",
+    "updatedAt" : "<datetime>",
+    "viewOnly" : false
+  } ]
+}

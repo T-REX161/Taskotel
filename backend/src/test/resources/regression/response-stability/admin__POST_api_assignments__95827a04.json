@@ -1,0 +1,9 @@
+{
+  "request" : "POST /api/assignments",
+  "status" : 400,
+  "body" : {
+    "error" : "400 BAD_REQUEST",
+    "message" : "Staff member does not belong to the task's department",
+    "status" : 400
+  }
+}

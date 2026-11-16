@@ -1,0 +1,53 @@
+{
+  "request" : "GET /api/staff",
+  "status" : 200,
+  "body" : [ {
+    "active" : true,
+    "availability" : "AVAILABLE",
+    "department" : "RS_A",
+    "departmentName" : "RS_A name",
+    "email" : "rs_staff_a1@scope.test",
+    "id" : "<staff:rs_staff_a1>",
+    "name" : "Scope rs_staff_a1",
+    "pendingEmailExpiresAt" : null,
+    "pendingEmailMasked" : null,
+    "phone" : "555-0100",
+    "profileImageUrl" : null,
+    "role" : "STAFF",
+    "userId" : "<user:rs_staff_a1>",
+    "username" : "rs_staff_a1",
+    "viewOnly" : false
+  }, {
+    "active" : true,
+    "availability" : "AVAILABLE",
+    "department" : "RS_A",
+    "departmentName" : "RS_A name",
+    "email" : "rs_staff_a2@scope.test",
+    "id" : "<staff:rs_staff_a2>",
+    "name" : "Scope rs_staff_a2",
+    "pendingEmailExpiresAt" : null,
+    "pendingEmailMasked" : null,
+    "phone" : "555-0100",
+    "profileImageUrl" : null,
+    "role" : "STAFF",
+    "userId" : "<user:rs_staff_a2>",
+    "username" : "rs_staff_a2",
+    "viewOnly" : false
+  }, {
+    "active" : true,
+    "availability" : "UNAVAILABLE",
+    "department" : "RS_A",
+    "departmentName" : "RS_A name",
+    "email" : "rs_staff_a3@scope.test",
+    "id" : "<staff:rs_staff_a3>",
+    "name" : "Scope rs_staff_a3",
+    "pendingEmailExpiresAt" : null,
+    "pendingEmailMasked" : null,
+    "phone" : "555-0100",
+    "profileImageUrl" : null,
+    "role" : "STAFF",
+    "userId" : "<user:rs_staff_a3>",
+    "username" : "rs_staff_a3",
+    "viewOnly" : false
+  } ]
+}

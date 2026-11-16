@@ -1,0 +1,16 @@
+{
+  "request" : "GET /api/users/<user:rs_mgr_a>/manager-department",
+  "status" : 200,
+  "body" : {
+    "accountActive" : true,
+    "departmentActive" : true,
+    "departmentCode" : "RS_A",
+    "departmentName" : "RS_A name",
+    "staffActive" : true,
+    "staffId" : "<staff:rs_mgr_a>",
+    "staffName" : "Scope rs_mgr_a",
+    "userId" : "<user:rs_mgr_a>",
+    "username" : "rs_mgr_a",
+    "valid" : true
+  }
+}

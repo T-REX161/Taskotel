@@ -1,0 +1,10 @@
+{
+  "request" : "GET /api/workload/recommendations",
+  "status" : 200,
+  "body" : {
+    "generatedAt" : "<datetime>",
+    "limitations" : [ "Only active STAFF accounts that can sign in (email verified, credentials set up) are suggested. Managers, admins and staff still waiting for email verification or credentials setup are never suggested, although they still count as free staff of their own department.", "Shifts and working hours are not recorded. \"Available\" means the person is active, marked Available and has no active task right now.", "Skills are not recorded in Taskotel, so a person's suitability for the receiving department's work is not assessed. A manager must judge it.", "Taskotel currently lets staff take tasks only from their own department, so these suggestions cannot be put into effect yet. Nothing here moves staff or tasks." ],
+    "recommendations" : [ ],
+    "unsupported" : [ ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "request" : "PUT /api/assignments/<assignment:RS A assigned>",
+  "status" : 200,
+  "body" : {
+    "assignedAt" : "<datetime>",
+    "id" : "<assignment:RS A assigned>",
+    "staffId" : "<staff:rs_staff_a2>",
+    "staffName" : "Scope rs_staff_a2",
+    "staffProfileImageUrl" : null,
+    "taskId" : "<task:RS A assigned>",
+    "taskStatus" : "ASSIGNED",
+    "taskTitle" : "RS A assigned",
+    "viewOnly" : false
+  }
+}

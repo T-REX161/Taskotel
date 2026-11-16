@@ -1,0 +1,35 @@
+{
+  "request" : "GET /api/support/options?receivingDepartment=RS_A",
+  "status" : 200,
+  "body" : {
+    "donors" : [ ],
+    "limitations" : [ "Only active STAFF accounts that can sign in (email verified, credentials set up) can be selected.", "Shifts and working hours are not recorded. \"Available\" means active, marked Available and with no active task right now.", "Skills are not recorded in Taskotel, so a person's suitability for the task is not verified. You decide whether they can do it.", "Support lasts until the task is completed. The person stays in their home department the whole time." ],
+    "maxHelpers" : 0,
+    "receiving" : {
+      "activeStaff" : 4,
+      "code" : "RS_A",
+      "metrics" : {
+        "assignedMinutes" : 45,
+        "availableStaff" : 3,
+        "freeStaff" : 2,
+        "uncoveredMinutes" : 0,
+        "uncoveredTasks" : 0,
+        "waitingMinutes" : 30,
+        "waitingTasks" : 1
+      },
+      "name" : "RS_A name",
+      "overdueOrDueSoonTasks" : 1,
+      "severity" : "MODERATE",
+      "urgentOrHighTasks" : 1
+    },
+    "tasks" : [ {
+      "category" : null,
+      "deadlineTime" : null,
+      "dueDate" : "<today+1>",
+      "estimatedDuration" : 30,
+      "id" : "<task:RS A pending>",
+      "priority" : "HIGH",
+      "title" : "RS A pending"
+    } ]
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "request" : "GET /api/support/cross-department-status",
+  "status" : 200,
+  "body" : {
+    "crossDepartmentAssistanceEnabled" : true
+  }
+}

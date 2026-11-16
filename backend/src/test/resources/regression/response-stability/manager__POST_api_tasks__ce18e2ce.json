@@ -1,0 +1,20 @@
+{
+  "request" : "POST /api/tasks",
+  "status" : 201,
+  "body" : {
+    "category" : null,
+    "createdAt" : "<datetime>",
+    "deadlineTime" : null,
+    "department" : "RS_A",
+    "departmentName" : "RS_A name",
+    "description" : null,
+    "dueDate" : "<today+5>",
+    "estimatedDuration" : 10,
+    "id" : "<uuid>",
+    "priority" : "LOW",
+    "status" : "PENDING",
+    "title" : "RS mgr own",
+    "updatedAt" : "<datetime>",
+    "viewOnly" : false
+  }
+}

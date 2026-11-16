@@ -1,0 +1,11 @@
+{
+  "request" : "GET /api/users/<user:rs_mgr_a>/view-departments",
+  "status" : 200,
+  "body" : {
+    "departments" : [ ],
+    "primaryDepartmentCode" : "RS_A",
+    "primaryDepartmentName" : "RS_A name",
+    "userId" : "<user:rs_mgr_a>",
+    "username" : "rs_mgr_a"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "request" : "GET /api/profile",
+  "status" : 200,
+  "body" : {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "departmentCode" : null,
+    "departmentName" : null,
+    "displayName" : "Rs_admin",
+    "email" : "rs_admin@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Rs Admin",
+    "lastLoginAt" : null,
+    "passwordChangedAt" : null,
+    "pendingEmailExpiresAt" : null,
+    "pendingEmailMasked" : null,
+    "phone" : null,
+    "preferences" : {
+      "dateFormat" : "DMY",
+      "themePreference" : "LIGHT",
+      "timeFormat" : "H12"
+    },
+    "profileImageUrl" : null,
+    "role" : "ADMIN",
+    "username" : "rs_admin"
+  }
+}

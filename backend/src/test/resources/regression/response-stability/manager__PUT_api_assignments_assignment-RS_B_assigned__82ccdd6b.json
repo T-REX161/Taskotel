@@ -1,0 +1,9 @@
+{
+  "request" : "PUT /api/assignments/<assignment:RS B assigned>",
+  "status" : 404,
+  "body" : {
+    "error" : "404 NOT_FOUND",
+    "message" : "Assignment not found",
+    "status" : 404
+  }
+}

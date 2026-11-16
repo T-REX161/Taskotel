@@ -1,0 +1,9 @@
+{
+  "request" : "GET /api/support/options?receivingDepartment=RS_B",
+  "status" : 404,
+  "body" : {
+    "error" : "404 NOT_FOUND",
+    "message" : "Department not found or not active",
+    "status" : 404
+  }
+}

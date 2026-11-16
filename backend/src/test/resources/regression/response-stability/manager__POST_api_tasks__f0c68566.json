@@ -1,0 +1,9 @@
+{
+  "request" : "POST /api/tasks",
+  "status" : 403,
+  "body" : {
+    "error" : "403 FORBIDDEN",
+    "message" : "Managers can only create tasks in their own department.",
+    "status" : 403
+  }
+}

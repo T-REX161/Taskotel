@@ -1,0 +1,5 @@
+{
+  "request" : "GET /api/users",
+  "status" : 403,
+  "body" : null
+}

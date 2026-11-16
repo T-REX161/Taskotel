@@ -1,0 +1,15 @@
+{
+  "request" : "GET /api/assignments",
+  "status" : 200,
+  "body" : [ {
+    "assignedAt" : "<datetime>",
+    "id" : "<assignment:RS A assigned>",
+    "staffId" : "<staff:rs_staff_a1>",
+    "staffName" : "Scope rs_staff_a1",
+    "staffProfileImageUrl" : null,
+    "taskId" : "<task:RS A assigned>",
+    "taskStatus" : "ASSIGNED",
+    "taskTitle" : "RS A assigned",
+    "viewOnly" : false
+  } ]
+}

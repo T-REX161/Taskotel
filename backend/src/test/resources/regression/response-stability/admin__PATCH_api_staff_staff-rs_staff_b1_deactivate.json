@@ -1,0 +1,9 @@
+{
+  "request" : "PATCH /api/staff/<staff:rs_staff_b1>/deactivate",
+  "status" : 409,
+  "body" : {
+    "error" : "409 CONFLICT",
+    "message" : "Cannot deactivate staff member with active task assignments. Please reassign or complete their active tasks first.",
+    "status" : 409
+  }
+}

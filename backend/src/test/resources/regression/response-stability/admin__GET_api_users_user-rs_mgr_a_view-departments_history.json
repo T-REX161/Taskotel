@@ -1,0 +1,5 @@
+{
+  "request" : "GET /api/users/<user:rs_mgr_a>/view-departments/history",
+  "status" : 200,
+  "body" : [ ]
+}

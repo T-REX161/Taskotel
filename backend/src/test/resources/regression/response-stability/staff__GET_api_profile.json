@@ -1,0 +1,27 @@
+{
+  "request" : "GET /api/profile",
+  "status" : 200,
+  "body" : {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "departmentCode" : "RS_A",
+    "departmentName" : "RS_A name",
+    "displayName" : "Rs_staff_a1",
+    "email" : "rs_staff_a1@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Scope rs_staff_a1",
+    "lastLoginAt" : null,
+    "passwordChangedAt" : null,
+    "pendingEmailExpiresAt" : null,
+    "pendingEmailMasked" : null,
+    "phone" : "555-0100",
+    "preferences" : {
+      "dateFormat" : "DMY",
+      "themePreference" : "LIGHT",
+      "timeFormat" : "H12"
+    },
+    "profileImageUrl" : null,
+    "role" : "STAFF",
+    "username" : "rs_staff_a1"
+  }
+}

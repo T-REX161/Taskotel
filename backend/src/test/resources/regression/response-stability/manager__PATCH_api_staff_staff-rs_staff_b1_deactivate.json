@@ -1,0 +1,9 @@
+{
+  "request" : "PATCH /api/staff/<staff:rs_staff_b1>/deactivate",
+  "status" : 404,
+  "body" : {
+    "error" : "404 NOT_FOUND",
+    "message" : "Staff not found",
+    "status" : 404
+  }
+}

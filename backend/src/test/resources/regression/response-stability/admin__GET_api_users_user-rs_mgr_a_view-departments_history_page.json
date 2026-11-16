@@ -1,0 +1,17 @@
+{
+  "request" : "GET /api/users/<user:rs_mgr_a>/view-departments/history/page",
+  "status" : 200,
+  "body" : {
+    "counts" : {
+      "all" : 0,
+      "granted" : 0,
+      "revoked" : 0
+    },
+    "departments" : [ ],
+    "hasMore" : false,
+    "items" : [ ],
+    "page" : 0,
+    "size" : 10,
+    "totalElements" : 0
+  }
+}

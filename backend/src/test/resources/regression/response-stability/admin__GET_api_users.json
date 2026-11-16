@@ -1,0 +1,75 @@
+{
+  "request" : "GET /api/users",
+  "status" : 200,
+  "body" : [ {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "email" : "rs_admin@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Rs Admin",
+    "id" : "<user:rs_admin>",
+    "profileImageUrl" : null,
+    "role" : "ADMIN",
+    "username" : "rs_admin"
+  }, {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "email" : "rs_mgr_a@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Scope rs_mgr_a",
+    "id" : "<user:rs_mgr_a>",
+    "profileImageUrl" : null,
+    "role" : "MANAGER",
+    "username" : "rs_mgr_a"
+  }, {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "email" : "rs_mgr_b@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Scope rs_mgr_b",
+    "id" : "<user:rs_mgr_b>",
+    "profileImageUrl" : null,
+    "role" : "MANAGER",
+    "username" : "rs_mgr_b"
+  }, {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "email" : "rs_staff_a1@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Scope rs_staff_a1",
+    "id" : "<user:rs_staff_a1>",
+    "profileImageUrl" : null,
+    "role" : "STAFF",
+    "username" : "rs_staff_a1"
+  }, {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "email" : "rs_staff_a2@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Scope rs_staff_a2",
+    "id" : "<user:rs_staff_a2>",
+    "profileImageUrl" : null,
+    "role" : "STAFF",
+    "username" : "rs_staff_a2"
+  }, {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "email" : "rs_staff_a3@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Scope rs_staff_a3",
+    "id" : "<user:rs_staff_a3>",
+    "profileImageUrl" : null,
+    "role" : "STAFF",
+    "username" : "rs_staff_a3"
+  }, {
+    "active" : true,
+    "createdAt" : "<datetime>",
+    "email" : "rs_staff_b1@scope.test",
+    "emailVerified" : false,
+    "fullName" : "Scope rs_staff_b1",
+    "id" : "<user:rs_staff_b1>",
+    "profileImageUrl" : null,
+    "role" : "STAFF",
+    "username" : "rs_staff_b1"
+  } ]
+}

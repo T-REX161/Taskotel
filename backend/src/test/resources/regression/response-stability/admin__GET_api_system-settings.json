@@ -1,0 +1,12 @@
+{
+  "request" : "GET /api/system-settings",
+  "status" : 200,
+  "body" : {
+    "autoBalancingEnabled" : true,
+    "capacityAlertEnabled" : true,
+    "capacityThresholdPercent" : 85,
+    "crossDepartmentAssistanceEnabled" : true,
+    "updatedAt" : null,
+    "updatedBy" : null
+  }
+}

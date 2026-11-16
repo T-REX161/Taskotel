@@ -1,0 +1,35 @@
+{
+  "request" : "GET /api/dashboard/summary",
+  "status" : 200,
+  "body" : {
+    "assignedTasks" : 1,
+    "completedTasks" : 0,
+    "inProgressTasks" : 0,
+    "pendingTasks" : 0,
+    "recentAssignments" : [ {
+      "assignedAt" : "<datetime>",
+      "id" : "<assignment:RS A assigned>",
+      "staffId" : "<staff:rs_staff_a1>",
+      "staffName" : "Scope rs_staff_a1",
+      "staffProfileImageUrl" : null,
+      "taskId" : "<task:RS A assigned>",
+      "taskStatus" : "ASSIGNED",
+      "taskTitle" : "RS A assigned",
+      "viewOnly" : false
+    } ],
+    "workload" : {
+      "activeTaskCount" : 1,
+      "availability" : "AVAILABLE",
+      "department" : "RS_A",
+      "departmentName" : "RS_A name",
+      "profileImageUrl" : null,
+      "staffId" : "<staff:rs_staff_a1>",
+      "staffName" : "Scope rs_staff_a1",
+      "supportDepartment" : null,
+      "supportDepartmentName" : null,
+      "totalEstimatedDuration" : 45,
+      "viewOnly" : false,
+      "workloadStatus" : "LOW"
+    }
+  }
+}
