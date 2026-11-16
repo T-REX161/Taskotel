@@ -67,8 +67,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * responses. Normalization: object keys are sorted; fixture ids become stable labels (for example {@code <staff:rs_staff_a1>}) and any other
  * UUID becomes {@code <uuid>}, also inside strings; date-times become {@code <datetime>}; dates become their distance from today
  * ({@code <today+1>}). Arrays keep the order the API sent and are compared in that order, EXCEPT the few listed in {@link #UNORDERED}, whose
- * order the API does not define (their query has no ORDER BY, so rows come back in primary-key order and primary keys are random UUIDs):
- * only those are compared as sorted lists. Every other value (numbers, booleans, texts, nulls, the presence of every field) must match.
+ * order the API does not define (their query has no ORDER BY, and SQL leaves the order of such a result unspecified: it may differ between
+ * runs, data sets and database engines): only those are compared as sorted lists. Every other value (numbers, booleans, texts, nulls, the presence of every field) must match.
  *
  * <p>The newest-first contracts of the history endpoints (and the other documented orders) are also asserted directly, with several
  * records, by the {@code ...Order...} tests below; the reference files hold only the fixture's (mostly empty) histories.
@@ -94,7 +94,8 @@ public class ResponseStabilityRegressionTest {
 
     /**
      * The only arrays compared without regard to order: "METHOD /path" (ids as {id}, no query) mapped to JSON paths ("$" is the body, "[]"
-     * an array element). Each is justified by the query behind it, which has no ORDER BY:
+     * an array element). Each is justified by the query behind it, which has no ORDER BY, so the order of its rows is unspecified (no
+     * particular order, by id or otherwise, is guaranteed or assumed):
      * <ul>
      *   <li>GET /api/staff: {@code staffRepository.findAll()} (Admin) / {@code findByDepartmentAndUserRole} (Manager)</li>
      *   <li>GET /api/tasks: {@code taskRepository.findAll()} / {@code findByDepartment} / {@code findTasksByStaffId} (Staff)</li>
@@ -141,7 +142,8 @@ public class ResponseStabilityRegressionTest {
     /**
      * Two departments (RS_A, RS_B) next to the six built-in ones; an Admin; one Manager per department (neither has additional departments);
      * three Staff in RS_A (one unavailable) and one in RS_B; two waiting and two assigned tasks. Only rs_staff_a2 is free and available, so
-     * no answer depends on how random ids happen to sort.
+     * no answer depends on choosing between equal candidates (the recommendation engine breaks such ties by name and then by id, and the
+     * fixture's ids are generated afresh on every run).
      */
     @BeforeEach
     void setUp() throws Exception {
@@ -447,6 +449,40 @@ public class ResponseStabilityRegressionTest {
             body(call(HttpMethod.GET, "/api/departments", token, null)).forEach(d -> codes.add(d.get("code").asText()));
             assertEquals(expected, codes);
         }
+    }
+
+    /**
+     * The department list's contract, not just the fixture's order: DepartmentServiceImpl.getAllDepartments maps
+     * DepartmentRepository.findAllByOrderByCreatedAtAscNameAsc() one to one (ORDER BY created_at ASC, name ASC). Three departments are saved so
+     * that saving order, creation time and name all disagree: the list must follow creation time, then name, and nothing else. The names are
+     * single capitalized words, so their order is the same under any database collation.
+     */
+    @Test
+    @DisplayName("Order: the department list follows creation time, then name (not saving order, code or name alone)")
+    void departmentOrderIsCreationTimeThenName() throws Exception {
+        java.time.LocalDateTime later = java.time.LocalDateTime.now().plusDays(1);
+        java.time.LocalDateTime earliest = java.time.LocalDateTime.of(2000, 1, 1, 0, 0);
+        // Saved in this order: a late one named Zulu, an early one, then a late one named Alpha created at the very same moment as Zulu
+        saveDepartment("RS_LATE_1", "Zulu", later);
+        saveDepartment("RS_EARLY", "Mike", earliest);
+        saveDepartment("RS_LATE_2", "Alpha", later);
+
+        List<String> expected = new ArrayList<>();
+        expected.add("RS_EARLY"); // created first of all, although saved second
+        com.hotel.workload.staff.DepartmentCatalog.BUILT_IN.forEach(b -> expected.add(b.code())); // created at start-up, in catalog order
+        expected.addAll(List.of("RS_A", "RS_B")); // the fixture's, created during setUp
+        expected.addAll(List.of("RS_LATE_2", "RS_LATE_1")); // same creation time: by name, Alpha before Zulu, although Zulu was saved first
+        for (String token : List.of(admin, managerA, staffA1)) {
+            List<String> codes = new ArrayList<>();
+            body(call(HttpMethod.GET, "/api/departments", token, null)).forEach(d -> codes.add(d.get("code").asText()));
+            assertEquals(expected, codes);
+        }
+    }
+
+    private void saveDepartment(String code, String name, java.time.LocalDateTime createdAt) {
+        Department department = new Department(code, name);
+        department.setCreatedAt(createdAt);
+        departmentRepository.saveAndFlush(department);
     }
 
     private JsonNode body(MvcResult result) throws Exception {
