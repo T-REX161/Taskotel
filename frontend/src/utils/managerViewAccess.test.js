@@ -6,7 +6,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   VIEW_ACCESS_ADMIN_ONLY_MESSAGE,
   canManageViewAccess,
+  choiceState,
   describeViewAccessChange,
+  revokeSelection,
+  viewAccessHistoryRows,
   grantedCodes,
   isViewOnly,
   showsAdditionalAccess,
@@ -261,5 +264,98 @@ describe('a Manager’s details on the Users page: Additional Department Access'
     const users = read('pages', 'UsersPage.jsx');
     assert.match(users, /departmentAccess=\{\s*\/\/[^\n]*\n\s*isAdmin && viewingStaff && showsAdditionalAccess\(getUserRole\(\), viewingStaff\)\s*\? <ManagerAdditionalAccess key=\{viewingStaff\.userId\} staff=\{viewingStaff\} \/>\s*: null/);
     for (const page of ['StaffPage.jsx', 'WorkloadPage.jsx']) assert.ok(!read('pages', page).includes('departmentAccess'), page);
+  });
+});
+
+describe('the Admin dialog: revoking one department', () => {
+  const access = {
+    primaryDepartmentCode: 'HK',
+    departments: [
+      { departmentCode: 'FD', departmentName: 'Front Desk' },
+      { departmentCode: 'SEC', departmentName: 'Security' },
+    ],
+  };
+
+  it('sends the saved grants minus that one department, keeping the others', () => {
+    assert.deepEqual(revokeSelection(access, 'FD'), ['SEC']);
+    assert.deepEqual(revokeSelection(access, 'SEC'), ['FD']);
+    assert.deepEqual(revokeSelection({ ...access, departments: [access.departments[0]] }, 'FD'), []);
+  });
+
+  it('never revokes the primary department, a department that is not granted, or nothing', () => {
+    assert.equal(revokeSelection(access, 'HK'), null);
+    assert.equal(revokeSelection({ primaryDepartmentCode: 'HK', departments: [{ departmentCode: 'HK' }] }, 'HK'), null, 'even if a stale answer listed it');
+    assert.equal(revokeSelection(access, 'MT'), null);
+    assert.equal(revokeSelection(access, ''), null);
+    assert.equal(revokeSelection(null, 'FD'), null);
+  });
+
+  it('row states: primary locked, saved grant, pending grant, pending removal', () => {
+    const saved = ['FD', 'SEC'];
+    assert.equal(choiceState({ code: 'HK', primary: true }, saved, saved), 'primary');
+    assert.equal(choiceState({ code: 'FD' }, saved, ['FD', 'SEC']), 'granted');
+    assert.equal(choiceState({ code: 'SEC' }, saved, ['FD']), 'removing');
+    assert.equal(choiceState({ code: 'MT' }, saved, ['FD', 'SEC', 'MT']), 'adding');
+    assert.equal(choiceState({ code: 'MT' }, saved, saved), 'none');
+  });
+
+  it('asks for confirmation, uses the existing endpoint, and offers Revoke only on saved grants (never the primary row)', () => {
+    const modal = read('components', 'users', 'ManagerViewAccessModal.jsx');
+    const grantedBranch = modal.indexOf("{state === 'granted' && (");
+    const revokeButton = modal.indexOf('aria-label={`Revoke view access to ${choice.name}`}');
+    assert.ok(grantedBranch > modal.indexOf("{state === 'primary' && ("));
+    assert.ok(revokeButton > grantedBranch && revokeButton < modal.indexOf("{state === 'adding' &&"), 'the button sits inside the saved-grant branch only');
+    assert.ok(modal.includes('setRevoking({ code: choice.code, name: choice.name });'), 'the button only opens the confirmation');
+    assert.ok(modal.includes('role="alertdialog"') && modal.includes("'Revoke access'"), 'a confirmation step before anything is sent');
+    assert.ok(modal.includes('const remaining = revokeSelection(access, target?.code);'));
+    assert.ok(modal.includes('if (inFlight.current || !remaining) {'));
+    assert.ok(modal.includes('const updated = await updateManagerViewAccess(userId, remaining);'), 'the same Admin-only PUT; no new endpoint');
+    const api = read('services', 'api.js');
+    assert.ok(!/view-departments[^\n]*`, \{\s*method: 'DELETE'/.test(api), 'nothing deletes a grant record or the history');
+  });
+});
+
+describe('the Admin dialog: layout and history', () => {
+  const modal = read('components', 'users', 'ManagerViewAccessModal.jsx');
+
+  it('fixed header and footer around a scrolling body; the history scrolls in its own, shorter area', () => {
+    assert.ok(modal.includes('relative flex flex-col bg-white rounded-2xl max-w-xl w-full max-h-[88vh]'));
+    assert.ok(modal.includes('<header className="shrink-0'));
+    assert.ok(modal.includes('<footer className="shrink-0'));
+    assert.ok(modal.includes('flex-1 min-h-0 overflow-y-auto'));
+    assert.ok(modal.includes('mt-2 max-h-48 sm:max-h-56 overflow-y-auto'), 'the history has its own scroll area');
+    assert.ok(modal.includes('mt-3 max-h-56 sm:max-h-72 overflow-y-auto'), 'so does a long department list, keeping the history in view');
+    assert.ok(modal.indexOf('<footer') > modal.indexOf('data-testid="view-access-history"'), 'the buttons come after the history, outside its scroll area');
+    assert.ok(modal.includes('aria-label="Close"'), 'a close button in the header');
+    assert.ok(modal.includes('Cancel') && modal.includes("'Save changes'"));
+  });
+
+  it('the history is read-only: no button or delete action inside it', () => {
+    const start = modal.indexOf('data-testid="view-access-history"');
+    const end = modal.indexOf('</ol>', start);
+    assert.ok(start > 0 && end > start);
+    assert.ok(!/<button|onClick|delete|remove/i.test(modal.slice(start, end)));
+  });
+
+  it('history rows newest first, with action, department, actor and time; automatic removals are explained', () => {
+    const rows = viewAccessHistoryRows([
+      { id: 1, action: 'GRANTED', departmentName: 'Front Desk', changedByUsername: 'admin', changedAt: '2026-11-10T09:00:00Z', changeSource: 'ADMIN_VIEW_ACCESS' },
+      { id: 3, action: 'REVOKED', departmentCode: 'SEC', changedByUsername: 'admin2', changedAt: '2026-11-12T09:00:00Z', changeSource: 'PRIMARY_DEPARTMENT_CHANGE' },
+      { id: 2, action: 'REVOKED', departmentName: 'Front Desk', changedByUsername: 'admin', changedAt: '2026-11-11T09:00:00Z', changeSource: 'ADMIN_VIEW_ACCESS' },
+      null,
+    ]);
+    assert.deepEqual(rows.map((r) => r.id), [3, 2, 1]);
+    assert.deepEqual(rows[0], { id: 3, action: 'Revoked', tone: 'revoked', department: 'SEC', actor: 'admin2', automatic: true, changedAt: '2026-11-12T09:00:00Z' });
+    assert.equal(rows[2].action, 'Granted');
+    assert.equal(rows[1].automatic, false);
+    assert.deepEqual(viewAccessHistoryRows(null), []);
+  });
+
+  it('copes with hundreds of entries', () => {
+    const many = Array.from({ length: 500 }, (_, i) => ({ id: i, action: i % 2 ? 'REVOKED' : 'GRANTED', departmentName: 'D', changedByUsername: 'a', changedAt: new Date(Date.UTC(2026, 0, 1) + i * 60000).toISOString() }));
+    const rows = viewAccessHistoryRows(many);
+    assert.equal(rows.length, 500);
+    assert.equal(rows[0].id, 499);
+    assert.equal(rows[499].id, 0);
   });
 });

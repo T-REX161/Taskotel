@@ -126,3 +126,51 @@ export function viewAccessErrorMessage(error, fallback = 'The department access 
   if (status >= 500) return 'A server error occurred. Nothing was changed. Please try again later.';
   return server || fallback;
 }
+
+/**
+ * The set to send when an Admin revokes ONE additional department: what is saved now, minus that department. Built from the saved grants,
+ * not from unsaved ticks, so a revocation never also saves other pending edits. Null when there is nothing to revoke: the Manager's own
+ * department (never removable; the server refuses it too), a department that is not granted, or no code.
+ */
+export function revokeSelection(access, code) {
+  if (!code || code === access?.primaryDepartmentCode) return null;
+  const saved = grantedCodes(access);
+  if (!saved.includes(code)) return null;
+  return saved.filter((granted) => granted !== code);
+}
+
+/**
+ * How a department row of the dialog reads: 'primary' (own department, locked), 'granted' (saved view-only grant), 'adding' (ticked, not
+ * saved yet), 'removing' (granted, unticked, not saved yet) or 'none'.
+ */
+export function choiceState(choice, savedCodes, selectedCodes) {
+  if (choice?.primary) return 'primary';
+  const saved = (savedCodes || []).includes(choice?.code);
+  const selected = (selectedCodes || []).includes(choice?.code);
+  if (saved) return selected ? 'granted' : 'removing';
+  return selected ? 'adding' : 'none';
+}
+
+/**
+ * The audit records as compact rows, most recent first (the server already orders them so; sorted again so the order never depends on
+ * it). Read-only: there is nothing here, or anywhere, that removes a record.
+ */
+export function viewAccessHistoryRows(history) {
+  const time = (change) => {
+    const value = new Date(change?.changedAt).getTime();
+    return Number.isNaN(value) ? 0 : value;
+  };
+  return (Array.isArray(history) ? history : [])
+    .filter(Boolean)
+    .map((change, index) => ({ change, index }))
+    .sort((a, b) => time(b.change) - time(a.change) || a.index - b.index)
+    .map(({ change }) => ({
+      id: change.id,
+      action: change.action === 'GRANTED' ? 'Granted' : change.action === 'REVOKED' ? 'Revoked' : 'Changed',
+      tone: change.action === 'GRANTED' ? 'granted' : change.action === 'REVOKED' ? 'revoked' : 'other',
+      department: change.departmentName || change.departmentCode || 'A department',
+      actor: change.changedByUsername || 'Unknown',
+      automatic: change.changeSource === 'PRIMARY_DEPARTMENT_CHANGE',
+      changedAt: change.changedAt,
+    }));
+}
