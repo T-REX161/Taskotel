@@ -1,4 +1,4 @@
--- H2 stand-in for Flyway V22 (Manager view-only department access). V22 itself uses PostgreSQL-only syntax (a DO block and
+-- H2 stand-in for Flyway V22 (Manager department access grants) as left by V23 (the action CHECK also allows UPGRADED). V22 itself uses PostgreSQL-only syntax (a DO block and
 -- SET LOCAL), so the production-profile tests (ddl-auto=validate against a schema built from SQL files) load this instead.
 -- Same tables, columns, types, constraints and indexes.
 CREATE TABLE IF NOT EXISTS manager_view_access (
@@ -25,6 +25,6 @@ CREATE TABLE IF NOT EXISTS manager_view_access_changes (
     changed_by_user_id   UUID         NOT NULL,
     changed_by_username  VARCHAR(255) NOT NULL,
     changed_at           TIMESTAMP    NOT NULL,
-    CONSTRAINT ck_manager_view_access_changes_action CHECK (action IN ('GRANTED', 'REVOKED'))
+    CONSTRAINT ck_manager_view_access_changes_action CHECK (action IN ('GRANTED', 'REVOKED', 'UPGRADED'))
 );
 CREATE INDEX IF NOT EXISTS ix_mgr_view_changes_manager ON manager_view_access_changes (manager_user_id, changed_at);

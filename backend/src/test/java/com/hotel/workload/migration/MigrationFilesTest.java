@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V22 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V23 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -91,7 +91,8 @@ public class MigrationFilesTest {
                 "V19__staff_department_optional.sql",
                 "V20__manager_department_changes_nullable.sql",
                 "V21__department_constraints_reconcile.sql",
-                "V22__manager_view_access.sql"), names);
+                "V22__manager_view_access.sql",
+                "V23__manager_view_access_full_management.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -99,7 +100,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22), versions, "Versions must be 1 to 22 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23), versions, "Versions must be 1 to 23 with no gaps or duplicates");
     }
 
     @Test
@@ -184,6 +185,47 @@ public class MigrationFilesTest {
         assertTrue(executable.contains("REFERENCES users (id) ON DELETE CASCADE") && executable.contains("REFERENCES departments (id) ON DELETE CASCADE"));
         assertTrue(executable.contains("UNIQUE (manager_user_id, department_id)"));
         assertTrue(file.contains("Not applied automatically") && file.contains("Rollback"));
+    }
+
+    @Test
+    @DisplayName("V23 only upgrades the audit trail: guarded, lock timeout, widens the action CHECK, adds the missing index, inserts one UPGRADED row per grant without one, never changes a grant or an existing audit row")
+    public void testV23UpgradesTheAuditTrailOnly() throws IOException {
+        String file = read(MIGRATIONS.resolve("V23__manager_view_access_full_management.sql"));
+        String executable = withoutLineComments(file);
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        // Checked before anything is changed
+        int firstChange = executable.indexOf("ALTER TABLE");
+        assertTrue(executable.indexOf("to_regclass") >= 0 && executable.indexOf("to_regclass") < firstChange, "it checks the tables first");
+        assertTrue(executable.indexOf("RAISE EXCEPTION") >= 0 && executable.lastIndexOf("RAISE EXCEPTION", firstChange) >= 0, "and refuses before changing anything");
+        assertTrue(executable.contains("action NOT IN ('GRANTED', 'REVOKED', 'UPGRADED')"), "an unknown existing action stops it");
+        // The CHECK: dropped only if present, then recreated with UPGRADED
+        assertTrue(executable.contains("DROP CONSTRAINT IF EXISTS ck_manager_view_access_changes_action"));
+        assertTrue(executable.contains("CHECK (action IN ('GRANTED', 'REVOKED', 'UPGRADED'))"));
+        assertTrue(executable.contains("CREATE INDEX IF NOT EXISTS ix_mgr_view_changes_manager ON manager_view_access_changes (manager_user_id, changed_at)"));
+        // Exactly one statement writes rows, and only into the audit table
+        assertEquals(1, Pattern.compile("(?i)\\bINSERT INTO\\b").matcher(executable).results().count());
+        assertTrue(executable.contains("INSERT INTO manager_view_access_changes"));
+        assertFalse(Pattern.compile("(?i)\\b(UPDATE|DELETE|TRUNCATE|CREATE TABLE|DROP TABLE|DROP COLUMN|RENAME)\\b").matcher(executable).find(),
+                "no grant and no existing audit row is updated or deleted, and no table is created or dropped");
+        assertFalse(Pattern.compile("(?i)\\b(INSERT INTO|ALTER TABLE|CREATE INDEX)\\s+manager_view_access\\b").matcher(executable).find(), "the grants table is only read");
+        // The agreed actor, action and source
+        assertTrue(executable.contains("'00000000-0000-0000-0000-000000000000'::uuid") && executable.contains("'SYSTEM (V23 migration)'"));
+        assertTrue(executable.contains("'UPGRADED', 'ACCESS_MODEL_V23'"));
+        // Idempotent: a grant already upgraded is skipped
+        assertTrue(executable.contains("WHERE NOT EXISTS") && executable.contains("c.action = 'UPGRADED'") && executable.contains("c.change_source = 'ACCESS_MODEL_V23'"));
+        // Stated for the operator
+        assertTrue(file.contains("Not applied automatically") && file.contains("Rollback") && file.contains("psql -1 -v ON_ERROR_STOP=1") && file.contains("Safe to run again"));
+    }
+
+    @Test
+    @DisplayName("The action values in the application, V23 and the test schema agree")
+    public void testUpgradedActionAgrees() throws IOException {
+        String v23 = withoutLineComments(read(MIGRATIONS.resolve("V23__manager_view_access_full_management.sql")));
+        String h2 = withoutLineComments(read(Path.of("src/test/resources/db/h2-manager-view-access.sql")));
+        assertEquals("UPGRADED", com.hotel.workload.staff.ManagerViewGrantChange.ACTION_UPGRADED);
+        assertEquals("ACCESS_MODEL_V23", com.hotel.workload.staff.ManagerViewGrantChange.SOURCE_ACCESS_MODEL_V23);
+        assertTrue(v23.contains("CHECK (action IN ('GRANTED', 'REVOKED', 'UPGRADED'))") && h2.contains("CHECK (action IN ('GRANTED', 'REVOKED', 'UPGRADED'))"));
+        assertTrue("UPGRADED".length() <= 16 && "ACCESS_MODEL_V23".length() <= 40 && "SYSTEM (V23 migration)".length() <= 255, "fits the columns");
     }
 
     @Test

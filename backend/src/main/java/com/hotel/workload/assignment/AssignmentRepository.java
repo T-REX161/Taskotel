@@ -35,7 +35,7 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     @Query("SELECT a FROM Assignment a JOIN FETCH a.task t JOIN FETCH a.staff s LEFT JOIN FETCH s.user WHERE t.department = :department ORDER BY a.assignedAt DESC")
     List<Assignment> findByTaskDepartmentOrderByAssignedAtDesc(@Param("department") com.hotel.workload.staff.Department department);
 
-    /** As {@link #findByTaskDepartmentOrderByAssignedAtDesc}, for the departments a Manager may view (their own and any view-only grants). */
+    /** As {@link #findByTaskDepartmentOrderByAssignedAtDesc}, for the departments a Manager manages (their primary and any Administrator-granted ones). */
     @Query("SELECT a FROM Assignment a JOIN FETCH a.task t JOIN FETCH a.staff s LEFT JOIN FETCH s.user WHERE t.department IN :departments ORDER BY a.assignedAt DESC")
     List<Assignment> findByTaskDepartmentInOrderByAssignedAtDesc(@Param("departments") java.util.Collection<com.hotel.workload.staff.Department> departments);
 

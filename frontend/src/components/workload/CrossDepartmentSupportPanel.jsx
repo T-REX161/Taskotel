@@ -66,7 +66,7 @@ const Stat = ({ label, value }) => (
  *
  * Who sees what (Step 2G-4; the backend is the authority, this only decides what is offered):
  *   Admin    every department, full figures, confirm, end and archive;
- *   Manager  their own department as receiver, plan and preview without the lending departments' figures, no confirm,
+ *   Manager  each department they manage as receiver, plan and preview (lending figures only for departments they manage), no confirm,
  *            end and archive only on the records the server returns to them (those involving their department);
  *   Staff    nothing: the panel renders nothing (the Workload page also never mounts it for Staff).
  */
@@ -370,7 +370,7 @@ function SupportPanelContent({ onChanged }) {
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Lend available staff to an overloaded department until a task is completed.</p>
           {!permissions.canConfirm && (
             <p className="text-xs text-gray-500 mt-1">
-              You can plan and preview support for your own department and manage the support records that involve it. Only an Admin can confirm new support, and other departments&apos; staffing figures are not shown to your role.
+              You can plan and preview support for the departments you manage and manage the support records that involve them. Only an Admin can confirm new support, and the staffing figures of departments you do not manage are not shown to your role.
             </p>
           )}
         </div>

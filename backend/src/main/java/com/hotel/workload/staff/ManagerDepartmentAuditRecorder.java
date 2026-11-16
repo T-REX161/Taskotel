@@ -76,7 +76,7 @@ public class ManagerDepartmentAuditRecorder {
         change.setChangeSource(source);
         ManagerDepartmentChange saved = repository.saveAndFlush(change);
         if (next != null && viewAccessService != null) {
-            // A view-only grant for the department that is now the primary one is redundant: removed (and audited) in this transaction
+            // A grant for the department that is now the primary one is redundant: removed (and audited) in this transaction
             viewAccessService.primaryDepartmentChanged(staff.getUser(), next);
         }
         return saved;

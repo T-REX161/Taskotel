@@ -20,10 +20,11 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * View-only access for a Manager to one department other than their own, granted by an Administrator (V22).
+ * Access for a Manager to one department other than their own, granted by an Administrator (V22; full management since the access-model
+ * change, V23).
  *
- * <p>A grant lets the Manager SEE that department's staff, workload, tasks and assignments. It never gives any management right: every
- * write path checks the Manager's primary department only ({@code DepartmentScope.includes}), which a grant does not change. Grants are
+ * <p>A grant makes that department one of the Manager's managed departments, with the same operational access as their primary one (see
+ * {@code DepartmentScope.managedDepartments}). Only an Administrator can grant or revoke it. Grants are
  * read from the database on every request ({@code CurrentUserScopeResolver}), so revoking one takes effect on the next request.
  *
  * <p>The rows go with the account or the department (ON DELETE CASCADE): a grant never outlives either.

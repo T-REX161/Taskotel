@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * One append-only audit record: an Administrator granted or revoked a Manager's view-only access to a department (V22).
+ * One append-only audit record: an Administrator granted or revoked a Manager's access to an additional department (V22; full management since V23).
  *
  * <p>Like {@link ManagerDepartmentChange}, people and departments are plain identifiers with name snapshots and no foreign keys, so the
  * record stays readable after a rename or a removal. Nothing ever updates or deletes a row.

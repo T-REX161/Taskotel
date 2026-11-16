@@ -37,7 +37,7 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findByDepartment(com.hotel.workload.staff.Department department);
 
     /**
-     * Every task of these departments: the departments a Manager may view (their own and any view-only grants). The filter is part of
+     * Every task of these departments: the departments a Manager manages (their primary and any Administrator-granted ones). The filter is part of
      * the query, so no other department is loaded, and tasks with no department are never returned.
      */
     List<Task> findByDepartmentIn(Collection<com.hotel.workload.staff.Department> departments);
