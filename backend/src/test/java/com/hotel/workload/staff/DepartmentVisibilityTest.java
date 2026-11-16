@@ -117,8 +117,8 @@ public class DepartmentVisibilityTest {
     }
 
     @Test
-    @DisplayName("A Manager sees their own department in full and every other department as basic identity only")
-    public void managerSeesOwnInFullOthersBasic() throws Exception {
+    @DisplayName("A Manager sees only their own department, in full; every other department is completely absent")
+    public void managerSeesOnlyTheirOwnDepartment() throws Exception {
         MvcResult result = list("dvt_m_alpha", "MANAGER");
         assertEquals(200, result.getResponse().getStatus());
 
@@ -127,20 +127,12 @@ public class DepartmentVisibilityTest {
         assertFalse(own.get("status").isNull());
         assertFalse(own.get("supervisor").isNull());
 
-        JsonNode other = department(result, BETA);
-        assertBasicOnly(other);
-
-        // Nothing about the other department leaks anywhere in the body, whatever the field
+        // Nothing about any other department is in the body: no card, no code, no name, no description, no person
         String body = result.getResponse().getContentAsString();
-        for (String hidden : List.of("Secret beta description", "dvt_s_beta", beta.getHeadStaff().getId().toString())) {
+        assertEquals(1, mapper.readTree(body).size(), "exactly one department");
+        for (String hidden : List.of(BETA, beta.getName(), "Secret beta description", "dvt_s_beta", beta.getHeadStaff().getId().toString())) {
             assertFalse(body.contains(hidden), "leaked: " + hidden);
         }
-        // Every department other than the Manager's own is basic
-        List<String> notBasic = new ArrayList<>();
-        for (JsonNode node : mapper.readTree(body)) {
-            if (!ALPHA.equals(node.get("code").asText()) && !node.get("staffCount").isNull()) notBasic.add(node.get("code").asText());
-        }
-        assertTrue(notBasic.isEmpty(), "departments shown in full to a Manager of another department: " + notBasic);
     }
 
     @Test

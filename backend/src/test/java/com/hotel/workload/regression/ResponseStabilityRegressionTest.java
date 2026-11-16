@@ -447,11 +447,15 @@ public class ResponseStabilityRegressionTest {
         List<String> expected = new ArrayList<>();
         com.hotel.workload.staff.DepartmentCatalog.BUILT_IN.forEach(b -> expected.add(b.code()));
         expected.addAll(List.of("RS_A", "RS_B"));
-        for (String token : List.of(admin, managerA, staffA1)) {
+        for (String token : List.of(admin, staffA1)) {
             List<String> codes = new ArrayList<>();
             body(call(HttpMethod.GET, "/api/departments", token, null)).forEach(d -> codes.add(d.get("code").asText()));
             assertEquals(expected, codes);
         }
+        // A Manager receives only the departments they manage (here RS_A), whatever the hotel holds
+        List<String> managerCodes = new ArrayList<>();
+        body(call(HttpMethod.GET, "/api/departments", managerA, null)).forEach(d -> managerCodes.add(d.get("code").asText()));
+        assertEquals(List.of("RS_A"), managerCodes);
     }
 
     /**
@@ -475,11 +479,14 @@ public class ResponseStabilityRegressionTest {
         com.hotel.workload.staff.DepartmentCatalog.BUILT_IN.forEach(b -> expected.add(b.code())); // created at start-up, in catalog order
         expected.addAll(List.of("RS_A", "RS_B")); // the fixture's, created during setUp
         expected.addAll(List.of("RS_LATE_2", "RS_LATE_1")); // same creation time: by name, Alpha before Zulu, although Zulu was saved first
-        for (String token : List.of(admin, managerA, staffA1)) {
+        for (String token : List.of(admin, staffA1)) {
             List<String> codes = new ArrayList<>();
             body(call(HttpMethod.GET, "/api/departments", token, null)).forEach(d -> codes.add(d.get("code").asText()));
             assertEquals(expected, codes);
         }
+        List<String> managerCodes = new ArrayList<>();
+        body(call(HttpMethod.GET, "/api/departments", managerA, null)).forEach(d -> managerCodes.add(d.get("code").asText()));
+        assertEquals(List.of("RS_A"), managerCodes, "a Manager's list holds only their managed departments");
     }
 
     private void saveDepartment(String code, String name, java.time.LocalDateTime createdAt) {

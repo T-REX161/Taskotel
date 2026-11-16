@@ -305,12 +305,11 @@ public class ManagerViewAccessTest {
         assertEquals(1, workload.get(sg.getId().toString()).get("activeTaskCount").asInt(), "the granted member's own workload");
 
         Map<String, JsonNode> departments = byId("/api/departments", manager, "code");
+        assertEquals(java.util.Set.of(GRANT, HOME), departments.keySet(), "only the managed departments are listed; OTHER is completely absent");
         assertTrue(departments.get(GRANT).get("managed").asBoolean());
         assertTrue(departments.get(HOME).get("managed").asBoolean());
-        assertFalse(departments.get(OTHER).get("managed").asBoolean());
         assertFalse(departments.get(GRANT).get("viewOnly").asBoolean());
         assertTrue(departments.get(GRANT).hasNonNull("staffCount"), "a granted department's figures are shown");
-        assertTrue(departments.get(OTHER).get("staffCount") == null || departments.get(OTHER).get("staffCount").isNull(), "other departments stay basic");
         for (JsonNode d : read("/api/departments", admin)) assertFalse(d.has("managed"), "an Admin's answer carries no managed field");
         for (JsonNode d : read("/api/departments", staffMember)) assertFalse(d.has("managed"), "a Staff member's answer carries no managed field");
     }
@@ -463,9 +462,7 @@ public class ManagerViewAccessTest {
         assertFalse(byId("/api/staff", manager, "id").containsKey(sg.getId().toString()));
         assertFalse(byId("/api/assignments", manager, "id").containsKey(ag.getId().toString()));
         assertFalse(byId("/api/workload", manager, "staffId").containsKey(sg.getId().toString()));
-        JsonNode grantDept = byId("/api/departments", manager, "code").get(GRANT);
-        assertTrue(grantDept.get("staffCount") == null || grantDept.get("staffCount").isNull());
-        assertFalse(grantDept.get("managed").asBoolean());
+        assertFalse(byId("/api/departments", manager, "code").containsKey(GRANT), "the revoked department is no longer listed at all");
         // The very next writes are refused as for any department the Manager does not manage
         assertEquals(404, status(HttpMethod.PUT, "/api/staff/" + sg.getId(), manager, editStaff));
         assertEquals(403, status(HttpMethod.POST, "/api/tasks", manager, "{\"title\":\"VA after revoke\",\"priority\":\"MEDIUM\",\"estimatedDuration\":30,\"dueDate\":\"2027-01-01\"" + ",\"department\":\"" + GRANT + "\"" + "}"));
@@ -597,8 +594,8 @@ public class ManagerViewAccessTest {
         assertFalse(tasks.containsKey(th.getId().toString()));
         for (JsonNode task : tasks.values()) assertFalse(task.get("viewOnly").asBoolean());
         Map<String, JsonNode> departments = byId("/api/departments", manager, "code");
+        assertEquals(java.util.Set.of(GRANT, OTHER), departments.keySet(), "the old primary department is no longer listed");
         assertTrue(departments.get(GRANT).get("managed").asBoolean() && departments.get(OTHER).get("managed").asBoolean());
-        assertFalse(departments.get(HOME).get("managed").asBoolean());
     }
 
     // ── nothing else is widened ─────────────────────────────────────────────

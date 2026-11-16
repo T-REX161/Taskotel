@@ -8,7 +8,8 @@ public class DepartmentDto {
     /** Kept for API compatibility and always false: Administrator grants give full management, so nothing is view-only any more. */
     private boolean viewOnly;
     /**
-     * For a signed-in Manager only: whether they manage this department (their primary department or one an Administrator granted).
+     * For a signed-in Manager only: always true, because a Manager is sent only the departments they manage (their primary department or
+     * one an Administrator granted).
      * Null, and so left out of the response, for Admin and Staff.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)

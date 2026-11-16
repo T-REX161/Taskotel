@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { DepartmentsIcon, StaffIcon, TasksIcon, PlusIcon, DotsVerticalIcon, TrashIcon } from '../components/icons/Icons';
 import { getDepartments, getUserRole } from '../services/api';
 import { departmentCount, totalOfKnownCounts } from '../utils/departmentDisplay';
+import { authorizedDepartments } from '../utils/managedDepartments';
 import DepartmentIcon from '../components/common/DepartmentIcon';
 import DepartmentFormModal from '../components/departments/DepartmentFormModal';
 import RemoveDepartmentModal from '../components/departments/RemoveDepartmentModal';
@@ -41,7 +42,8 @@ export default function DepartmentsPage() {
     }
     try {
       const data = await getDepartments();
-      setDepartments(Array.isArray(data) ? data : []);
+      // A Manager's page holds only the departments they manage: nothing else is kept in state, so no card or total can include it
+      setDepartments(authorizedDepartments(getUserRole(), data));
     } catch (err) {
       if (err.message && err.message.includes('Redirecting to login')) {
         navigate('/login');
@@ -157,8 +159,8 @@ export default function DepartmentsPage() {
 
   // An inactive department is not counted as one of the hotel's departments; its staff and tasks still are
   const totalDepartments = departments.filter((dept) => dept.active !== false).length;
-  // Only an Admin receives every department's figures; for anyone else a total over departments with hidden figures would be wrong,
-  // so it reads as unavailable rather than as a smaller number (see utils/departmentDisplay.js)
+  // An Admin receives every department's figures and a Manager every authorized department's (and only those), so both totals are exact.
+  // Staff receive no figures, so their totals read as unavailable rather than as a smaller number (see utils/departmentDisplay.js)
   const activeStaff = departmentCount(totalOfKnownCounts(departments, 'staffCount'));
   const activeTasks = departmentCount(totalOfKnownCounts(departments, 'activeTasks'));
 

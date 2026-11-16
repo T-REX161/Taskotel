@@ -47,12 +47,12 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional(readOnly = true)
     public List<DepartmentDto> getAllDepartments() {
-        // Who is asking decides how much of each department is returned (no sign-in is 401, an invalid Manager 403):
-        // an Admin gets everything; a Manager gets the full details of the departments they manage (primary and Administrator-granted);
-        // everyone else, and every other department, gets the basic identity a selector needs. The figures for a department that is not
-        // shown in full are never computed, so they cannot leak. A Manager's answer also says, for every department, whether they manage it
-        // ("managed"); Admin and Staff answers do not carry that field at all.
-        return departmentsFor(scopeResolver.resolve());
+        // Who is asking decides what is returned (no sign-in is 401, an invalid Manager 403): an Admin gets every department in full;
+        // a Manager gets ONLY the departments they manage (primary and active Administrator-granted), in full, and no other department at
+        // all, not even its name; Staff get the basic identity of every department, as before. A Manager's entries carry managed=true;
+        // Admin and Staff answers do not carry that field.
+        DepartmentScope scope = scopeResolver.resolve();
+        return scope.isDepartment() ? managedDepartmentsFor(scope) : departmentsFor(scope);
     }
 
     private List<DepartmentDto> departmentsFor(DepartmentScope scope) {
@@ -60,12 +60,6 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .map(department -> {
                     if (scope.isAll()) {
                         return toDto(department);
-                    }
-                    if (scope.isDepartment()) {
-                        boolean managed = scope.canManage(department);
-                        DepartmentDto dto = managed ? toDto(department) : toBasicDto(department);
-                        dto.setManaged(managed);
-                        return dto;
                     }
                     return toBasicDto(department);
                 })
@@ -79,6 +73,10 @@ public class DepartmentServiceImpl implements DepartmentService {
         if (!scope.isDepartment()) {
             return departmentsFor(scope); // Admin and Staff: unchanged
         }
+        return managedDepartmentsFor(scope);
+    }
+
+    private List<DepartmentDto> managedDepartmentsFor(DepartmentScope scope) {
         // A Manager: only the departments the scope says they manage. The list is built from the scope itself (which the resolver read from
         // the database for this request, active departments only), never by loading every department and removing some afterwards.
         List<Department> managed = new ArrayList<>(scope.managedDepartments());

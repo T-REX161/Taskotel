@@ -416,10 +416,11 @@ public class DepartmentManagementTest {
 
     @Test
     @WithMockUser(username = "dm_manager", roles = "MANAGER")
-    @DisplayName("A manager sees the same department list as an admin (read access is unchanged)")
+    @DisplayName("A manager sees only the departments they manage (here: their own), never the whole list")
     public void testManagerCanViewDepartments() throws Exception {
         MvcResult result = mockMvc.perform(get("/api/departments")).andExpect(status().isOk()).andReturn();
-        assertEquals(departmentRepository.count(), body(result).size());
+        assertEquals(1, body(result).size());
+        assertTrue(departmentRepository.count() > 1);
     }
 
     @Test

@@ -15,3 +15,13 @@ export function managedDepartmentList(departments, primaryCode) {
   const rest = managed.filter((department) => String(department.code || '').toUpperCase() !== primary);
   return [...first, ...rest];
 }
+
+/**
+ * The departments a screen may show for this role. The server already answers a Manager with their managed departments only; this keeps
+ * the Departments page honest even against an older or odd answer: for a Manager anything not flagged managed is dropped entirely (no
+ * card, no figures, no part of any total). Admin and Staff lists are returned untouched.
+ */
+export function authorizedDepartments(role, departments) {
+  const list = Array.isArray(departments) ? departments : [];
+  return role === 'MANAGER' ? list.filter((department) => department && department.managed === true) : list;
+}
