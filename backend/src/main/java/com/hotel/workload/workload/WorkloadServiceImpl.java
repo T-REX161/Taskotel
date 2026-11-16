@@ -91,7 +91,12 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
             return buildGlobalRows(operationalStaff(), true);
         }
         if (scope.isDepartment()) {
-            return buildDepartmentRows(scope.department());
+            // The rows of every department this Manager manages, one department at a time (the same query per department)
+            List<WorkloadDto> rows = new ArrayList<>();
+            for (Department department : scope.managedDepartments()) {
+                rows.addAll(buildDepartmentRows(department));
+            }
+            return rows;
         }
         // A Staff member's own row is always returned, whatever their state
         return buildGlobalRows(List.of(ownStaffRecord(SecurityContextHolder.getContext().getAuthentication().getName())), false);

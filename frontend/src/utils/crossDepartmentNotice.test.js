@@ -125,7 +125,7 @@ describe('the panel', () => {
   it('the backend refuses only NEW support while disabled (for every role); existing arrangements are never ended or changed by the switch', () => {
     const service = readFileSync(new URL('../../../backend/src/main/java/com/hotel/workload/support/SupportAssignmentServiceImpl.java', import.meta.url), 'utf8');
     assert.equal(service.split('requireCrossDepartmentAssistanceEnabled();').length - 1, 3, 'checked by planning options, preview and confirm only');
-    assert.match(service, /public Options getOptions\(String receivingDepartmentCode\) \{\s*String managerDepartment = readerDepartmentCode\(\);[\s\S]{0,200}requireCrossDepartmentAssistanceEnabled\(\);/, 'options: after the role check');
+    assert.match(service, /public Options getOptions\(String receivingDepartmentCode\) \{\s*List<String> managerCodes = readerManagedCodes\(\);[\s\S]{0,200}requireCrossDepartmentAssistanceEnabled\(\);/, 'options: after the role check');
     assert.ok(service.includes('Existing support records are never read or changed by this.'));
     const recommendations = readFileSync(new URL('../../../backend/src/main/java/com/hotel/workload/workload/WorkloadRecommendationServiceImpl.java', import.meta.url), 'utf8');
     assert.ok(recommendations.includes('!systemSettings.current().crossDepartmentAssistanceEnabled()'), 'support suggestions are not made while it is off');

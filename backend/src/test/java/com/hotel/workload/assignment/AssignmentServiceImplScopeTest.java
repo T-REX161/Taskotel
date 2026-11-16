@@ -85,11 +85,11 @@ public class AssignmentServiceImplScopeTest {
     @DisplayName("A Manager's list is a department query: the all-assignments query is never used")
     public void managerListUsesTheDepartmentQuery() {
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        when(assignmentRepository.findByTaskDepartmentOrderByAssignedAtDesc(alpha)).thenReturn(List.of());
+        when(assignmentRepository.findByTaskDepartmentInOrderByAssignedAtDesc(List.of(alpha))).thenReturn(List.of());
 
         assertTrue(service.getAllAssignments().isEmpty());
 
-        verify(assignmentRepository).findByTaskDepartmentOrderByAssignedAtDesc(alpha);
+        verify(assignmentRepository).findByTaskDepartmentInOrderByAssignedAtDesc(List.of(alpha));
         verify(assignmentRepository, never()).findAllByOrderByAssignedAtDesc();
         verify(assignmentRepository, never()).findByStaffIdOrderByAssignedAtDesc(any());
     }
@@ -103,7 +103,7 @@ public class AssignmentServiceImplScopeTest {
         service.getAllAssignments();
 
         verify(assignmentRepository).findAllByOrderByAssignedAtDesc();
-        verify(assignmentRepository, never()).findByTaskDepartmentOrderByAssignedAtDesc(any());
+        verify(assignmentRepository, never()).findByTaskDepartmentInOrderByAssignedAtDesc(any());
     }
 
     @Test
@@ -119,7 +119,7 @@ public class AssignmentServiceImplScopeTest {
 
             verify(staffRepository).findByUserUsername("sam");
             verify(assignmentRepository, never()).findAllByOrderByAssignedAtDesc();
-            verify(assignmentRepository, never()).findByTaskDepartmentOrderByAssignedAtDesc(any());
+            verify(assignmentRepository, never()).findByTaskDepartmentInOrderByAssignedAtDesc(any());
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }
@@ -131,11 +131,11 @@ public class AssignmentServiceImplScopeTest {
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
         UUID taskId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
-        when(taskRepository.lockByIdAndDepartment(taskId, alpha)).thenReturn(Optional.empty());
+        when(taskRepository.lockByIdAndDepartmentIn(taskId, List.of(alpha))).thenReturn(Optional.empty());
 
         assertEquals(HttpStatus.NOT_FOUND, statusOf(() -> service.createAssignment(new CreateAssignmentRequest(taskId, staffId))));
 
-        verify(taskRepository).lockByIdAndDepartment(taskId, alpha);
+        verify(taskRepository).lockByIdAndDepartmentIn(taskId, List.of(alpha));
         verify(taskRepository, never()).lockByIds(any());
         verify(taskRepository, never()).findById(any());
         verifyNoInteractions(staffRepository);
@@ -148,14 +148,14 @@ public class AssignmentServiceImplScopeTest {
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
         Task task = taskIn(alpha);
         UUID staffId = UUID.randomUUID();
-        when(taskRepository.lockByIdAndDepartment(task.getId(), alpha)).thenReturn(Optional.of(task));
-        when(staffRepository.lockByIdAndDepartment(staffId, alpha)).thenReturn(Optional.empty());
+        when(taskRepository.lockByIdAndDepartmentIn(task.getId(), List.of(alpha))).thenReturn(Optional.of(task));
+        when(staffRepository.lockByIdAndDepartmentIn(staffId, List.of(alpha))).thenReturn(Optional.empty());
 
         assertEquals(HttpStatus.NOT_FOUND, statusOf(() -> service.createAssignment(new CreateAssignmentRequest(task.getId(), staffId))));
 
         InOrder order = inOrder(taskRepository, staffRepository);
-        order.verify(taskRepository).lockByIdAndDepartment(task.getId(), alpha);
-        order.verify(staffRepository).lockByIdAndDepartment(staffId, alpha);
+        order.verify(taskRepository).lockByIdAndDepartmentIn(task.getId(), List.of(alpha));
+        order.verify(staffRepository).lockByIdAndDepartmentIn(staffId, List.of(alpha));
         verify(staffRepository, never()).lockByIds(any());
         verify(staffRepository, never()).findById(any());
         verify(assignmentRepository, never()).save(any());
@@ -171,7 +171,7 @@ public class AssignmentServiceImplScopeTest {
         UUID outsideTask = UUID.randomUUID();
         when(assignmentRepository.findTaskIdById(missing)).thenReturn(Optional.empty());
         when(assignmentRepository.findTaskIdById(outside)).thenReturn(Optional.of(outsideTask));
-        when(taskRepository.lockByIdAndDepartment(outsideTask, alpha)).thenReturn(Optional.empty());
+        when(taskRepository.lockByIdAndDepartmentIn(outsideTask, List.of(alpha))).thenReturn(Optional.empty());
         UpdateAssignmentRequest request = new UpdateAssignmentRequest(UUID.randomUUID());
 
         assertEquals(HttpStatus.NOT_FOUND, statusOf(() -> service.reassignTask(missing, request)));
@@ -196,16 +196,16 @@ public class AssignmentServiceImplScopeTest {
         assignment.setTask(task);
         assignment.setStaff(holder);
         when(assignmentRepository.findTaskIdById(assignment.getId())).thenReturn(Optional.of(task.getId()));
-        when(taskRepository.lockByIdAndDepartment(task.getId(), alpha)).thenReturn(Optional.of(task));
-        when(staffRepository.lockByIdAndDepartment(target.getId(), alpha)).thenReturn(Optional.of(target));
+        when(taskRepository.lockByIdAndDepartmentIn(task.getId(), List.of(alpha))).thenReturn(Optional.of(task));
+        when(staffRepository.lockByIdAndDepartmentIn(target.getId(), List.of(alpha))).thenReturn(Optional.of(target));
         when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
         when(assignmentRepository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
 
         service.reassignTask(assignment.getId(), new UpdateAssignmentRequest(target.getId()));
 
         InOrder order = inOrder(taskRepository, staffRepository, assignmentRepository);
-        order.verify(taskRepository).lockByIdAndDepartment(task.getId(), alpha);
-        order.verify(staffRepository).lockByIdAndDepartment(target.getId(), alpha);
+        order.verify(taskRepository).lockByIdAndDepartmentIn(task.getId(), List.of(alpha));
+        order.verify(staffRepository).lockByIdAndDepartmentIn(target.getId(), List.of(alpha));
         order.verify(assignmentRepository).findById(assignment.getId());
         assertSame(target, assignment.getStaff());
         verify(supportLifecycle).onTaskReassigned(task.getId(), target.getId());
@@ -228,8 +228,8 @@ public class AssignmentServiceImplScopeTest {
         InOrder order = inOrder(taskRepository, staffRepository);
         order.verify(taskRepository).lockByIds(Set.of(task.getId()));
         order.verify(staffRepository).lockByIds(Set.of(staff.getId()));
-        verify(taskRepository, never()).lockByIdAndDepartment(any(), any());
-        verify(staffRepository, never()).lockByIdAndDepartment(any(), any());
+        verify(taskRepository, never()).lockByIdAndDepartmentIn(any(), any());
+        verify(staffRepository, never()).lockByIdAndDepartmentIn(any(), any());
     }
 
     @Test

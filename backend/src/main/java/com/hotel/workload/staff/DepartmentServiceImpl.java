@@ -53,7 +53,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         DepartmentScope scope = scopeResolver.resolve();
         return departmentRepository.findAllByOrderByCreatedAtAscNameAsc().stream()
                 .map(department -> {
-                    if (scope.isAll() || (scope.isDepartment() && scope.includes(department))) {
+                    if (scope.isAll() || (scope.isDepartment() && scope.canManage(department))) {
                         return toDto(department);
                     }
                     if (scope.isDepartment() && scope.isViewOnly(department)) {

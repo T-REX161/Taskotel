@@ -139,12 +139,13 @@ public class AssignmentServiceImpl implements AssignmentService {
         Task task;
         java.util.Map<UUID, Staff> byId = new java.util.HashMap<>();
         if (scope.isDepartment()) {
-            // A Manager reaches only their department's task and staff. Anything else (other department, task with no department,
-            // nonexistent) gives the same 404 and is never locked; staff locks are taken only once the task is known to be in scope.
-            task = taskRepository.lockByIdAndDepartment(taskId, scope.department())
+            // A Manager reaches only the task and staff of the departments they manage. Anything else (other department, task with no
+            // department, nonexistent) gives the same 404 and is never locked; staff locks are taken only once the task is known to be in
+            // scope. The task and each person must still be in the same department (checked below).
+            task = taskRepository.lockByIdAndDepartmentIn(taskId, scope.managedDepartments())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
             for (UUID id : locking) {
-                byId.put(id, staffRepository.lockByIdAndDepartment(id, scope.department())
+                byId.put(id, staffRepository.lockByIdAndDepartmentIn(id, scope.managedDepartments())
                         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found")));
             }
         } else {
@@ -236,7 +237,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
         if (scope.isDepartment() && !scope.viewOnlyDepartments().isEmpty()) {
             // Also the assignments of the departments an Administrator lets this Manager VIEW, marked view-only. Assigning, reassigning
-            // and every other assignment write still check the primary department only, so none of them can be changed through this.
+            // and every other assignment write check the managed departments only, so none of them can be changed through this.
             return assignmentRepository.findByTaskDepartmentInOrderByAssignedAtDesc(scope.viewableDepartments()).stream()
                     .map(assignment -> {
                         AssignmentDto dto = AssignmentDto.fromEntity(assignment);
@@ -246,8 +247,8 @@ public class AssignmentServiceImpl implements AssignmentService {
                     .collect(Collectors.toList());
         }
         if (scope.isDepartment()) {
-            // Database-side filter on the task's department: other departments' assignments are never loaded
-            return assignmentRepository.findByTaskDepartmentOrderByAssignedAtDesc(scope.department()).stream()
+            // Database-side filter on the task's department (the departments this Manager manages): others' assignments are never loaded
+            return assignmentRepository.findByTaskDepartmentInOrderByAssignedAtDesc(scope.managedDepartments()).stream()
                     .map(AssignmentDto::fromEntity)
                     .collect(Collectors.toList());
         }
@@ -276,10 +277,10 @@ public class AssignmentServiceImpl implements AssignmentService {
             // from another department by an approved support). A task outside the department, a task with no department and a
             // nonexistent assignment all give the same 404 and lock nothing.
             Optional<UUID> taskId = assignmentRepository.findTaskIdById(assignmentId);
-            if (taskId.isEmpty() || taskRepository.lockByIdAndDepartment(taskId.get(), scope.department()).isEmpty()) {
+            if (taskId.isEmpty() || taskRepository.lockByIdAndDepartmentIn(taskId.get(), scope.managedDepartments()).isEmpty()) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found");
             }
-            targetStaff = staffRepository.lockByIdAndDepartment(request.getStaffId(), scope.department())
+            targetStaff = staffRepository.lockByIdAndDepartmentIn(request.getStaffId(), scope.managedDepartments())
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found"));
             assignment = assignmentRepository.findById(assignmentId)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));

@@ -52,6 +52,15 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     java.util.Optional<Task> lockByIdAndDepartment(@Param("id") UUID id, @Param("department") com.hotel.workload.staff.Department department);
 
     /**
+     * As {@link #lockByIdAndDepartment}, for the departments a Manager manages ({@code DepartmentScope.managedDepartments()}): locks the task
+     * only when it belongs to one of them; a task of any other department, or with no department, is never locked and is not returned.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT t FROM Task t WHERE t.id = :id AND t.department IN :departments")
+    java.util.Optional<Task> lockByIdAndDepartmentIn(@Param("id") UUID id,
+                                                     @Param("departments") Collection<com.hotel.workload.staff.Department> departments);
+
+    /**
      * Active tasks of one department that nobody holds (no assignment row): the department's "waiting" work. The department filter is in the
      * query, so a Manager's recommendation never loads another department's tasks, and tasks with no department never match.
      */

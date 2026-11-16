@@ -66,7 +66,7 @@ public class TaskServiceImpl implements TaskService {
         }
         if (scope.isDepartment() && !scope.viewOnlyDepartments().isEmpty()) {
             // A Manager with view-only access to other departments: those tasks too, marked view-only. Every task write still checks the
-            // primary department only (scope.includes / scope.department()), so none of them can be changed through this.
+            // managed departments only (scope.canManage / scope.managedDepartments()), so none of them can be changed through this.
             return taskRepository.findByDepartmentIn(scope.viewableDepartments()).stream()
                     .map(task -> {
                         TaskDto dto = mapToDto(task);
@@ -76,8 +76,8 @@ public class TaskServiceImpl implements TaskService {
                     .collect(Collectors.toList());
         }
         if (scope.isDepartment()) {
-            // A Manager: the department is part of the query. Tasks with no department are never returned.
-            return taskRepository.findByDepartment(scope.department()).stream()
+            // A Manager: the departments they manage are part of the query. Tasks with no department are never returned.
+            return taskRepository.findByDepartmentIn(scope.managedDepartments()).stream()
                     .map(this::mapToDto)
                     .collect(Collectors.toList());
         }
@@ -107,13 +107,26 @@ public class TaskServiceImpl implements TaskService {
      * Locks and loads the task for a change. An administrator uses the existing lock. A Manager uses the department-scoped lock, so a task
      * of another department, or one with no department, is reported as not found, exactly like an id that does not exist, and is never locked.
      */
+    /**
+     * The department a Manager's new task gets: the requested one (already checked to be a department they manage, so it is taken from the
+     * scope and never looked up), or their primary department when none was requested.
+     */
+    private static com.hotel.workload.staff.Department managedDepartmentFor(DepartmentScope scope, String requested) {
+        if (requested == null || requested.isBlank()) {
+            return scope.primaryDepartment();
+        }
+        String code = requested.trim();
+        return scope.managedDepartments().stream().filter(d -> code.equals(d.getCode())).findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, OWN_DEPARTMENT_ONLY_MESSAGE));
+    }
+
     private Task lockTask(DepartmentScope scope, UUID id) {
         if (scope.isAll()) {
             taskRepository.lockByIds(Set.of(id));
             return taskRepository.findById(id)
                     .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
         }
-        return taskRepository.lockByIdAndDepartment(id, scope.department())
+        return taskRepository.lockByIdAndDepartmentIn(id, scope.managedDepartments())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found"));
     }
 
@@ -124,7 +137,7 @@ public class TaskServiceImpl implements TaskService {
         // A Manager creates tasks in their own department only. A blank department means their own; any other value is refused before
         // anything is looked up or saved, so the refusal says nothing about whether that department exists.
         if (scope.isDepartment() && request.getDepartment() != null && !request.getDepartment().isBlank()
-                && !request.getDepartment().trim().equals(scope.departmentCode())) {
+                && !scope.canManageCode(request.getDepartment().trim())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, OWN_DEPARTMENT_ONLY_MESSAGE);
         }
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -141,7 +154,8 @@ public class TaskServiceImpl implements TaskService {
         task.setDueDate(request.getDueDate());
         task.setDeadlineTime(request.getDeadlineTime());
         // For a Manager the department is the one resolved from their own records, never the one from the request
-        task.setDepartment(scope.isDepartment() ? scope.department() : departmentResolver.optionalActive(request.getDepartment()));
+        task.setDepartment(scope.isDepartment() ? managedDepartmentFor(scope, request.getDepartment())
+                : departmentResolver.optionalActive(request.getDepartment()));
         task.setCreatedBy(createdBy);
         // createdAt / updatedAt handled by @PrePersist on the entity
         task = taskRepository.save(task);

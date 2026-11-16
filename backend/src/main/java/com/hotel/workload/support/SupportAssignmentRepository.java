@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -54,6 +55,28 @@ public interface SupportAssignmentRepository extends JpaRepository<SupportAssign
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM SupportAssignment s WHERE s.id = :id AND (s.homeDepartmentCode = :code OR s.receivingDepartmentCode = :code)")
     Optional<SupportAssignment> lockByIdInvolvingDepartment(@Param("id") UUID id, @Param("code") String code);
+
+    // ── the same five queries for a set of departments: the departments a Manager manages (DepartmentScope.managedDepartmentCodes()) ──
+
+    /** As {@link #findHistoryInvolvingDepartment}: records not archived where any of the departments is the donor (home) or the receiver. */
+    @Query("SELECT s FROM SupportAssignment s WHERE s.archivedAt IS NULL AND (s.homeDepartmentCode IN :codes OR s.receivingDepartmentCode IN :codes) ORDER BY s.createdAt DESC")
+    List<SupportAssignment> findHistoryInvolvingDepartments(@Param("codes") Collection<String> codes);
+
+    @Query("SELECT s FROM SupportAssignment s WHERE s.archivedAt IS NULL AND s.status = :status AND (s.homeDepartmentCode IN :codes OR s.receivingDepartmentCode IN :codes) ORDER BY s.createdAt DESC")
+    List<SupportAssignment> findHistoryInvolvingDepartmentsAndStatus(@Param("codes") Collection<String> codes, @Param("status") SupportStatus status);
+
+    /** As {@link #findByStatusInvolvingDepartment}, for any of the departments. */
+    @Query("SELECT s FROM SupportAssignment s WHERE s.status = :status AND (s.homeDepartmentCode IN :codes OR s.receivingDepartmentCode IN :codes)")
+    List<SupportAssignment> findByStatusInvolvingDepartments(@Param("status") SupportStatus status, @Param("codes") Collection<String> codes);
+
+    /** As {@link #findTaskIdByIdInvolvingDepartment}, for any of the departments. */
+    @Query("SELECT s.taskId FROM SupportAssignment s WHERE s.id = :id AND (s.homeDepartmentCode IN :codes OR s.receivingDepartmentCode IN :codes)")
+    Optional<UUID> findTaskIdByIdInvolvingDepartments(@Param("id") UUID id, @Param("codes") Collection<String> codes);
+
+    /** As {@link #lockByIdInvolvingDepartment}, for any of the departments: a record of any other department is never loaded or locked. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM SupportAssignment s WHERE s.id = :id AND (s.homeDepartmentCode IN :codes OR s.receivingDepartmentCode IN :codes)")
+    Optional<SupportAssignment> lockByIdInvolvingDepartments(@Param("id") UUID id, @Param("codes") Collection<String> codes);
 
     /** The task of this support record, without loading (and caching) the record itself. */
     @Query("SELECT s.taskId FROM SupportAssignment s WHERE s.id = :id")

@@ -163,11 +163,11 @@ public class StaffServiceImplTest {
     public void testGetAllStaff_ManagerUsesDepartmentQueryOnly() {
         com.hotel.workload.security.DepartmentScope managerScope = com.hotel.workload.security.DepartmentScope.department(TestDepartments.FRONT_DESK);
         when(scopeResolver.resolve()).thenReturn(managerScope);
-        when(staffRepository.findByDepartmentAndUserRole(TestDepartments.FRONT_DESK, Role.STAFF)).thenReturn(List.of());
+        when(staffRepository.findByDepartmentInAndUserRole(List.of(TestDepartments.FRONT_DESK), Role.STAFF)).thenReturn(List.of());
 
         assertTrue(staffService.getAllStaff().isEmpty());
 
-        verify(staffRepository).findByDepartmentAndUserRole(TestDepartments.FRONT_DESK, Role.STAFF);
+        verify(staffRepository).findByDepartmentInAndUserRole(List.of(TestDepartments.FRONT_DESK), Role.STAFF);
         verify(staffRepository, never()).findAll();
         verify(staffRepository, never()).findAllWithUser();
     }

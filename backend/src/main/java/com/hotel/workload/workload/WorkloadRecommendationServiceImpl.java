@@ -93,11 +93,13 @@ public class WorkloadRecommendationServiceImpl implements WorkloadRecommendation
             for (Object[] row : taskRepository.countWaitingByDepartmentCode(ACTIVE_STATUSES)) {
                 waitingByDepartment.put((String) row[0], ((Number) row[1]).intValue());
             }
+            // Deliberately the PRIMARY department as the receiver for now: recommendations for every managed department need the approved
+            // per-department merge (Q8), which is part of P4. Until then a Manager gets the same recommendations as before.
             return WorkloadRecommendationEngine.recommendForReceiver(
-                    scope.department(),
+                    scope.primaryDepartment(),
                     departmentRepository.findAllByOrderByCreatedAtAscNameAsc(),
                     staffRepository.findAllWithUser(),
-                    taskRepository.findWaitingByDepartment(scope.department(), ACTIVE_STATUSES),
+                    taskRepository.findWaitingByDepartment(scope.primaryDepartment(), ACTIVE_STATUSES),
                     waitingByDepartment,
                     new HashSet<>(assignmentRepository.findBusyStaffIds(ACTIVE_STATUSES)),
                     LocalDate.now(),

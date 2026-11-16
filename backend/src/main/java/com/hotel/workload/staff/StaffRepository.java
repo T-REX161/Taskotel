@@ -44,6 +44,14 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     @Query("SELECT s FROM Staff s WHERE s.id = :id AND s.department = :department")
     Optional<Staff> lockByIdAndDepartment(@Param("id") UUID id, @Param("department") Department department);
 
+    /**
+     * As {@link #lockByIdAndDepartment}, for the departments a Manager manages ({@code DepartmentScope.managedDepartments()}): locks the
+     * member only when they belong to one of them; anyone else is never locked and is not returned.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM Staff s WHERE s.id = :id AND s.department IN :departments")
+    Optional<Staff> lockByIdAndDepartmentIn(@Param("id") UUID id, @Param("departments") Collection<Department> departments);
+
     /** The home-department codes of these staff members, without loading the records. */
     @Query("SELECT DISTINCT s.department.code FROM Staff s WHERE s.id IN :ids AND s.department IS NOT NULL")
     List<String> departmentCodesOf(@Param("ids") Collection<UUID> ids);

@@ -69,14 +69,14 @@ public class SupportAssignmentServiceImplScopeTest {
     @DisplayName("A Manager history uses the department-filtered query and never loads the global history")
     public void managerHistoryUsesDepartmentQuery() {
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        when(supportRepository.findHistoryInvolvingDepartment("ALPHA")).thenReturn(List.of());
-        when(supportRepository.findByStatusInvolvingDepartment(SupportStatus.ACTIVE, "ALPHA")).thenReturn(List.of());
+        when(supportRepository.findHistoryInvolvingDepartments(List.of("ALPHA"))).thenReturn(List.of());
+        when(supportRepository.findByStatusInvolvingDepartments(SupportStatus.ACTIVE, List.of("ALPHA"))).thenReturn(List.of());
 
         assertTrue(service.list(null).isEmpty());
 
         verify(scopeResolver, times(1)).resolve();
-        verify(supportRepository).findHistoryInvolvingDepartment("ALPHA");
-        verify(supportRepository).findByStatusInvolvingDepartment(SupportStatus.ACTIVE, "ALPHA");
+        verify(supportRepository).findHistoryInvolvingDepartments(List.of("ALPHA"));
+        verify(supportRepository).findByStatusInvolvingDepartments(SupportStatus.ACTIVE, List.of("ALPHA"));
         verify(supportRepository, never()).findByStatus(any());   // the global reconcile is not run for a Manager read
         verify(supportRepository, never()).findAllByArchivedAtIsNullOrderByCreatedAtDesc();
         verify(supportRepository, never()).findByStatusAndArchivedAtIsNullOrderByCreatedAtDesc(any());
@@ -89,13 +89,13 @@ public class SupportAssignmentServiceImplScopeTest {
     @DisplayName("A Manager history with a status filter uses the department-and-status query")
     public void managerHistoryWithStatusUsesDepartmentQuery() {
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        when(supportRepository.findHistoryInvolvingDepartmentAndStatus("ALPHA", SupportStatus.ACTIVE)).thenReturn(List.of());
-        when(supportRepository.findByStatusInvolvingDepartment(SupportStatus.ACTIVE, "ALPHA")).thenReturn(List.of());
+        when(supportRepository.findHistoryInvolvingDepartmentsAndStatus(List.of("ALPHA"), SupportStatus.ACTIVE)).thenReturn(List.of());
+        when(supportRepository.findByStatusInvolvingDepartments(SupportStatus.ACTIVE, List.of("ALPHA"))).thenReturn(List.of());
 
         service.list(SupportStatus.ACTIVE);
 
-        verify(supportRepository).findHistoryInvolvingDepartmentAndStatus("ALPHA", SupportStatus.ACTIVE);
-        verify(supportRepository, never()).findHistoryInvolvingDepartment(any());
+        verify(supportRepository).findHistoryInvolvingDepartmentsAndStatus(List.of("ALPHA"), SupportStatus.ACTIVE);
+        verify(supportRepository, never()).findHistoryInvolvingDepartments(any());
         verify(supportRepository, never()).findByStatusAndArchivedAtIsNullOrderByCreatedAtDesc(any());
         verify(supportRepository, never()).findByStatus(any());
         verify(scopeResolver, times(1)).resolve();
@@ -113,9 +113,9 @@ public class SupportAssignmentServiceImplScopeTest {
         verify(scopeResolver, times(1)).resolve();
         verify(supportRepository).findAllByArchivedAtIsNullOrderByCreatedAtDesc();
         verify(supportRepository).findByStatus(SupportStatus.ACTIVE);   // the Admin read still reconciles every active record
-        verify(supportRepository, never()).findByStatusInvolvingDepartment(any(), any());
-        verify(supportRepository, never()).findHistoryInvolvingDepartment(any());
-        verify(supportRepository, never()).findHistoryInvolvingDepartmentAndStatus(any(), any());
+        verify(supportRepository, never()).findByStatusInvolvingDepartments(any(), any());
+        verify(supportRepository, never()).findHistoryInvolvingDepartments(any());
+        verify(supportRepository, never()).findHistoryInvolvingDepartmentsAndStatus(any(), any());
     }
 
     @Test
@@ -280,16 +280,16 @@ public class SupportAssignmentServiceImplScopeTest {
     public void managerEndUsesScopedLookups() {
         UUID id = UUID.randomUUID();
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        when(supportRepository.findTaskIdByIdInvolvingDepartment(id, "ALPHA")).thenReturn(java.util.Optional.empty());
+        when(supportRepository.findTaskIdByIdInvolvingDepartments(id, List.of("ALPHA"))).thenReturn(java.util.Optional.empty());
 
         SupportPlanException thrown = assertThrows(SupportPlanException.class, () -> service.end(id));
 
         assertEquals(HttpStatus.NOT_FOUND, thrown.getStatus());
         verify(scopeResolver, times(1)).resolve();
-        verify(supportRepository).findTaskIdByIdInvolvingDepartment(id, "ALPHA");
+        verify(supportRepository).findTaskIdByIdInvolvingDepartments(id, List.of("ALPHA"));
         verify(supportRepository, never()).findTaskIdById(any());
         verify(supportRepository, never()).lockById(any());
-        verify(supportRepository, never()).lockByIdInvolvingDepartment(any(), any());
+        verify(supportRepository, never()).lockByIdInvolvingDepartments(any(), any());
         verifyNoInteractions(taskRepository, staffRepository, assignmentRepository);
     }
 
@@ -299,13 +299,13 @@ public class SupportAssignmentServiceImplScopeTest {
         UUID id = UUID.randomUUID();
         UUID taskId = UUID.randomUUID();
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        when(supportRepository.findTaskIdByIdInvolvingDepartment(id, "ALPHA")).thenReturn(java.util.Optional.of(taskId));
-        when(supportRepository.lockByIdInvolvingDepartment(id, "ALPHA")).thenReturn(java.util.Optional.empty());   // lost a race: gone by the time it is locked
+        when(supportRepository.findTaskIdByIdInvolvingDepartments(id, List.of("ALPHA"))).thenReturn(java.util.Optional.of(taskId));
+        when(supportRepository.lockByIdInvolvingDepartments(id, List.of("ALPHA"))).thenReturn(java.util.Optional.empty());   // lost a race: gone by the time it is locked
 
         assertEquals(HttpStatus.NOT_FOUND, assertThrows(SupportPlanException.class, () -> service.end(id)).getStatus());
 
         verify(taskRepository).lockByIds(java.util.Set.of(taskId));
-        verify(supportRepository).lockByIdInvolvingDepartment(id, "ALPHA");
+        verify(supportRepository).lockByIdInvolvingDepartments(id, List.of("ALPHA"));
         verify(supportRepository, never()).findTaskIdById(any());
         verify(supportRepository, never()).lockById(any());
     }
@@ -316,12 +316,12 @@ public class SupportAssignmentServiceImplScopeTest {
         UUID id = UUID.randomUUID();
         signedIn("manager");
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        when(supportRepository.lockByIdInvolvingDepartment(id, "ALPHA")).thenReturn(java.util.Optional.empty());
+        when(supportRepository.lockByIdInvolvingDepartments(id, List.of("ALPHA"))).thenReturn(java.util.Optional.empty());
 
         assertEquals(HttpStatus.NOT_FOUND, assertThrows(SupportPlanException.class, () -> service.archive(id)).getStatus());
 
         verify(scopeResolver, times(1)).resolve();
-        verify(supportRepository).lockByIdInvolvingDepartment(id, "ALPHA");
+        verify(supportRepository).lockByIdInvolvingDepartments(id, List.of("ALPHA"));
         verify(supportRepository, never()).lockById(any());
         verifyNoInteractions(taskRepository, staffRepository, assignmentRepository);
     }
@@ -340,8 +340,8 @@ public class SupportAssignmentServiceImplScopeTest {
 
         verify(supportRepository).findTaskIdById(id);
         verify(supportRepository).lockById(id);
-        verify(supportRepository, never()).findTaskIdByIdInvolvingDepartment(any(), any());
-        verify(supportRepository, never()).lockByIdInvolvingDepartment(any(), any());
+        verify(supportRepository, never()).findTaskIdByIdInvolvingDepartments(any(), any());
+        verify(supportRepository, never()).lockByIdInvolvingDepartments(any(), any());
     }
 
     @Test

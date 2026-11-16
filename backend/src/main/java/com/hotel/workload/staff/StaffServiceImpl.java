@@ -114,14 +114,14 @@ public class StaffServiceImpl implements StaffService {
         // the role are part of the database query, so other departments' staff, and manager or admin accounts, are never loaded.
         if (scope.isDepartment() && !scope.viewOnlyDepartments().isEmpty()) {
             // Also the STAFF-role staff of the departments an Administrator lets this Manager VIEW: listed without contact details and
-            // marked view-only. Every staff write still checks the primary department only (scope.includes), so none of them can be changed.
+            // marked view-only. Every staff write checks the managed departments only (scope.canManage), so none of them can be changed.
             return staffRepository.findByDepartmentInAndUserRole(scope.viewableDepartments(), Role.STAFF).stream()
                     .map(staff -> scope.isViewOnly(staff.getDepartment()) ? StaffDto.viewOnlyFromEntity(staff) : StaffDto.fromEntity(staff))
                     .collect(Collectors.toList());
         }
         List<Staff> visible = scope.isAll()
                 ? staffRepository.findAll()
-                : staffRepository.findByDepartmentAndUserRole(scope.department(), Role.STAFF);
+                : staffRepository.findByDepartmentInAndUserRole(scope.managedDepartments(), Role.STAFF);
         return visible.stream()
                 .map(StaffDto::fromEntity)
                 .collect(Collectors.toList());
@@ -142,7 +142,7 @@ public class StaffServiceImpl implements StaffService {
         if (scope.isDepartment() && (request.getDepartment() == null || request.getDepartment().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Department is required");
         }
-        if (scope.isDepartment() && !isDepartmentCode(request.getDepartment(), scope.departmentCode())) {
+        if (scope.isDepartment() && !scope.canManageCode(request.getDepartment().trim())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, OWN_DEPARTMENT_ONLY_MESSAGE);
         }
 
@@ -179,8 +179,10 @@ public class StaffServiceImpl implements StaffService {
         staff.setName(request.getFullName());
         staff.setEmail(request.getEmail());
         staff.setPhone(request.getPhone());
-        // For a Manager the department is the one resolved from their own records, never the one from the request
-        staff.setDepartment(scope.isDepartment() ? scope.department() : (noDepartment ? null : departmentResolver.requireActive(request.getDepartment())));
+        // For a Manager the department is the managed department from their own records that the request named (checked above), never a
+        // department looked up from the request
+        staff.setDepartment(scope.isDepartment() ? managedDepartment(scope, request.getDepartment())
+                : (noDepartment ? null : departmentResolver.requireActive(request.getDepartment())));
         staff.setAvailability(request.getAvailability());
         staff.setActive(true);
         
@@ -478,9 +480,16 @@ public class StaffServiceImpl implements StaffService {
      * cannot be probed. Must run after the row is loaded (and locked), so a concurrent move is seen.
      */
     private static void requireInScope(DepartmentScope scope, Staff staff) {
-        if (!scope.includes(staff.getDepartment())) {
+        if (!scope.canManage(staff.getDepartment())) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Staff not found");
         }
+    }
+
+    /** The managed department the code names (already checked with canManageCode), taken from the scope: nothing is looked up. */
+    private static Department managedDepartment(DepartmentScope scope, String requested) {
+        String code = requested.trim();
+        return scope.managedDepartments().stream().filter(d -> code.equals(d.getCode())).findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, OWN_DEPARTMENT_ONLY_MESSAGE));
     }
 
     private static boolean isDepartmentCode(String requested, String actual) {

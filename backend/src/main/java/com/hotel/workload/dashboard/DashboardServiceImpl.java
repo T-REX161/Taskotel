@@ -104,22 +104,39 @@ public class DashboardServiceImpl implements DashboardService {
      * (task and holder both in the department), so support-loan work is excluded in both directions.
      */
     private AdminDashboardSummaryDto buildDepartmentDashboardSummary(DepartmentScope scope) {
-        Department department = scope.department();
         AdminDashboardSummaryDto dto = new AdminDashboardSummaryDto();
+        // The totals of every department this Manager manages: the same per-department queries, added up (each staff member, task and
+        // counted assignment belongs to exactly one department, so nothing is counted twice)
+        long totalStaff = 0, availableStaff = 0, unavailableStaff = 0, inactiveStaff = 0;
+        long totalTasks = 0, pending = 0, assigned = 0, inProgress = 0, completed = 0, cancelled = 0, activeAssignments = 0;
+        for (Department department : scope.managedDepartments()) {
+            totalStaff += staffRepository.countOperationalInDepartment(department);
+            availableStaff += staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.AVAILABLE);
+            unavailableStaff += staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.UNAVAILABLE);
+            inactiveStaff += staffRepository.countOperationalInactiveInDepartment(department);
 
-        dto.setTotalStaff(staffRepository.countOperationalInDepartment(department));
-        dto.setAvailableStaff(staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.AVAILABLE));
-        dto.setUnavailableStaff(staffRepository.countOperationalActiveByAvailabilityInDepartment(department, Availability.UNAVAILABLE));
-        dto.setInactiveStaff(staffRepository.countOperationalInactiveInDepartment(department));
+            totalTasks += taskRepository.countByDepartment(department);
+            pending += taskRepository.countByDepartmentAndStatus(department, TaskStatus.PENDING);
+            assigned += taskRepository.countByDepartmentAndStatus(department, TaskStatus.ASSIGNED);
+            inProgress += taskRepository.countByDepartmentAndStatus(department, TaskStatus.IN_PROGRESS);
+            completed += taskRepository.countByDepartmentAndStatus(department, TaskStatus.COMPLETED);
+            cancelled += taskRepository.countByDepartmentAndStatus(department, TaskStatus.CANCELLED);
 
-        dto.setTotalTasks(taskRepository.countByDepartment(department));
-        dto.setPendingTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.PENDING));
-        dto.setAssignedTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.ASSIGNED));
-        dto.setInProgressTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.IN_PROGRESS));
-        dto.setCompletedTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.COMPLETED));
-        dto.setCancelledTasks(taskRepository.countByDepartmentAndStatus(department, TaskStatus.CANCELLED));
+            activeAssignments += assignmentRepository.countActiveByTaskAndStaffDepartment(ACTIVE_STATUSES, department);
+        }
+        dto.setTotalStaff(totalStaff);
+        dto.setAvailableStaff(availableStaff);
+        dto.setUnavailableStaff(unavailableStaff);
+        dto.setInactiveStaff(inactiveStaff);
 
-        dto.setTotalActiveAssignments(assignmentRepository.countActiveByTaskAndStaffDepartment(ACTIVE_STATUSES, department));
+        dto.setTotalTasks(totalTasks);
+        dto.setPendingTasks(pending);
+        dto.setAssignedTasks(assigned);
+        dto.setInProgressTasks(inProgress);
+        dto.setCompletedTasks(completed);
+        dto.setCancelledTasks(cancelled);
+
+        dto.setTotalActiveAssignments(activeAssignments);
 
         applyWorkloadBuckets(dto, scope);
         applyCapacityAlerts(dto, scope);
@@ -151,7 +168,7 @@ public class DashboardServiceImpl implements DashboardService {
         int threshold = settings.capacityThresholdPercent();
 
         List<Staff> candidates = scope.isDepartment()
-                ? staffRepository.findByDepartmentAndUserRole(scope.department(), com.hotel.workload.security.Role.STAFF)
+                ? staffRepository.findByDepartmentInAndUserRole(scope.managedDepartments(), com.hotel.workload.security.Role.STAFF)
                 : staffRepository.findAllWithUser();
         java.util.Set<java.util.UUID> busy = new java.util.HashSet<>(assignmentRepository.findBusyStaffIds(ACTIVE_STATUSES));
 

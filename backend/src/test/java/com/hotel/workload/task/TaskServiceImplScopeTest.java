@@ -74,11 +74,11 @@ public class TaskServiceImplScopeTest {
     @DisplayName("A Manager's list is a department query: findAll is never called")
     public void managerListUsesTheDepartmentQuery() {
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        when(taskRepository.findByDepartment(alpha)).thenReturn(List.of(taskIn(alpha)));
+        when(taskRepository.findByDepartmentIn(List.of(alpha))).thenReturn(List.of(taskIn(alpha)));
 
         assertEquals(1, service.getAllTasks().size());
 
-        verify(taskRepository).findByDepartment(alpha);
+        verify(taskRepository).findByDepartmentIn(List.of(alpha));
         verify(taskRepository, never()).findAll();
         verify(taskRepository, never()).findTasksByStaffId(any());
     }
@@ -91,7 +91,7 @@ public class TaskServiceImplScopeTest {
 
         assertEquals(2, service.getAllTasks().size());
 
-        verify(taskRepository, never()).findByDepartment(any());
+        verify(taskRepository, never()).findByDepartmentIn(any());
     }
 
     @Test
@@ -107,7 +107,7 @@ public class TaskServiceImplScopeTest {
 
             verify(staffRepository).findByUserUsername("sam");
             verify(taskRepository, never()).findAll();
-            verify(taskRepository, never()).findByDepartment(any());
+            verify(taskRepository, never()).findByDepartmentIn(any());
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }
@@ -118,12 +118,12 @@ public class TaskServiceImplScopeTest {
     public void managerSingleTaskOperationsUseTheScopedLock() {
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
         UUID otherId = UUID.randomUUID();
-        when(taskRepository.lockByIdAndDepartment(otherId, alpha)).thenReturn(Optional.empty());
+        when(taskRepository.lockByIdAndDepartmentIn(otherId, List.of(alpha))).thenReturn(Optional.empty());
 
         assertEquals(HttpStatus.NOT_FOUND, assertThrows(ResponseStatusException.class, () -> service.updateTask(otherId, update("ALPHA"))).getStatusCode());
         assertEquals(HttpStatus.NOT_FOUND, assertThrows(ResponseStatusException.class, () -> service.deleteTask(otherId)).getStatusCode());
 
-        verify(taskRepository, times(2)).lockByIdAndDepartment(otherId, alpha);
+        verify(taskRepository, times(2)).lockByIdAndDepartmentIn(otherId, List.of(alpha));
         verify(taskRepository, never()).lockByIds(any());
         verify(taskRepository, never()).findById(any());
         verify(taskRepository, never()).delete(any());
@@ -136,7 +136,7 @@ public class TaskServiceImplScopeTest {
     public void managerCannotMoveOrClearTheDepartment() {
         Task task = taskIn(alpha);
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        when(taskRepository.lockByIdAndDepartment(task.getId(), alpha)).thenReturn(Optional.of(task));
+        when(taskRepository.lockByIdAndDepartmentIn(task.getId(), List.of(alpha))).thenReturn(Optional.of(task));
 
         for (String requested : new String[] {"BETA", "", null, "NO_SUCH"}) {
             ResponseStatusException error = assertThrows(ResponseStatusException.class, () -> service.updateTask(task.getId(), update(requested)));
@@ -157,7 +157,7 @@ public class TaskServiceImplScopeTest {
         service.deleteTask(task.getId());
 
         verify(taskRepository).lockByIds(Set.of(task.getId()));
-        verify(taskRepository, never()).lockByIdAndDepartment(any(), any());
+        verify(taskRepository, never()).lockByIdAndDepartmentIn(any(), any());
         verify(taskRepository).delete(task);
         verify(supportLifecycle).onTaskDeleted(task.getId());
     }
