@@ -199,3 +199,28 @@ export function appendHistoryPage(loaded, next) {
   const added = (Array.isArray(next?.items) ? next.items : []).filter((change) => change && !seen.has(change.id));
   return [...(Array.isArray(loaded) ? loaded : []), ...added];
 }
+
+/** The Profile page lists departments only for a signed-in Manager (an Admin covers every department; Staff have their own records only). */
+export function showsProfileDepartments(role) {
+  return normalize(role) === 'MANAGER';
+}
+
+/**
+ * The departments in a signed-in Manager's own profile header. The primary one comes from the profile (the department of the Manager's own
+ * staff record, null when there is none or it is inactive). The additional ones are those the server marked view-only in the Manager's own
+ * department list (GET /api/departments, scoped to the caller): never the primary department, never twice, sorted by name.
+ */
+export function profileDepartments(profile, departments) {
+  const primaryCode = profile?.departmentCode || '';
+  const primary = primaryCode ? { code: primaryCode, name: profile?.departmentName || primaryCode } : null;
+  const seen = new Set(primaryCode ? [primaryCode] : []);
+  const additional = [];
+  for (const department of Array.isArray(departments) ? departments : []) {
+    const code = department?.code;
+    if (!code || !isViewOnly(department) || seen.has(code)) continue;
+    seen.add(code);
+    additional.push({ code, name: department.name || code, active: department.active !== false });
+  }
+  additional.sort((a, b) => a.name.localeCompare(b.name));
+  return { primary, additional };
+}

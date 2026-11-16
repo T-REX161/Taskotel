@@ -16,6 +16,7 @@ import { EMAIL_CHANGE_MESSAGES, pendingEmailChange } from '../utils/emailChange'
 import { describeActivity } from '../utils/accountActivity';
 import { accessScopeFor, accountStatus, emailAddress, emailVerification, phoneNumber } from '../utils/profileView';
 import ProfilePictureEditor from '../components/profile/ProfilePictureEditor';
+import ProfileDepartments from '../components/profile/ProfileDepartments';
 import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
 
@@ -288,6 +289,7 @@ export default function ProfilePage() {
                   {accessScope}
                 </span>
               </div>
+              <ProfileDepartments role={role} profile={profile} profileUnavailable={profileUnavailable} />
             </div>
           </div>
           </div>

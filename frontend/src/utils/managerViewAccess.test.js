@@ -24,6 +24,8 @@ import {
   viewAccessErrorMessage,
   viewAccessSummary,
   withoutViewOnly,
+  profileDepartments,
+  showsProfileDepartments,
 } from './managerViewAccess.js';
 import { filterEligibleStaff } from './staffFilter.js';
 import { getEligibleUnassignedTasks } from './assignmentUtils.js';
@@ -426,5 +428,73 @@ describe('access history: preview, full history, filters and Load more', () => {
     assert.deepEqual(appendHistoryPage([], { items: [{ id: 9 }] }).map((c) => c.id), [9]);
     assert.deepEqual(appendHistoryPage(first, null), first);
     assert.deepEqual(appendHistoryPage(null, { items: [null, { id: 4 }] }).map((c) => c.id), [4]);
+  });
+});
+
+describe("the Manager's own profile header: Departments", () => {
+  const profile = { username: 'mgr', role: 'MANAGER', departmentCode: 'FRONT_DESK', departmentName: 'Front Desk' };
+  const own = { code: 'FRONT_DESK', name: 'Front Desk', active: true };
+  const basic = (code, name) => ({ code, name, active: true }); // a department the Manager cannot see (identity only, not view-only)
+  const granted = (code, name, active = true) => ({ code, name, active, viewOnly: true });
+
+  it('is shown for a Manager only, never for an Admin or Staff', () => {
+    assert.equal(showsProfileDepartments('MANAGER'), true);
+    assert.equal(showsProfileDepartments('manager'), true);
+    for (const role of ['ADMIN', 'STAFF', '', null, undefined, 'OTHER']) assert.equal(showsProfileDepartments(role), false, String(role));
+  });
+
+  it('a Manager with only a primary department: Primary, no additional departments', () => {
+    const shown = profileDepartments(profile, [own, basic('SECURITY', 'Security'), basic('MAINTENANCE', 'Maintenance')]);
+    assert.deepEqual(shown.primary, { code: 'FRONT_DESK', name: 'Front Desk' });
+    assert.deepEqual(shown.additional, []);
+  });
+
+  it('a Manager with several grants: the view-only departments by name, never the primary one, never twice', () => {
+    const list = [own, granted('SECURITY', 'Security'), basic('SPA', 'Spa'), granted('MAINTENANCE', 'Maintenance', false),
+      granted('SECURITY', 'Security'), { ...own, viewOnly: true }];
+    const shown = profileDepartments(profile, list);
+    assert.equal(shown.primary.name, 'Front Desk');
+    assert.deepEqual(shown.additional, [
+      { code: 'MAINTENANCE', name: 'Maintenance', active: false },
+      { code: 'SECURITY', name: 'Security', active: true },
+    ]);
+  });
+
+  it('after a revocation the server no longer marks the department view-only, so it is no longer listed', () => {
+    const before = profileDepartments(profile, [own, granted('SECURITY', 'Security'), granted('SPA', 'Spa')]);
+    const after = profileDepartments(profile, [own, basic('SECURITY', 'Security'), granted('SPA', 'Spa')]);
+    assert.deepEqual(before.additional.map((d) => d.code), ['SECURITY', 'SPA']);
+    assert.deepEqual(after.additional.map((d) => d.code), ['SPA']);
+  });
+
+  it('only what the server said: no primary without one on the profile, nothing from other data, odd answers are safe', () => {
+    assert.equal(profileDepartments({ departmentCode: null }, [own]).primary, null);
+    assert.equal(profileDepartments(null, null).primary, null);
+    assert.deepEqual(profileDepartments(profile, 'nope').additional, []);
+    assert.deepEqual(profileDepartments(profile, [{ code: 'X', viewOnly: 'true' }, { viewOnly: true }, null]).additional, []);
+    assert.equal(profileDepartments({ departmentCode: 'FRONT_DESK' }, []).primary.name, 'FRONT_DESK');
+  });
+
+  const component = read('components', 'profile', 'ProfileDepartments.jsx');
+  const page = read('pages', 'ProfilePage.jsx');
+
+  it("reads the Manager's own scoped department list, never the Admin-only grant endpoints", () => {
+    assert.ok(component.includes('getDepartments()'));
+    for (const adminOnly of ['getManagerViewAccess', 'view-departments', 'updateManagerViewAccess', 'getManagerViewAccessHistory']) {
+      assert.ok(!component.includes(adminOnly), adminOnly);
+    }
+    assert.ok(component.includes('const shown = showsProfileDepartments(role);') && component.includes('if (!shown) return undefined;'));
+    assert.ok(component.includes('if (!shown) return null;'), 'renders nothing (and fetches nothing) for an Admin or Staff');
+  });
+
+  it("shows one compact text line under the badges: Primary and View only labels, no chips, badges or cards", () => {
+    assert.ok(component.includes("<p data-testid=\"profile-departments\"") && component.includes("text-xs") && component.includes(">Departments:</span>"));
+    assert.ok(component.includes("data-kind=\"primary\"") && component.includes("&nbsp;(Primary)") && component.includes("font-medium text-gray-700"));
+    assert.ok(component.includes("data-kind=\"view-only\"") && component.includes("'View only'") && component.includes(">·</span>"));
+    for (const chip of ["ViewOnlyBadge", "rounded-md", "border", "bg-gray-50", "<ul", "<li"]) assert.ok(!component.includes(chip), chip);
+    assert.ok(!component.includes("whitespace-nowrap"), "long names may wrap on a narrow screen");
+    const header = page.slice(page.indexOf('aria-label="Profile summary"'), page.indexOf('title="Personal Information"'));
+    const at = (s) => header.indexOf(s);
+    assert.ok(at('{accessScope}') > 0 && at('<ProfileDepartments role={role} profile={profile}') > at('{accessScope}'));
   });
 });
