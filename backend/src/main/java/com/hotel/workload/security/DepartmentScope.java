@@ -26,6 +26,10 @@ import java.util.Objects;
  * {@link #viewableDepartments()}, which read paths use to list data. A read path that does not ask for it simply shows the primary
  * department, so missing it under-exposes rather than over-exposes, and no write path can be reached through it.
  *
+ * <p><b>Authorized-department API (being introduced).</b> {@link #primaryDepartment()}, {@link #managedDepartments()} and
+ * {@link #canManage(Department)} are the methods every call site will use for the multi-department Manager change. In this phase they give
+ * exactly the same answers as {@link #department()} and {@link #includes(Department)} (the primary department only), so nothing changes yet.
+ *
  * A scope never carries information supplied by the client: it is built only from database records.
  */
 public final class DepartmentScope {
@@ -178,17 +182,69 @@ public final class DepartmentScope {
         return false;
     }
 
+    // ── the authorized-department API (multi-department Manager change, P1) ─────────────────────────────────────────────────
+    //
+    // Call sites move to these methods in P2; in P3 the Admin-granted departments join managedDepartments() in this one place. Until then
+    // they answer exactly like the primary-department methods above, so adopting them changes no behaviour.
+
+    /**
+     * The Manager's primary department: the department of their own Staff record. Only for defaults and labels (for example the department
+     * a task gets when none is chosen), never for an authorization decision, which uses {@link #canManage} or {@link #managedDepartments}.
+     * Asking on another kind is a programming error.
+     */
+    public Department primaryDepartment() {
+        return department();
+    }
+
+    /**
+     * The departments this DEPARTMENT scope may MANAGE, primary first: in this phase the primary department only (Administrator grants are
+     * still view-only). Asking on another kind is a programming error: ALL manages every department and OWN none.
+     */
+    public List<Department> managedDepartments() {
+        return List.of(department());
+    }
+
+    /** The codes of {@link #managedDepartments()}, in the same order. */
+    public List<String> managedDepartmentCodes() {
+        return managedDepartments().stream().map(Department::getCode).toList();
+    }
+
+    /** Whether data of {@code other} may be MANAGED: ALL any department (and records without one); DEPARTMENT a managed one; OWN none. */
+    public boolean canManage(Department other) {
+        return canManageCode(other == null ? null : other.getCode());
+    }
+
+    /** Same as {@link #canManage(Department)}, for a department code. */
+    public boolean canManageCode(String departmentCode) {
+        return switch (kind) {
+            case ALL -> true;
+            case DEPARTMENT -> departmentCode != null && managedDepartmentCodes().contains(departmentCode);
+            case OWN -> false;
+        };
+    }
+
+    /** The codes of the Administrator-granted departments, as a set (order does not matter for equality). */
+    private java.util.Set<String> grantedCodes() {
+        return viewOnly.stream().map(Department::getCode).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    /**
+     * Two scopes are equal only when they grant the same access: the same kind, the same primary department and the same set of
+     * Administrator-granted departments. (Before P1 the granted departments were ignored, so a Manager with grants compared equal to the
+     * same Manager without them.)
+     */
     @Override
     public boolean equals(Object other) {
         if (this == other) return true;
         if (!(other instanceof DepartmentScope that)) return false;
-        return kind == that.kind && Objects.equals(kind == Kind.DEPARTMENT ? department.getCode() : null,
-                that.kind == Kind.DEPARTMENT ? that.department.getCode() : null);
+        return kind == that.kind
+                && Objects.equals(kind == Kind.DEPARTMENT ? department.getCode() : null, that.kind == Kind.DEPARTMENT ? that.department.getCode() : null)
+                && grantedCodes().equals(that.grantedCodes());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(kind, kind == Kind.DEPARTMENT ? department.getCode() : null);
+        return Objects.hash(kind, kind == Kind.DEPARTMENT ? department.getCode() : null, grantedCodes());
     }
 
     @Override

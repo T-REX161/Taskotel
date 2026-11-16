@@ -39,7 +39,10 @@ class DepartmentScopeViewOnlyTest {
         assertTrue(scope.isViewOnly(granted));
         assertFalse(scope.isViewOnly(home));
         assertEquals(List.of(home, granted), scope.viewableDepartments());
-        assertEquals(DepartmentScope.department(home), scope, "equality (and so every existing comparison) is unchanged");
+        // P1 (multi-department change): equality now compares the granted departments too, so a scope with a grant is no longer
+        // mistaken for the same Manager's scope without it. Every assertion above (the write authority) is unchanged.
+        assertFalse(DepartmentScope.department(home).equals(scope), "a scope with a granted department differs from one without");
+        assertEquals(DepartmentScope.department(home).withViewOnly(List.of(granted)), scope);
     }
 
     @Test
