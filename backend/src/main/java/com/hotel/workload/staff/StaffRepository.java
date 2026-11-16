@@ -13,6 +13,14 @@ import java.util.Optional;
 public interface StaffRepository extends JpaRepository<Staff, UUID> {
     boolean existsByEmail(String email);
 
+    /**
+     * The accounts of the Managers whose PRIMARY department is this one and who are valid right now: an active Manager account, an active
+     * linked Staff record, and an active department (the same conditions the authorization scope checks on every request).
+     */
+    @Query("SELECT DISTINCT u.id FROM Staff s JOIN s.user u WHERE s.department = :department AND s.active = true AND u.active = true "
+            + "AND u.role = com.hotel.workload.security.Role.MANAGER AND s.department.active = true")
+    List<UUID> findValidManagerUserIdsByPrimaryDepartment(@Param("department") Department department);
+
     /** Every staff member with their user account loaded, for callers that read the account (no per-row lookups). */
     @Query("SELECT s FROM Staff s JOIN FETCH s.user")
     List<Staff> findAllWithUser();

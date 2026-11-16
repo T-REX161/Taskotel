@@ -233,4 +233,38 @@ public class NotificationServiceTest {
         });
         verify(emailService, never()).sendNotificationEmail(anyString(), anyString(), anyString(), anyString());
     }
+
+    @Test
+    @DisplayName("Recipients given as a supplier are decided only after the commit, from the database as it is then")
+    public void lazyRecipientsAreDecidedAfterCommit() {
+        User user = account("lazy");
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        java.util.concurrent.atomic.AtomicInteger asked = new java.util.concurrent.atomic.AtomicInteger();
+        template.executeWithoutResult(status -> {
+            notifications.sendAfterCommit(NotificationCategory.TASK_STATUS, () -> {
+                asked.incrementAndGet();
+                return List.of(new Notice(user.getId(), CONTENT));
+            });
+            assertEquals(0, asked.get(), "not asked while the transaction is open");
+            setEmailPreference(user, NotificationCategory.TASK_STATUS, true);
+        });
+        assertEquals(1, asked.get());
+        verifySentTo(user.getEmail(), 1);
+
+        Mockito.clearInvocations(emailService);
+        template.executeWithoutResult(status -> {
+            notifications.sendAfterCommit(NotificationCategory.TASK_STATUS, () -> List.of(new Notice(user.getId(), CONTENT)));
+            status.setRollbackOnly();
+        });
+        verify(emailService, never()).sendNotificationEmail(anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("A supplier that fails sends nothing and breaks nothing")
+    public void failingSupplierIsSwallowed() {
+        assertDoesNotThrow(() -> notifications.sendAfterCommit(NotificationCategory.TASK_STATUS, () -> {
+            throw new IllegalStateException("lookup failed");
+        }));
+        verify(emailService, never()).sendNotificationEmail(anyString(), anyString(), anyString(), anyString());
+    }
 }

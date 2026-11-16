@@ -86,4 +86,20 @@ public class NotificationEmailTemplatesTest {
         assertThrows(EmailSendingException.class, () -> new SendGridEmailService(new SendGridProperties("", "noreply@hotelwb.com", "Taskotel"))
                 .sendNotificationEmail("x@hotel.test", "s", "t", "h"));
     }
+
+    @Test
+    @DisplayName("The status email names the old and new status, escapes everything dynamic, keeps the subject on one line and carries no link")
+    public void statusTemplate() {
+        EmailContent content = NotificationEmailTemplates.taskStatusChanged(task("<b>Fix</b>\r\nBcc: x@evil.test", null), "Assigned", "In Progress", "Mia <script> (Staff)");
+        assertTrue(content.subject().startsWith("Taskotel - Task status updated: "));
+        assertTrue(content.subject().endsWith("is now In Progress"));
+        assertFalse(content.subject().contains("\n") || content.subject().contains("\r"));
+        for (String fragment : new String[] {"Previous status: Assigned", "New status: In Progress", "Priority: HIGH", "Department: Housekeeping", "Due: 2027-01-15 17:30", "Changed by: Mia"}) {
+            assertTrue(content.text().contains(fragment), fragment);
+        }
+        assertFalse(content.html().contains("<script>") || content.html().contains("<b>Fix</b>"));
+        assertTrue(content.html().contains("&lt;script&gt;"));
+        assertFalse(content.text().contains("http") || content.html().contains("href"), "no link when no application address is configured");
+        assertFalse(NotificationEmailTemplates.taskStatusChanged(task("T", null), "Pending", "Assigned", null).text().contains("Changed by"));
+    }
 }

@@ -36,6 +36,22 @@ public final class NotificationEmailTemplates {
                 taskFacts(task));
     }
 
+    /** A task's status changed. No link is included: no application address is configured. */
+    public static EmailContent taskStatusChanged(TaskInfo task, String previousStatus, String newStatus, String changedBy) {
+        List<Fact> facts = new ArrayList<>();
+        facts.add(new Fact("Task", task.title()));
+        facts.add(new Fact("Previous status", previousStatus));
+        facts.add(new Fact("New status", newStatus));
+        if (present(task.priority())) facts.add(new Fact("Priority", task.priority()));
+        if (present(task.departmentName())) facts.add(new Fact("Department", task.departmentName()));
+        if (present(task.dueDate())) facts.add(new Fact("Due", task.dueDate() + (present(task.deadlineTime()) ? " " + task.deadlineTime() : "")));
+        if (present(changedBy)) facts.add(new Fact("Changed by", changedBy));
+        return compose("Taskotel - Task status updated: " + shorten(task.title()) + " is now " + oneLine(newStatus),
+                "A task's status was updated",
+                "The status of a task you follow in Taskotel has changed.",
+                facts);
+    }
+
     private static List<Fact> taskFacts(TaskInfo task) {
         List<Fact> facts = new ArrayList<>();
         facts.add(new Fact("Task", task.title()));

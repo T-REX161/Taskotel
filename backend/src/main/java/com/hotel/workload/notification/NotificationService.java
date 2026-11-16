@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -67,35 +68,40 @@ public class NotificationService {
      * @param notices  the messages, one per account; an account named twice receives the first one only
      */
     public void sendAfterCommit(NotificationCategory category, Collection<Notice> notices) {
+        if (notices == null || notices.isEmpty()) return;
+        sendAfterCommit(category, () -> notices);
+    }
+
+    /**
+     * As {@link #sendAfterCommit(NotificationCategory, Collection)}, but WHO receives the message is decided only at delivery time: the
+     * supplier runs after the commit, in a short read-only transaction, so the recipients (an assignee, a Manager of a department) come from
+     * the database as it is then, with every grant, account and department state current. A supplier that throws sends nothing.
+     */
+    public void sendAfterCommit(NotificationCategory category, Supplier<Collection<Notice>> recipients) {
         try {
-            if (category == null || notices == null || notices.isEmpty()) return;
-            Map<UUID, EmailContent> unique = new LinkedHashMap<>();
-            for (Notice notice : notices) {
-                if (notice != null && notice.userId() != null && notice.content() != null) unique.putIfAbsent(notice.userId(), notice.content());
-            }
-            if (unique.isEmpty()) return;
+            if (category == null || recipients == null) return;
             if (TransactionSynchronizationManager.isSynchronizationActive() && TransactionSynchronizationManager.isActualTransactionActive()) {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                     @Override
                     public void afterCommit() {
-                        deliver(category, unique);
+                        deliver(category, recipients);
                     }
                 });
             } else {
-                deliver(category, unique);
+                deliver(category, recipients);
             }
         } catch (RuntimeException e) {
             log.error("Could not schedule {} notification emails: {}", category, e.getClass().getSimpleName());
         }
     }
 
-    private void deliver(NotificationCategory category, Map<UUID, EmailContent> notices) {
+    private void deliver(NotificationCategory category, Supplier<Collection<Notice>> recipients) {
         try {
             if (!emailService.isConfigured()) {
-                log.warn("Email is not configured: {} {} notification email(s) were not sent", notices.size(), category);
+                log.warn("Email is not configured: {} notification email(s) were not sent", category);
                 return;
             }
-            List<Target> targets = resolve(category, notices);
+            List<Target> targets = resolve(category, recipients);
             for (Target target : targets) {
                 try {
                     emailService.sendNotificationEmail(target.email(), target.content().subject(), target.content().text(), target.content().html());
@@ -110,11 +116,19 @@ public class NotificationService {
     }
 
     /** Who may receive these notices right now, read from the database in its own short read-only transaction. */
-    private List<Target> resolve(NotificationCategory category, Map<UUID, EmailContent> notices) {
+    private List<Target> resolve(NotificationCategory category, Supplier<Collection<Notice>> recipients) {
         TransactionTemplate template = new TransactionTemplate(transactionManager);
         template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         template.setReadOnly(true);
         return template.execute(status -> {
+            // One notice per account per event: a person named twice receives the first notice only
+            Map<UUID, EmailContent> notices = new LinkedHashMap<>();
+            Collection<Notice> named = recipients.get();
+            if (named != null) {
+                for (Notice notice : named) {
+                    if (notice != null && notice.userId() != null && notice.content() != null) notices.putIfAbsent(notice.userId(), notice.content());
+                }
+            }
             List<Target> targets = new ArrayList<>();
             for (Map.Entry<UUID, EmailContent> entry : notices.entrySet()) {
                 User user = userRepository.findById(entry.getKey()).orElse(null);

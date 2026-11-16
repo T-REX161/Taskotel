@@ -33,6 +33,13 @@ public class TaskServiceImpl implements TaskService {
     private final DepartmentResolver departmentResolver;
     private final SupportLifecycle supportLifecycle;
     private final CurrentUserScopeResolver scopeResolver;
+    /** Tells the people concerned by email when a task's status really changes (after commit). Optional: a service built by hand sends nothing. */
+    private com.hotel.workload.notification.TaskEmailNotifier taskEmails;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTaskEmailNotifier(com.hotel.workload.notification.TaskEmailNotifier taskEmails) {
+        this.taskEmails = taskEmails;
+    }
 
     private static final String OWN_DEPARTMENT_ONLY_MESSAGE = "Managers can only create tasks in their own department.";
     private static final String NO_DEPARTMENT_CHANGE_MESSAGE = "Managers cannot move a task to another department or remove its department.";
@@ -175,6 +182,7 @@ public class TaskServiceImpl implements TaskService {
         task.setDescription(request.getDescription());
         task.setCategory(request.getCategory());
         task.setPriority(request.getPriority());
+        TaskStatus previousStatus = task.getStatus();
         if (request.getStatus() != null) {
             task.setStatus(request.getStatus());
         }
@@ -186,6 +194,8 @@ public class TaskServiceImpl implements TaskService {
         task = taskRepository.saveAndFlush(task);
         // Temporary cross-department support ends when its task is completed, cancelled or moved
         supportLifecycle.onTaskChanged(task);
+        // Only a real change of status is announced (an edit that leaves the status as it was sends nothing)
+        if (taskEmails != null && previousStatus != task.getStatus()) taskEmails.taskStatusChanged(task, previousStatus, scopeResolver.currentUsername());
         return mapToDto(task);
     }
 
@@ -310,6 +320,7 @@ public class TaskServiceImpl implements TaskService {
         task = taskRepository.saveAndFlush(task);
         // The same follow-up as the full update: temporary cross-department support ends when its task is completed
         supportLifecycle.onTaskChanged(task);
+        if (taskEmails != null && current != task.getStatus()) taskEmails.taskStatusChanged(task, current, username);
         return mapToDto(task);
     }
 
