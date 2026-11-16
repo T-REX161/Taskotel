@@ -8,6 +8,7 @@ import {
   calculateDepartmentWorkloads,
   SUPPORTED_DEPARTMENTS,
   sortWorkloadAlphabetically } from '../utils/workloadUtils.js';
+import { decideWorkloadRefresh } from '../utils/workloadRefresh.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -532,7 +533,15 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       assert.ok(pageSource.includes("if (!isBackground) {\n      setIsLoading(true);\n      setError('');\n    }") || pageSource.includes("if (!isBackground) {\r\n      setIsLoading(true);\r\n      setError('');\r\n    }"), 'Spinner and error reset only for foreground loads');
       assert.ok(pageSource.includes('if (isBackground) {') && pageSource.includes("console.warn('Background workload refresh failed; keeping the current data:', err);"), 'Background failures only log');
       assert.ok(pageSource.includes("setError(err.message || 'Unable to load staff workload data. Please try again.');"), 'Foreground failures still show the error panel');
-      assert.ok(pageSource.includes('isBackground ? prev : []'), 'A failed departments or staff request keeps the previous list');
+      // A failed departments or staff request keeps the previous list on a quiet refresh (the rule lives in utils/workloadRefresh.js)
+      const kept = decideWorkloadRefresh({
+        role: 'ADMIN', isBackground: true, now: 1, lastSuccessAt: 1,
+        outcome: { workload: { ok: true, data: [] }, departments: { ok: false, error: new Error('x') }, staff: { ok: false, error: new Error('x') } },
+      });
+      assert.equal(kept.departments, null, 'null means: keep the list that is shown');
+      assert.equal(kept.allStaff, null);
+      assert.ok(pageSource.includes('if (decision.departments !== null) setDepartments(decision.departments);'));
+      assert.ok(pageSource.includes('if (decision.allStaff !== null) setAllStaff(decision.allStaff);'));
       assert.ok(pageSource.includes("navigate('/login')"), 'Expired sessions still go to login');
     });
   });

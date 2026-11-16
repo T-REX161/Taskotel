@@ -66,7 +66,7 @@ describe('how the API wrapper treats 401 and 403', () => {
 describe('page wiring that cannot be rendered here (no DOM environment): source checks, not behaviour tests', () => {
   it('the Workload page requests the staff list only for roles allowed to, so Staff never trigger the 403', () => {
     const page = read('..', 'pages', 'WorkloadPage.jsx');
-    assert.ok(page.includes('canListStaff(getUserRole())\n        ? getStaff()'), 'getStaff is gated');
+    assert.ok(page.includes('const staffPromise = canListStaff(getUserRole()) ? getStaff() : Promise.resolve(null);'), 'getStaff is gated');
     assert.ok(!/const staffPromise = getStaff\(\)/.test(page), 'no unconditional getStaff call');
   });
 

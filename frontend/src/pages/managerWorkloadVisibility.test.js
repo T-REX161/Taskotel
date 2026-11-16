@@ -108,7 +108,7 @@ describe('Admin and Staff see the page exactly as before', () => {
 
 describe('WorkloadPage wiring', () => {
   it("takes the cards from the server's department list for this account, never from GET /api/departments", () => {
-    assert.ok(page.includes('getWorkloadDepartments().catch'));
+    assert.ok(page.includes('const departmentsPromise = getWorkloadDepartments();'));
     assert.ok(!/\bgetDepartments\b/.test(page));
     assert.ok(api.includes("apiFetch('/api/workload/departments')"), 'the Workload department list has its own endpoint');
     assert.ok(/export const getWorkloadDepartments = async \(\) => \{\s*const departments = await apiFetch\('\/api\/workload\/departments'\);/.test(api));
@@ -127,9 +127,10 @@ describe('WorkloadPage wiring', () => {
     }
   });
 
-  it("drops a Manager's previous department list when a refresh fails, so a revoked department's card cannot linger", () => {
-    assert.ok(page.includes("const keepPreviousDepartments = isBackground && getUserRole() !== 'MANAGER';"));
-    assert.ok(page.includes('Array.isArray(departmentsData) ? departmentsData : keepPreviousDepartments ? prev : []'));
+  it("never keeps a Manager's older department list beside fresh rows, so a revoked department's card cannot linger (see workloadRefresh.test.js)", () => {
+    assert.ok(page.includes('decideWorkloadRefresh({'));
+    assert.ok(!page.includes('keepPreviousDepartments'), 'the old inline rule is gone');
+    assert.ok(page.includes('if (decision.departments !== null) setDepartments(decision.departments);'));
   });
 
   it('renders one card for each entry of the computed list and nothing else', () => {

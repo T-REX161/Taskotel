@@ -8,6 +8,9 @@ import {
 } from '../components/icons/Icons';
 import { getWorkload, getWorkloadDepartments, getStaff, getUserRole } from '../services/api';
 import { canListStaff } from '../utils/accessPolicy';
+import { decideWorkloadRefresh, selectedStaffAfterRefresh } from '../utils/workloadRefresh';
+import { formatTime } from '../utils/dateTimeFormat';
+import { getPreferences } from '../utils/preferences';
 import {
   calculateWorkloadSummary,
   calculateDepartmentWorkloads,
@@ -41,6 +44,16 @@ const ITEMS_PER_PAGE = 5;
 // How often the workload refreshes itself in the background
 const WORKLOAD_REFRESH_MS = 30000;
 
+/** One request's answer as {ok, data} or {ok, error}, so that each part of a refresh can be decided on its own. */
+const settle = (promise, warning) =>
+  promise.then(
+    (data) => ({ ok: true, data }),
+    (error) => {
+      if (warning) console.warn(warning, error);
+      return { ok: false, error };
+    }
+  );
+
 export default function WorkloadPage() {
   const navigate = useNavigate();
 
@@ -63,6 +76,8 @@ export default function WorkloadPage() {
     return () => { active = false; };
   }, [canSeeSupport]);
   const [error, setError] = useState('');
+  // For a Manager: when the data on screen was last refreshed successfully, while later refreshes keep failing (null: it is current)
+  const [staleSince, setStaleSince] = useState(null);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE); // rows per page, chosen with the toggle
@@ -83,32 +98,50 @@ export default function WorkloadPage() {
     try {
       const workloadPromise = getWorkload();
       // The department cards come from the server's own answer for this account: for a Manager only the departments they manage
-      const departmentsPromise = getWorkloadDepartments().catch((err) => {
-        console.warn('Failed to load departments for workload distribution:', err);
-        return null;
-      });
+      const departmentsPromise = getWorkloadDepartments();
       // The staff list is for Admin and Manager only (the backend answers Staff with 403), so Staff never request it
-      const staffPromise = canListStaff(getUserRole())
-        ? getStaff().catch((err) => {
-            console.warn('Failed to load staff list for workload view modal:', err);
-            return null;
-          })
-        : Promise.resolve(null);
+      const staffPromise = canListStaff(getUserRole()) ? getStaff() : Promise.resolve(null);
 
-      const [workloadData, departmentsData, staffData] = await Promise.all([
-        workloadPromise,
-        departmentsPromise,
-        staffPromise,
+      // Each answer is settled on its own, so a partial failure is decided part by part (see utils/workloadRefresh.js)
+      const [workloadResult, departmentsResult, staffResult] = await Promise.all([
+        settle(workloadPromise),
+        settle(departmentsPromise, 'Failed to load departments for workload distribution:'),
+        settle(staffPromise, 'Failed to load staff list for workload view modal:'),
       ]);
       if (!isMountedRef.current) return;
 
-      setWorkload(Array.isArray(workloadData) ? workloadData : []);
-      // A failed departments/staff request keeps the previous list on a background refresh, except for a Manager's departments: after a
-      // revocation the previous list could still hold a department they no longer manage, so it is dropped rather than kept
-      const keepPreviousDepartments = isBackground && getUserRole() !== 'MANAGER';
-      setDepartments((prev) => (Array.isArray(departmentsData) ? departmentsData : keepPreviousDepartments ? prev : []));
-      setAllStaff((prev) => (Array.isArray(staffData) ? staffData : isBackground ? prev : []));
-      lastFetchRef.current = Date.now();
+      // What stays on screen after this refresh. For a Manager nothing from an older refresh is kept beside newer rows, a refusal (403)
+      // clears the page, and data that could not be refreshed is marked stale for at most two minutes; for anyone else nothing changed.
+      const role = getUserRole();
+      const decision = decideWorkloadRefresh({
+        role,
+        isBackground,
+        now: Date.now(),
+        lastSuccessAt: lastFetchRef.current,
+        outcome: { workload: workloadResult, departments: departmentsResult, staff: staffResult },
+      });
+      if (decision.action === 'redirect') {
+        navigate('/login');
+        return;
+      }
+      if (decision.action === 'replace' || decision.action === 'clear') {
+        setWorkload(decision.workload);
+        if (decision.departments !== null) setDepartments(decision.departments);
+        if (decision.allStaff !== null) setAllStaff(decision.allStaff);
+        // A Manager's open details close when that person is no longer among the refreshed rows
+        setSelectedStaff((current) => selectedStaffAfterRefresh(role, current, decision.workload));
+        setStaleSince(null);
+        if (decision.action === 'replace') {
+          lastFetchRef.current = Date.now();
+          if (decision.clearError) setError('');
+        }
+      } else if (decision.action === 'keep-stale') {
+        setStaleSince(decision.staleSince);
+        console.warn('Background workload refresh failed; showing the last data, marked as stale:', workloadResult.error);
+      } else if (decision.action === 'keep') {
+        console.warn('Background workload refresh failed; keeping the current data:', workloadResult.error);
+      }
+      if (decision.error) setError(decision.error);
     } catch (err) {
       if (!isMountedRef.current) return;
       if (err.message && err.message.includes('Redirecting to login')) {
@@ -320,6 +353,18 @@ export default function WorkloadPage() {
     <div className="w-full space-y-4">
       {/* Page Header */}
       {pageHeader}
+
+      {/* A Manager's data that could not be refreshed: shown, but marked as old (cleared after two minutes, see utils/workloadRefresh.js) */}
+      {staleSince && (
+        <LoadError
+          variant="banner"
+          compact
+          testId="workload-stale-notice"
+          message={`Couldn't refresh. Showing data from ${formatTime(new Date(staleSince), getPreferences().timeFormat)}. Trying again every 30 seconds.`}
+          onRetry={() => fetchData(true)}
+          retryLabel="Refresh now"
+        />
+      )}
 
       {/* 1. Workload Summary: one full-width container holding the summary cards and the staff total */}
       <section className="bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload summary">
