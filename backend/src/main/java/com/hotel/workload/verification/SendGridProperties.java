@@ -10,6 +10,13 @@ public class SendGridProperties {
     private String apiKey = "";
     private String fromEmail = "";
     private String fromName = "Taskotel";
+    /**
+     * HTTP timeouts for every call to SendGrid, in milliseconds. Without them a stalled connection would block the calling thread (and any
+     * database connection it holds) indefinitely. Bound as sendgrid.connect-timeout-ms and so on.
+     */
+    private int connectTimeoutMs = 5000;
+    private int connectionRequestTimeoutMs = 5000;
+    private int socketTimeoutMs = 10000;
 
     public SendGridProperties() {}
 
@@ -33,6 +40,30 @@ public class SendGridProperties {
 
     public void setFromEmail(String fromEmail) {
         this.fromEmail = fromEmail;
+    }
+
+    public int getConnectTimeoutMs() {
+        return connectTimeoutMs;
+    }
+
+    public void setConnectTimeoutMs(int connectTimeoutMs) {
+        this.connectTimeoutMs = connectTimeoutMs;
+    }
+
+    public int getConnectionRequestTimeoutMs() {
+        return connectionRequestTimeoutMs;
+    }
+
+    public void setConnectionRequestTimeoutMs(int connectionRequestTimeoutMs) {
+        this.connectionRequestTimeoutMs = connectionRequestTimeoutMs;
+    }
+
+    public int getSocketTimeoutMs() {
+        return socketTimeoutMs;
+    }
+
+    public void setSocketTimeoutMs(int socketTimeoutMs) {
+        this.socketTimeoutMs = socketTimeoutMs;
     }
 
     public String getFromName() {

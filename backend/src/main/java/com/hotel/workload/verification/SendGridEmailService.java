@@ -23,6 +23,8 @@ public class SendGridEmailService implements EmailService {
 
     private final SendGridProperties properties;
     private final SendGrid sendGridClient;
+    /** The HTTP client created by the production constructor (null when SendGrid is not configured, or when a client was passed in). */
+    private final org.apache.http.impl.client.CloseableHttpClient httpClient;
 
     @org.springframework.beans.factory.annotation.Autowired
     public SendGridEmailService(SendGridProperties properties) {
@@ -31,15 +33,41 @@ public class SendGridEmailService implements EmailService {
         log.info("Transactional email sender display name: {}", properties.getFromName());
         String key = properties.getApiKey();
         if (key != null && !key.isBlank() && !key.equalsIgnoreCase("test-sendgrid-api-key") && !key.startsWith("test-")) {
-            this.sendGridClient = new SendGrid(key);
+            // The library's default HTTP client has no timeouts at all, so the client is built here with explicit ones
+            this.httpClient = buildHttpClient(properties);
+            this.sendGridClient = new SendGrid(key, new com.sendgrid.Client(httpClient));
         } else {
+            this.httpClient = null;
             this.sendGridClient = null;
+        }
+    }
+
+    /** An HTTP client whose connection-request, connect and socket (response) timeouts come from the configuration. */
+    static org.apache.http.impl.client.CloseableHttpClient buildHttpClient(SendGridProperties properties) {
+        org.apache.http.client.config.RequestConfig config = org.apache.http.client.config.RequestConfig.custom()
+                .setConnectionRequestTimeout(properties.getConnectionRequestTimeoutMs())
+                .setConnectTimeout(properties.getConnectTimeoutMs())
+                .setSocketTimeout(properties.getSocketTimeoutMs())
+                .build();
+        return org.apache.http.impl.client.HttpClients.custom().setDefaultRequestConfig(config).useSystemProperties().build();
+    }
+
+    /** Closes the HTTP client this service created (the library only closes clients it created itself). */
+    @jakarta.annotation.PreDestroy
+    public void close() {
+        if (httpClient != null) {
+            try {
+                httpClient.close();
+            } catch (IOException e) {
+                log.warn("The SendGrid HTTP client could not be closed cleanly: {}", e.getClass().getSimpleName());
+            }
         }
     }
 
     public SendGridEmailService(SendGridProperties properties, SendGrid sendGridClient) {
         this.properties = properties;
         this.sendGridClient = sendGridClient;
+        this.httpClient = null; // not ours to close
     }
 
     @Override
