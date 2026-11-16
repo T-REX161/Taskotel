@@ -150,6 +150,12 @@ public class StaffServiceImpl implements StaffService {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
         }
+        // A username equal to another account's email would capture that person's sign-in (the username is tried first). Equal to the
+        // new account's own email is harmless.
+        if (request.getUsername() != null && !request.getUsername().trim().equalsIgnoreCase(request.getEmail() == null ? "" : request.getEmail().trim())
+                && !userRepository.findAllByEmailIgnoreCase(request.getUsername().trim()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Username already exists");
+        }
 
         // Every account, whatever its role, starts unverified and must verify its email, then set its own password, before it can sign in
         User user = new User();
@@ -196,7 +202,7 @@ public class StaffServiceImpl implements StaffService {
         if (username == null || username.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Username is required");
         }
-        return !userRepository.existsByUsername(username);
+        return !userRepository.existsByUsername(username) && userRepository.findAllByEmailIgnoreCase(username.trim()).isEmpty();
     }
 
     // The database unique constraints are the final authority when two requests race past the exists checks

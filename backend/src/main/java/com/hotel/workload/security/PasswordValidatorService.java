@@ -2,6 +2,7 @@ package com.hotel.workload.security;
 
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Pattern;
 
 @Service
@@ -13,14 +14,25 @@ public class PasswordValidatorService {
 
     private static final Pattern pattern = Pattern.compile(PASSWORD_PATTERN);
 
+    /** bcrypt cannot take more than 72 bytes, so a longer password is refused up front (a 400, never a failure in the encoder). */
+    static final int MAX_BYTES = 72;
+    static final String TOO_LONG_MESSAGE = "Password must be at most 72 bytes long.";
+
+    private static boolean tooLong(String password) {
+        return password.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES;
+    }
+
     public boolean isValid(String password) {
-        if (password == null) {
+        if (password == null || tooLong(password)) {
             return false;
         }
         return pattern.matcher(password).matches();
     }
     
     public void validate(String password) {
+        if (password != null && tooLong(password)) {
+            throw new InvalidPasswordException(TOO_LONG_MESSAGE);
+        }
         if (!isValid(password)) {
             throw new InvalidPasswordException("Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one digit, and one special character.");
         }

@@ -294,7 +294,7 @@ public class VerificationCodeServiceTest {
         user.setVerificationAttemptCount(0);
 
         when(userRepository.findByUsernameForUpdate("staff1@hotel.com")).thenReturn(Optional.empty());
-        when(userRepository.findByEmailForUpdate("staff1@hotel.com")).thenReturn(Optional.of(user));
+        when(userRepository.findByEmailIgnoreCaseForUpdate("staff1@hotel.com")).thenReturn(Optional.of(user));
 
         String result = verificationCodeService.verifyCode("staff1@hotel.com", code);
         // assert result as appropriate

@@ -164,6 +164,10 @@ public class AuthService {
             if (userRepository.existsByUsername(request.getNewUsername())) {
                 throw new CredentialsSetupException("Username already exists");
             }
+            // Sign-in tries the username first, so a username equal to ANOTHER account's email would capture that person's sign-in
+            if (userRepository.findAllByEmailIgnoreCase(request.getNewUsername().trim()).stream().anyMatch(other -> !other.getId().equals(user.getId()))) {
+                throw new CredentialsSetupException("Username already exists");
+            }
         }
 
         user.setUsername(request.getNewUsername());

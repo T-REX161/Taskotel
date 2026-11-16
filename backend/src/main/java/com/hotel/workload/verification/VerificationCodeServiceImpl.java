@@ -298,7 +298,7 @@ public class VerificationCodeServiceImpl implements VerificationCodeService {
             throw new VerificationException("User identifier is required");
         }
         return userRepository.findByUsernameForUpdate(identifier)
-                .or(() -> userRepository.findByEmailForUpdate(identifier))
+                .or(() -> userRepository.findByEmailIgnoreCaseForUpdate(identifier))
                 .filter(User::isActive);
     }
 }

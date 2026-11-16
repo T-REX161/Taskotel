@@ -1,14 +1,17 @@
 package com.hotel.workload.task;
 
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.time.LocalTime;
 
 public class CreateTaskRequest {
 
     @NotBlank(message = "Title is required")
+    @Size(max = 255, message = "Title must be at most 255 characters")
     private String title;
 
     private String description;
@@ -19,6 +22,7 @@ public class CreateTaskRequest {
     private Priority priority;
 
     @Min(value = 1, message = "Estimated duration must be positive")
+    @Max(value = 100000, message = "Estimated duration must be at most 100000 minutes")
     private Integer estimatedDuration;
 
     private LocalDate dueDate;

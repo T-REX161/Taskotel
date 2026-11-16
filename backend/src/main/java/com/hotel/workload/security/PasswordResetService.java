@@ -65,7 +65,7 @@ public class PasswordResetService {
         }
 
         String normalizedEmail = request.getEmail().trim().toLowerCase();
-        Optional<User> optionalUser = userRepository.findByEmailForUpdate(normalizedEmail);
+        Optional<User> optionalUser = userRepository.findByEmailIgnoreCaseForUpdate(normalizedEmail);
 
         if (optionalUser.isEmpty() || !optionalUser.get().isActive()) {
             // Unknown or deactivated: nothing is sent or stored. One hash is computed so the work resembles a real request.
@@ -124,7 +124,7 @@ public class PasswordResetService {
         }
 
         String normalizedEmail = request.getEmail().trim().toLowerCase();
-        Optional<User> optionalUser = userRepository.findByEmailForUpdate(normalizedEmail);
+        Optional<User> optionalUser = userRepository.findByEmailIgnoreCaseForUpdate(normalizedEmail);
 
         if (optionalUser.isEmpty()) {
             throw new InvalidVerificationCodeException("Invalid code or email.");

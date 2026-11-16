@@ -24,6 +24,22 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.email = :email")
     Optional<User> findByEmailForUpdate(@org.springframework.data.repository.query.Param("email") String email);
+
+    /** All accounts whose email equals this one ignoring case, locked like {@link #findByEmailForUpdate}. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE lower(u.email) = lower(:email) ORDER BY u.id")
+    java.util.List<User> findAllByEmailIgnoreCaseForUpdate(@org.springframework.data.repository.query.Param("email") String email);
+
+    /**
+     * The account for an email typed in any letter case (sign-in already ignores case; the stored address keeps the case it was created
+     * with). An exact match wins; otherwise a case-insensitive match is used only when it is unambiguous (exactly one account).
+     */
+    default Optional<User> findByEmailIgnoreCaseForUpdate(String email) {
+        Optional<User> exact = findByEmailForUpdate(email);
+        if (exact.isPresent()) return exact;
+        java.util.List<User> matches = findAllByEmailIgnoreCaseForUpdate(email);
+        return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
+    }
     /**
      * Every active administrator account, locked for the rest of the transaction (SELECT ... FOR UPDATE, in id order). Used by
      * AdminAccountGuard so concurrent deactivations of administrators are decided one at a time. Must be called inside a transaction.
