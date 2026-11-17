@@ -114,6 +114,9 @@ public class HealthAndDeploymentConfigTest {
         assertTrue(docker.contains("FROM eclipse-temurin:25-jdk AS build") && docker.contains("FROM eclipse-temurin:25-jre AS runtime"));
         assertTrue(docker.contains("./mvnw") && docker.contains("USER taskotel") && docker.contains("SPRING_PROFILES_ACTIVE=prod"));
         assertTrue(docker.contains("sed -i 's/\\r$//' mvnw"), "CRLF-safe wrapper");
+        // Without unzip the wrapper downloads the .tar.gz and fails its (.zip) SHA-256 check, so the build stage must install it first
+        assertTrue(docker.contains("apt-get install -y --no-install-recommends unzip"), "unzip installed for the Maven wrapper");
+        assertTrue(docker.indexOf("unzip") < docker.indexOf("./mvnw"), "unzip is installed before the wrapper first runs");
         Pattern credential = Pattern.compile("(?i)(secret|password|api_?key|token|DB_|JWT|SENDGRID|CLOUDINARY)");
         for (String line : docker.split("\\R")) {
             String t = line.trim();

@@ -5,6 +5,11 @@
 FROM eclipse-temurin:25-jdk AS build
 WORKDIR /workspace
 
+# The Maven wrapper downloads the .zip distribution only when `unzip` exists; without it, it silently switches to the .tar.gz, whose SHA-256
+# differs from the pinned distributionSha256Sum (the .zip's) and fails with "Failed to validate Maven distribution SHA-256".
+# The Temurin JDK image does not ship unzip, so install it, keeping checksum verification on.
+RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
+
 COPY mvnw pom.xml ./
 COPY .mvn .mvn
 # mvnw is committed with Windows (CRLF) line endings in some checkouts; a CRLF shebang cannot run on Linux
