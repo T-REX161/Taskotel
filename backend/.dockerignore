@@ -1,0 +1,33 @@
+# Secrets and local settings: never part of the build context, so never part of an image
+.env
+.env.*
+!.env.example
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+
+# Build output and version control
+target/
+.git/
+.gitignore
+.gitattributes
+
+# IDE and OS files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs and scratch files
+*.log
+logs/
+*.tmp
+*.bak
+
+# Not needed to build or run the application (tests run before release; db-tools are local PostgreSQL rehearsal scripts)
+src/test/
+db-tools/
+Dockerfile
+.dockerignore

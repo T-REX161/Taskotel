@@ -1,13 +1,23 @@
 spring:
   # Never baseline an unknown production schema automatically: a non-empty database without
   # Flyway history makes startup fail instead. Whether Flyway runs at all still comes from
-  # spring.flyway.enabled in application.yml (WB_FLYWAY_ENABLED, default false).
+  # spring.flyway.enabled in application.yml (WB_FLYWAY_ENABLED, default false). Because Hibernate only VALIDATES the schema here,
+  # a fresh empty database needs WB_FLYWAY_ENABLED=true on its first start so Flyway creates the tables (see DEPLOYMENT_RENDER.md).
   flyway:
     baseline-on-migrate: false
   datasource:
-    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:workload_balancer}
+    # DB_URL, when set, is used as given (a full JDBC URL). Otherwise the URL is built from DB_HOST, DB_PORT and DB_NAME, with TLS required
+    # by default (managed PostgreSQL such as Neon refuses unencrypted connections); DB_SSLMODE can relax it for a private network.
+    url: ${DB_URL:jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:workload_balancer}?sslmode=${DB_SSLMODE:require}}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
+    # A small deployment: a handful of connections is plenty, and connections are retired before a managed database or its pooler drops them.
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX_SIZE:5}
+      minimum-idle: ${DB_POOL_MIN_IDLE:1}
+      connection-timeout: ${DB_POOL_CONNECTION_TIMEOUT_MS:30000}
+      idle-timeout: 300000
+      max-lifetime: 900000
   jpa:
     hibernate:
       ddl-auto: validate
@@ -16,6 +26,18 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: false
     show-sql: false
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  # Finish in-flight requests when the platform stops the instance (a redeploy)
+  shutdown: graceful
+  # Error responses never carry exception messages, stack traces or binding details
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false
 
 jwt:
   secret: ${JWT_SECRET}
