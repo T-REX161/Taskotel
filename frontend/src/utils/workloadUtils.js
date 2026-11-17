@@ -378,6 +378,69 @@ export function calculateDepartmentWorkloads(workloadList = [], departmentList =
 }
 
 /**
+ * Department workload UTILIZATION, as calculated by the server (GET /api/workload/department-summary): the department's assigned minutes
+ * (every active assignment of its own staff counts the task's full duration, as in each person's workload) over its working capacity (480
+ * minutes per eligible staff member). The status uses the DEPARTMENT thresholds, never the individual staff ones. These helpers only shape
+ * what the server sent; nothing is recalculated from staff rows.
+ */
+export const DEPARTMENT_STATUS_LABELS = { LOW: 'LOW', NORMAL: 'NORMAL', HIGH: 'HIGH', AT_RISK: 'AT RISK', NO_CAPACITY: 'NO CAPACITY' };
+
+/** The label of a department status (the individual staff statuses use the same four names; NO_CAPACITY is the department-only fifth). */
+export function getDepartmentStatusLabel(status) {
+  return DEPARTMENT_STATUS_LABELS[String(status || '').toUpperCase()] || '—';
+}
+
+/** Severity colours: the same four as the staff statuses, grey for NO_CAPACITY. Never the department's identity colour. */
+export function getDepartmentStatusBadge(status) {
+  return getWorkloadStatusBadge(status);
+}
+
+/**
+ * The department cards for an Admin or a Manager, from the server's department summary. Cards follow the department list (the server's list
+ * for this account), so a Manager's page holds only the departments they manage; a department the summary has no row for shows zeros and
+ * no capacity. With no department list the summary rows themselves are the cards.
+ *
+ * @param {Array<object>} summary rows of GET /api/workload/department-summary
+ * @param {Array<{code: string, name?: string, iconKey?: string, colorKey?: string, active?: boolean}>} departmentList
+ */
+export function buildDepartmentWorkloads(summary = [], departmentList = []) {
+  const rows = Array.isArray(summary) ? summary.filter(Boolean) : [];
+  const byCode = new Map(rows.map((row) => [String(row.code).toUpperCase(), row]));
+  const list = Array.isArray(departmentList) && departmentList.length > 0 ? departmentList.filter((d) => d && d.code) : rows;
+  const num = (value) => (Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0);
+  const cards = list.map((dept) => {
+    const row = byCode.get(String(dept.code).toUpperCase());
+    const utilization = row && row.utilizationPercent !== null && row.utilizationPercent !== undefined && Number.isFinite(Number(row.utilizationPercent))
+      ? Math.max(0, Number(row.utilizationPercent))
+      : null;
+    return {
+      code: dept.code,
+      name: dept.name || row?.name || dept.code,
+      assignedMinutes: num(row?.assignedMinutes),
+      capacityMinutes: num(row?.capacityMinutes),
+      eligibleStaffCount: num(row?.eligibleStaffCount),
+      utilizationPercent: utilization,
+      status: row?.status || 'NO_CAPACITY',
+      activeTaskCount: num(row?.activeTaskCount),
+      staffCount: num(row?.staffCount),
+      unassignedTaskCount: num(row?.unassignedTaskCount),
+      unassignedMinutes: num(row?.unassignedMinutes),
+      iconKey: dept.iconKey,
+      colorKey: dept.colorKey,
+      active: dept.active !== false,
+    };
+  });
+  // The card's bar and percentage are the department's SHARE of all department assigned minutes (as the cards always showed), not utilization
+  const overallMinutes = cards.reduce((sum, c) => sum + c.assignedMinutes, 0);
+  return cards.map((c) => ({
+    ...c,
+    totalMinutes: c.assignedMinutes,
+    overallMinutes,
+    percentage: overallMinutes > 0 ? Math.round((c.assignedMinutes / overallMinutes) * 100) : 0,
+  }));
+}
+
+/**
  * Compares two workload items alphabetically by their display name (staffName, fullName, or name).
  *
  * Rules:

@@ -137,10 +137,11 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
   });
 
   describe('Stacked Full-Width Layout', () => {
-    it('orders the sections: summary container, thresholds, department panel, staff table', () => {
+    it('orders the sections: summary, department thresholds legend, department panel, support panel, staff section', () => {
+      // the department legend is its own card above the department section; there is no per-staff legend card
       const at = (m) => pageSource.indexOf(m);
-      const order = ['aria-label="Workload summary"', 'Workload Thresholds:', '<h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>', 'Staff Workload Distribution</h2>'].map(at);
-      assert.ok(order.every((i) => i > 0), 'All four sections must exist');
+      const order = ['aria-label="Workload summary"', 'Department Workload Thresholds:', '<h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>', '<CrossDepartmentSupportPanel', 'Staff Workload Distribution</h2>'].map(at);
+      assert.ok(order.every((i) => i > 0), 'All sections must exist');
       assert.deepStrictEqual(order, [...order].sort((x, y) => x - y), 'Sections must appear in the required order');
     });
 
@@ -162,9 +163,9 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       const section = pageSource.slice(start, pageSource.indexOf('</section>', start));
       assert.ok(pageSource.includes('min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department"'), 'Same container style as the summary');
       assert.ok(section.includes('grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))]'), 'Auto-fill grid, so rows are added as departments grow');
-      assert.ok(section.includes('{departmentWorkloads.map((dept, index) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
+      assert.ok(section.includes('{departmentWorkloads.map((dept) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
       assert.ok(section.includes('min-w-0 bg-white rounded-xl p-4 shadow-2xs border border-gray-100'), 'Each department is a card');
-      for (const field of ['{dept.name}', '{dept.totalMinutes} mins', 'dept.percentage', 'dept.activeTaskCount', 'dept.staffCount', 'getDepartmentBarColor(index)']) {
+      for (const field of ['{dept.name}', '{dept.totalMinutes} mins', 'dept.percentage', 'dept.activeTaskCount', 'dept.staffCount', 'getDepartmentBarColor(dept)']) {
         assert.ok(section.includes(field), 'Card shows ' + field);
       }
       for (const fixed of ['lg:grid-cols-3', 'md:grid-cols-2', 'SUPPORTED_DEPARTMENTS', 'departmentWorkloads[', 'slice(']) {
@@ -482,10 +483,10 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
 
     it('shows the total in the section header, top-right, and no longer in a bar under the cards', () => {
       const section = pageSource.slice(pageSource.indexOf('aria-label="Workload by department"'), pageSource.indexOf('{/* 4. Staff Workload Distribution'));
-      const total = section.indexOf('{summary.totalWorkload} mins');
+      const total = section.indexOf('{totalDepartmentLoad} mins');
       assert.ok(total > section.indexOf('Workload by Department</h2>') && total < section.indexOf('departmentWorkloads.map('), 'Total sits in the header, above the cards');
       assert.ok(section.includes('justify-between') && section.includes('sm:ml-auto sm:text-right'), 'Heading left, total right; stacks on small screens');
-      assert.ok(/Total Department Load<\/span>\s*<span className="font-bold[^"]*">\{summary\.totalWorkload\} mins/.test(section) && section.includes('gap-x-2.5'), 'Label then bold value on one line, ~10px apart');
+      assert.ok(/Total Department Load<\/span>\s*<span className="font-bold[^"]*">\{totalDepartmentLoad\} mins/.test(section) && section.includes('gap-x-2.5'), 'Label then bold value on one line, ~10px apart');
       assert.strictEqual(section.split('Total Department Load').length, 2, 'Only one total: the bottom bar is gone');
       assert.ok(!section.includes('Total Department Workload Callout') && !/\b422\b/.test(pageSource), 'No old bar and no hardcoded total');
     });

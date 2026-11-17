@@ -109,4 +109,16 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     /** The ids of staff who hold at least one active assignment (ids only, no assignment or task detail). */
     @Query("SELECT DISTINCT a.staff.id FROM Assignment a WHERE a.task.status IN :statuses")
     List<UUID> findBusyStaffIds(@Param("statuses") List<TaskStatus> statuses);
+
+    /**
+     * The ASSIGNED workload of whole departments, as [department code, minutes, unique task count, distinct staff count] rows. Each active
+     * ASSIGNMENT row of a task of the department counts its task's full estimated duration (the existing rule: every assignee carries the whole
+     * duration, so a task with three assignees is three times its duration; a missing duration is 0). Only rows held by the department's OWN staff
+     * count (the holder's home department is the task's department): cross-department support never adds to the receiving department, as in a
+     * Manager's workload view. Totals only; no task or person detail is returned.
+     */
+    @Query("SELECT t.department.code, COALESCE(SUM(COALESCE(t.estimatedDuration, 0)), 0), COUNT(DISTINCT t.id), COUNT(DISTINCT a.staff.id) "
+            + "FROM Assignment a JOIN a.task t WHERE t.department.code IN :codes AND t.status IN :statuses AND a.staff.department = t.department "
+            + "GROUP BY t.department.code")
+    List<Object[]> assignedWorkloadByDepartmentCode(@Param("codes") java.util.Collection<String> codes, @Param("statuses") List<TaskStatus> statuses);
 }

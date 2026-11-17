@@ -188,11 +188,11 @@ export function WorkloadPageSkeleton({ label = 'Loading staff workload data...',
         note: ['h-2.5 w-28', 'h-5'],
       }),
     ),
-    // 2. thresholds legend
-    h('div', { className: 'bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3' },
+    // department thresholds legend (administrators and managers only): its own card, directly after the summary
+    showSupport ? h('div', { className: 'bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3' },
       line('h-3 w-56 max-w-full', 'h-4'),
       h('div', { className: 'flex flex-wrap items-center gap-3 sm:gap-5' }, [0, 1, 2, 3].map((i) => line('h-3 w-24', 'h-4', i))),
-    ),
+    ) : null,
     // 3. workload by department: heading, then department cards
     h('section', { className: cx('min-w-0', WORKLOAD_SECTION) },
       h('div', { className: 'flex flex-wrap items-start justify-between gap-x-6 gap-y-2' },

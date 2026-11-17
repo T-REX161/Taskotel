@@ -6,7 +6,7 @@ import {
   TasksIcon,
   EyeIcon,
 } from '../components/icons/Icons';
-import { getWorkload, getWorkloadDepartments, getStaff, getUserRole } from '../services/api';
+import { getWorkload, getWorkloadDepartments, getDepartmentWorkloadSummary, getStaff, getUserRole } from '../services/api';
 import { canListStaff } from '../utils/accessPolicy';
 import { decideWorkloadRefresh, selectedStaffAfterRefresh } from '../utils/workloadRefresh';
 import { formatTime } from '../utils/dateTimeFormat';
@@ -14,6 +14,7 @@ import { getPreferences } from '../utils/preferences';
 import {
   calculateWorkloadSummary,
   calculateDepartmentWorkloads,
+  buildDepartmentWorkloads,
   restrictWorkloadToDepartments,
   getWorkloadStatusBadge,
   getWorkloadProgressBarColor,
@@ -28,6 +29,7 @@ import {
 } from '../components/staff/staffFormatters';
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import DepartmentBadge from '../components/workload/DepartmentBadge';
+import { getDepartmentStyle } from '../utils/departmentStyles';
 import UtilizationMeter from '../components/workload/UtilizationMeter';
 import CrossDepartmentSupportPanel from '../components/workload/CrossDepartmentSupportPanel';
 import PageSizeToggle from '../components/common/PageSizeToggle';
@@ -57,6 +59,8 @@ export default function WorkloadPage() {
 
   const [workload, setWorkload] = useState([]);
   const [departments, setDepartments] = useState([]);
+  // Admin and Manager: the server's department workload (each department's own active tasks, counted once). Null until it has loaded.
+  const [departmentSummary, setDepartmentSummary] = useState(null);
   const [allStaff, setAllStaff] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   // Cross-Department Assistance (Admin and Manager only): read as the page opens, alongside the workload, so the loading skeleton
@@ -99,12 +103,15 @@ export default function WorkloadPage() {
       const departmentsPromise = getWorkloadDepartments();
       // The staff list is for Admin and Manager only (the backend answers Staff with 403), so Staff never request it
       const staffPromise = canListStaff(getUserRole()) ? getStaff() : Promise.resolve(null);
+      // Department workload comes from the server for Admin and Manager (Staff are refused it and keep their own row)
+      const summaryPromise = ['ADMIN', 'MANAGER'].includes(getUserRole()) ? getDepartmentWorkloadSummary() : Promise.resolve(null);
 
       // Each answer is settled on its own, so a partial failure is decided part by part (see utils/workloadRefresh.js)
-      const [workloadResult, departmentsResult, staffResult] = await Promise.all([
+      const [workloadResult, departmentsResult, staffResult, summaryResult] = await Promise.all([
         settle(workloadPromise),
         settle(departmentsPromise, 'Failed to load departments for workload distribution:'),
         settle(staffPromise, 'Failed to load staff list for workload view modal:'),
+        settle(summaryPromise, 'Failed to load the department workload:'),
       ]);
       if (!isMountedRef.current) return;
 
@@ -124,6 +131,10 @@ export default function WorkloadPage() {
       }
       if (decision.action === 'replace' || decision.action === 'clear') {
         setWorkload(decision.workload);
+        // A cleared page (a Manager refused) shows no department figures; a failed quiet refresh keeps the last ones
+        if (decision.action === 'clear') setDepartmentSummary(null);
+        else if (summaryResult.ok && Array.isArray(summaryResult.data)) setDepartmentSummary(summaryResult.data);
+        else if (!summaryResult.ok && !isBackground) setError('Failed to load the department workload. Please try again.');
         if (decision.departments !== null) setDepartments(decision.departments);
         if (decision.allStaff !== null) setAllStaff(decision.allStaff);
         // A Manager's open details close when that person is no longer among the refreshed rows
@@ -195,9 +206,14 @@ export default function WorkloadPage() {
   }, [visibleWorkload]);
 
   // Aggregated department workload distribution (complete dataset)
+  // Admin and Manager: the server's department figures, from each department's own active tasks counted once (not a sum of staff rows).
+  // Staff only ever have their own row, so for them the cards stay what they were.
+  const usesDepartmentSummary = ['ADMIN', 'MANAGER'].includes(getUserRole());
   const departmentWorkloads = useMemo(() => {
+    if (usesDepartmentSummary) return buildDepartmentWorkloads(departmentSummary || [], departments);
     return calculateDepartmentWorkloads(visibleWorkload, departments, { strict: isManager });
-  }, [visibleWorkload, departments, isManager]);
+  }, [usesDepartmentSummary, departmentSummary, visibleWorkload, departments, isManager]);
+  const totalDepartmentLoad = usesDepartmentSummary ? departmentWorkloads.reduce((sum, dept) => sum + dept.assignedMinutes, 0) : summary.totalWorkload;
 
   // Sort complete staff workload list alphabetically (A–Z) before pagination
   const sortedWorkload = useMemo(() => {
@@ -258,18 +274,8 @@ export default function WorkloadPage() {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  // Department progress bar color palette
-  const getDepartmentBarColor = (index) => {
-    const palette = [
-      'bg-emerald-500',
-      'bg-blue-500',
-      'bg-indigo-500',
-      'bg-amber-500',
-      'bg-purple-500',
-      'bg-teal-500',
-    ];
-    return palette[index % palette.length];
-  };
+  // A department's bar uses the department's own colour (the same one its badge has everywhere), whatever its position in the list
+  const getDepartmentBarColor = (dept) => getDepartmentStyle(dept).swatch;
 
   const summaryCards = [
     {
@@ -395,31 +401,38 @@ export default function WorkloadPage() {
         </div>
       </section>
 
-      {/* 2. Workload Status Thresholds Legend (unchanged) */}
-      <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-gray-700">Workload Thresholds:</span>
-          <span className="text-gray-400 text-2xs">(480m Shift Baseline)</span>
+      {/* Department workload thresholds: their own card, directly after the summary and before the department section (Admin and Manager) */}
+      {usesDepartmentSummary && (
+        <div
+          className="bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs"
+          role="group"
+          aria-label="Department workload thresholds. Utilization is assigned minutes over working capacity, and applies to departments, not to individual staff."
+          title="Utilization = assigned minutes / working capacity. Applies to departments, not to individual staff."
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-700">Department Workload Thresholds:</span>
+            <span className="text-gray-400 text-2xs">(utilization = assigned minutes ÷ capacity · 480 min per available staff member)</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 sm:gap-5">
+            <span className="inline-flex items-center gap-1.5 text-blue-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-blue-500" />
+              LOW: 0 – 25%
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-emerald-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              NORMAL: &gt; 25 – 50%
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-orange-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-orange-500" />
+              HIGH: &gt; 50 – 75%
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-red-700 font-medium">
+              <span className="w-2 h-2 rounded-full bg-red-500" />
+              AT RISK: &gt; 75%
+            </span>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-3 sm:gap-5">
-          <span className="inline-flex items-center gap-1.5 text-blue-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            LOW: 0 – 120 mins
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-emerald-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            NORMAL: 121 – 240 mins
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-orange-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-orange-500" />
-            HIGH: 241 – 360 mins
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-red-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-red-500" />
-            AT RISK: &gt; 360 mins
-          </span>
-        </div>
-      </div>
+      )}
 
       {/* 3. Workload by Department: full width container with one card per department */}
       <section className="min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department">
@@ -434,7 +447,7 @@ export default function WorkloadPage() {
           <div className="min-w-0 sm:ml-auto sm:text-right">
             <p className="flex flex-wrap items-baseline gap-x-2.5 sm:justify-end text-xs sm:text-sm">
               <span className="font-medium text-gray-500">Total Department Load</span>
-              <span className="font-bold text-gray-900 whitespace-nowrap">{summary.totalWorkload} mins</span>
+              <span className="font-bold text-gray-900 whitespace-nowrap">{totalDepartmentLoad} mins</span>
             </p>
             <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">Calculated from active staff workloads.</p>
           </div>
@@ -443,8 +456,8 @@ export default function WorkloadPage() {
         {/* One card per department, generated from the data. auto-fill keeps every card the same width and
             wraps to new rows as departments are added, so no department count is hardcoded. */}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
-          {departmentWorkloads.map((dept, index) => {
-            const barColor = getDepartmentBarColor(index);
+          {departmentWorkloads.map((dept) => {
+            const barColor = getDepartmentBarColor(dept);
             return (
               <div
                 key={dept.code}

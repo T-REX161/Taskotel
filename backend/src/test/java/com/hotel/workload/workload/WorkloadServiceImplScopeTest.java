@@ -47,7 +47,7 @@ public class WorkloadServiceImplScopeTest {
         supportRepository = mock(SupportAssignmentRepository.class);
         departmentRepository = mock(DepartmentRepository.class);
         scopeResolver = mock(CurrentUserScopeResolver.class);
-        service = new WorkloadServiceImpl(staffRepository, assignmentRepository, supportRepository, departmentRepository, scopeResolver);
+        service = new WorkloadServiceImpl(staffRepository, assignmentRepository, supportRepository, departmentRepository, scopeResolver, mock(com.hotel.workload.task.TaskRepository.class));
         alpha = new Department("ALPHA", "Alpha");
     }
 

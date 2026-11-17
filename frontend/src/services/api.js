@@ -108,6 +108,14 @@ export const getDashboardSummary = () => {
 };
 
 /**
+ * The workload of each department the caller may see (Admin: every department; Manager: the departments they manage; Staff are refused),
+ * calculated by the server from the departments' own active tasks, each task once. Read-only.
+ */
+export const getDepartmentWorkloadSummary = () => {
+  return apiFetch('/api/workload/department-summary');
+};
+
+/**
  * The departments the Workload page shows as cards, decided by the server: everything an Admin or a Staff member has always seen
  * (the same list as getDepartments), and for a Manager ONLY the departments they manage. Read-only.
  */

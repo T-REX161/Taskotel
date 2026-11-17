@@ -73,4 +73,13 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
      */
     @Query("SELECT t.department.code, COUNT(t) FROM Task t WHERE t.department IS NOT NULL AND t.status IN :statuses AND NOT EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t) GROUP BY t.department.code")
     List<Object[]> countWaitingByDepartmentCode(@Param("statuses") Collection<TaskStatus> statuses);
+
+    /**
+     * The department's UNASSIGNED active work, as [department code, task count, minutes] rows: active tasks nobody holds. Kept apart from the
+     * assigned workload (it is a backlog, not staff workload). Totals only; tasks with no department never match.
+     */
+    @Query("SELECT t.department.code, COUNT(t), COALESCE(SUM(COALESCE(t.estimatedDuration, 0)), 0) FROM Task t "
+            + "WHERE t.department.code IN :codes AND t.status IN :statuses AND NOT EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t) "
+            + "GROUP BY t.department.code")
+    List<Object[]> activeUnassignedByDepartmentCode(@Param("codes") Collection<String> codes, @Param("statuses") Collection<TaskStatus> statuses);
 }

@@ -12,6 +12,7 @@ import com.hotel.workload.support.SupportAssignment;
 import com.hotel.workload.support.SupportAssignmentRepository;
 import com.hotel.workload.support.SupportStatus;
 import com.hotel.workload.staff.StaffRepository;
+import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -44,17 +45,20 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
     private final SupportAssignmentRepository supportRepository;
     private final DepartmentRepository departmentRepository;
     private final CurrentUserScopeResolver scopeResolver;
+    private final TaskRepository taskRepository;
 
     public WorkloadServiceImpl(StaffRepository staffRepository,
                                AssignmentRepository assignmentRepository,
                                SupportAssignmentRepository supportRepository,
                                DepartmentRepository departmentRepository,
-                               CurrentUserScopeResolver scopeResolver) {
+                               CurrentUserScopeResolver scopeResolver,
+                               TaskRepository taskRepository) {
         this.staffRepository = staffRepository;
         this.assignmentRepository = assignmentRepository;
         this.supportRepository = supportRepository;
         this.departmentRepository = departmentRepository;
         this.scopeResolver = scopeResolver;
+        this.taskRepository = taskRepository;
     }
 
     /**
@@ -87,6 +91,44 @@ public class WorkloadServiceImpl implements WorkloadService, ScopedWorkloadCalcu
         }
         // A Staff member's own row is always returned, whatever their state
         return buildGlobalRows(List.of(ownStaffRecord(SecurityContextHolder.getContext().getAuthentication().getName())), false);
+    }
+
+    /**
+     * Department workload utilization: each department's ASSIGNED workload against its working capacity. Admin: every department; Manager: the
+     * departments they manage (from the resolved scope, so nothing of another department is read); Staff: refused.
+     *
+     * <p>Assigned minutes are the existing per-assignee rule summed over the department's active assignment rows (every assignee carries the
+     * task's full duration), counting only its own staff on its own tasks, so a helper on loan never adds to the receiving department. Capacity
+     * is 480 minutes per eligible staff member, the Admin Dashboard's population. Unassigned active tasks are a separate backlog and are not
+     * part of the utilization. The individual staff thresholds are not applied.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<DepartmentWorkloadDto> calculateDepartmentWorkload() {
+        DepartmentScope scope = scopeResolver.resolve();
+        if (scope.isOwn()) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Department workload is not available to this account");
+        }
+        List<Department> departments = scope.isAll() ? departmentRepository.findAllByOrderByCreatedAtAscNameAsc() : new ArrayList<>(scope.managedDepartments());
+        if (departments.isEmpty()) return List.of();
+        List<String> codes = departments.stream().map(Department::getCode).collect(java.util.stream.Collectors.toList());
+
+        Map<String, long[]> assigned = new HashMap<>(); // code -> {minutes, unique tasks, distinct staff}
+        for (Object[] row : assignmentRepository.assignedWorkloadByDepartmentCode(codes, ACTIVE_STATUSES)) {
+            assigned.put((String) row[0], new long[]{((Number) row[1]).longValue(), ((Number) row[2]).longValue(), ((Number) row[3]).longValue()});
+        }
+        Map<String, long[]> unassigned = new HashMap<>(); // code -> {tasks, minutes}
+        for (Object[] row : taskRepository.activeUnassignedByDepartmentCode(codes, ACTIVE_STATUSES)) {
+            unassigned.put((String) row[0], new long[]{((Number) row[1]).longValue(), ((Number) row[2]).longValue()});
+        }
+        List<DepartmentWorkloadDto> result = new ArrayList<>();
+        for (Department department : departments) {
+            long[] a = assigned.getOrDefault(department.getCode(), new long[]{0, 0, 0});
+            long[] u = unassigned.getOrDefault(department.getCode(), new long[]{0, 0});
+            int eligible = (int) staffRepository.countOperationalActiveByAvailabilityInDepartment(department, com.hotel.workload.staff.Availability.AVAILABLE);
+            result.add(new DepartmentWorkloadDto(department.getCode(), department.getName(), a[0], eligible, (int) a[1], (int) a[2], (int) u[0], u[1]));
+        }
+        return result;
     }
 
     /**

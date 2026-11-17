@@ -30,6 +30,16 @@ public class WorkloadController {
     }
 
     /**
+     * GET /api/workload/department-summary
+     * The workload of each department the caller may see, from the departments' own active tasks (each task once, never the sum of the staff
+     * rows). ADMIN: every department; MANAGER: the departments they manage; STAFF: 403.
+     */
+    @GetMapping("/department-summary")
+    public ResponseEntity<List<DepartmentWorkloadDto>> getDepartmentWorkload() {
+        return ResponseEntity.ok(workloadService.calculateDepartmentWorkload());
+    }
+
+    /**
      * GET /api/workload
      * Returns the current workload the caller may see, calculated on-the-fly from PostgreSQL: every department for an ADMIN, the own
      * department for a valid MANAGER, the own row for STAFF. Accessible to ADMIN, MANAGER, and STAFF.

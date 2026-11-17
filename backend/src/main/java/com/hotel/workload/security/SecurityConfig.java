@@ -136,7 +136,7 @@ public class SecurityConfig {
 
         // ── Workload and dashboard ────────────────────────────────────────────────────────────────────────────────────────────
         allowGet(authz, new String[]{"/api/workload", "/api/workload/departments", "/api/dashboard/summary"}, ADMIN, MANAGER, STAFF);
-        allowGet(authz, new String[]{"/api/workload/recommendations"}, ADMIN, MANAGER);
+        allowGet(authz, new String[]{"/api/workload/recommendations", "/api/workload/department-summary"}, ADMIN, MANAGER);
 
         // ── Departments: everyone may read (how much each role sees is decided by the service); managing them is Admin only ───
         allowGet(authz, new String[]{"/api/departments"}, ADMIN, MANAGER, STAFF);

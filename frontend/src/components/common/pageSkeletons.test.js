@@ -94,7 +94,7 @@ describe('each skeleton follows its loaded page: same containers, columns and wi
     const page = read('pages/WorkloadPage.jsx');
     const html = render(WorkloadPageSkeleton);
     for (const cls of ['grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4', 'bg-white rounded-xl p-4 shadow-2xs border border-gray-100 flex items-center space-x-3.5',
-      'bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3', 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4',
+      'grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4',
       'min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 overflow-hidden', 'block md:hidden divide-y divide-gray-100', 'w-full text-left border-collapse table-fixed']) {
       assert.ok(page.includes(cls) && html.includes(cls), cls);
     }
@@ -104,6 +104,10 @@ describe('each skeleton follows its loaded page: same containers, columns and wi
     assert.deepEqual(headings(html).map((t) => t.label), ['Staff', 'Department', 'Tasks', 'Workload', 'Utilization', 'Availability']);
     assert.equal(count(html, /<tr class="h-\[66px\]">/g), 5);
     assert.ok(!html.includes('rounded-2xl'), 'no support frame by default');
+    // the department legend placeholder shows with the support frame (Admin and Manager); there is no per-staff legend placeholder
+    const legendCls = 'bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3';
+    assert.ok(page.includes(legendCls) && !html.includes(legendCls), 'no legend placeholder by default');
+    assert.equal(render(WorkloadPageSkeleton, { showSupport: true }).split(legendCls).length - 1, 1, 'one legend placeholder with the support frame');
     const withSupport = render(WorkloadPageSkeleton, { showSupport: true });
     assert.ok(withSupport.includes('min-w-0 bg-white rounded-2xl shadow-2xs border border-gray-100 px-4 pt-4 pb-5 sm:px-6 sm:pt-5 sm:pb-6 space-y-6'));
     assert.ok(read('components/workload/CrossDepartmentSupportPanel.jsx').includes('min-w-0 bg-white rounded-2xl shadow-2xs border border-gray-100 px-4 pt-4 pb-5 sm:px-6 sm:pt-5 sm:pb-6 space-y-6'));
