@@ -164,6 +164,10 @@ public class SecurityConfig {
         // ── Deny by default: every other API route and method. 401 without a sign-in, 403 with one. ───────────────────────────
         authz.requestMatchers("/api", "/api/**").denyAll();
 
+        // Operations endpoints: only the health probe is public (it carries no details); anything else under /actuator is closed
+        authz.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll();
+        authz.requestMatchers("/actuator", "/actuator/**").denyAll();
+
         // Outside /api only the single-page app files and the error page are served; they hold no data
         authz.anyRequest().permitAll();
     }
