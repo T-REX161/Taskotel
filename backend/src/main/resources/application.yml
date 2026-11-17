@@ -43,6 +43,26 @@ server:
   # Render (and most hosts) tell the application which port to listen on through PORT; 8080 stays the local default
   port: ${PORT:8080}
 
+# Actuator: the single endpoint /actuator/health, on the same port as the application (so it follows PORT), answering {"status":"UP"}.
+# No details, components or other endpoints are exposed, and the individual indicators (database, disk space) are off so that a slow or
+# sleeping database never turns this liveness probe red. See SecurityConfig for the access rule.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+      probes:
+        enabled: false
+  health:
+    defaults:
+      enabled: false
+    ping:
+      enabled: true
+
 # Sample users, staff and tasks with a shared well-known password. Off by default; never runs under the prod or production profile.
 app:
   demo-data:
