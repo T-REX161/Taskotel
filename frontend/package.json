@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "description": "Taskotel — Hotel Operations, Simplified",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
