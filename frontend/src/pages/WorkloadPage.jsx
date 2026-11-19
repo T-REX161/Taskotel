@@ -17,6 +17,7 @@ import {
   restrictWorkloadToDepartments,
   getWorkloadStatusBadge,
   getWorkloadProgressBarColor,
+  getDepartmentShareBarColor,
   calculateWorkloadPercentage,
   deriveWorkloadStatus,
   sortWorkloadAlphabetically,
@@ -258,19 +259,6 @@ export default function WorkloadPage() {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
-  // Department progress bar color palette
-  const getDepartmentBarColor = (index) => {
-    const palette = [
-      'bg-emerald-500',
-      'bg-blue-500',
-      'bg-indigo-500',
-      'bg-amber-500',
-      'bg-purple-500',
-      'bg-teal-500',
-    ];
-    return palette[index % palette.length];
-  };
-
   const summaryCards = [
     {
       title: 'Total Active Tasks',
@@ -402,30 +390,30 @@ export default function WorkloadPage() {
           <p className="text-xs text-gray-500">Based on a 480-minute shift · Can exceed 100%</p>
         </div>
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <li className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+          <li className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-100 dark:border-blue-100 dark:bg-blue-50 px-3 py-2">
             <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-blue-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" aria-hidden="true" />
+              <span className="w-3 h-3 rounded-full bg-blue-600 dark:bg-blue-500" aria-hidden="true" />
               LOW
             </span>
             <span className="text-sm font-medium text-gray-900">0–25%</span>
           </li>
-          <li className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+          <li className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-100 dark:border-emerald-100 dark:bg-emerald-50 px-3 py-2">
             <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-emerald-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+              <span className="w-3 h-3 rounded-full bg-emerald-600 dark:bg-emerald-500" aria-hidden="true" />
               NORMAL
             </span>
             <span className="text-sm font-medium text-gray-900">Above 25%–50%</span>
           </li>
-          <li className="flex items-center justify-between gap-3 rounded-lg border border-orange-100 bg-orange-50 px-3 py-2">
+          <li className="flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-100 dark:border-orange-100 dark:bg-orange-50 px-3 py-2">
             <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-orange-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-orange-500" aria-hidden="true" />
+              <span className="w-3 h-3 rounded-full bg-orange-600 dark:bg-orange-500" aria-hidden="true" />
               HIGH
             </span>
             <span className="text-sm font-medium text-gray-900">Above 50%–75%</span>
           </li>
-          <li className="flex items-center justify-between gap-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+          <li className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-100 dark:border-red-100 dark:bg-red-50 px-3 py-2">
             <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-red-700">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500" aria-hidden="true" />
+              <span className="w-3 h-3 rounded-full bg-red-600 dark:bg-red-500" aria-hidden="true" />
               AT RISK
             </span>
             <span className="text-sm font-medium text-gray-900">Above 75%</span>
@@ -455,8 +443,9 @@ export default function WorkloadPage() {
         {/* One card per department, generated from the data. auto-fill keeps every card the same width and
             wraps to new rows as departments are added, so no department count is hardcoded. */}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
-          {departmentWorkloads.map((dept, index) => {
-            const barColor = getDepartmentBarColor(index);
+          {departmentWorkloads.map((dept) => {
+            // Colour by the percentage of the total load shown on the card, in the legend's blue / green / orange / red
+            const barColor = getDepartmentShareBarColor(dept.percentage);
             return (
               <div
                 key={dept.code}
