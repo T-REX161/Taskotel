@@ -94,8 +94,7 @@ Safe procedure for a release with a new migration:
 
 ## 8. Known gaps in the current setup
 
-* `DEPLOYMENT_RENDER.md` still describes Neon and a manual SQL insert for the first administrator. Production now runs on Supabase and
-  the Admin was created with the reviewed bootstrap. Section 7 of that file is obsolete.
-* There is no CI workflow (`.github` does not exist): tests do not run automatically before a merge. Run them locally (section 3, step 2)
-  or add a GitHub Actions workflow later.
+* `DEPLOYMENT_RENDER.md` has been updated for Supabase and the bootstrap-based first Admin.
+* CI: `.github/workflows/ci.yml` runs the backend tests, the frontend tests, lint and build on every pull request and every push to `main`
+  (it never deploys). Make the checks required in GitHub (Settings > Branches) if merges should be blocked on a failure.
 * The Docker image build was verified on Render. TLS to the database uses `sslmode=require` (encrypts, does not verify the certificate).
