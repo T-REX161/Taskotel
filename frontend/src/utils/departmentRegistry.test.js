@@ -104,7 +104,7 @@ describe('workload by department uses the real department list', () => {
     assert.strictEqual(result.reduce((sum, d) => sum + d.totalMinutes, 0), 400);
   });
 
-  it('still returns the built-in six when no department list is available', () => {
-    assert.strictEqual(calculateDepartmentWorkloads([], []).length, 6);
+  it('returns no department at all when no department list is available (no built-in fallback)', () => {
+    assert.strictEqual(calculateDepartmentWorkloads([], []).length, 0);
   });
 });

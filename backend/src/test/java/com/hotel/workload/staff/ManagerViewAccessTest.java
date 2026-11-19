@@ -524,10 +524,22 @@ public class ManagerViewAccessTest {
     }
 
     @Test
-    @DisplayName("Removing a granted department removes its grants with it (database cascade)")
-    void departmentRemovalCascades() throws Exception {
+    @DisplayName("A department a Manager has a grant for is not removed (409, grants kept); once the grant is revoked it can be removed")
+    void grantedDepartmentIsNotRemoved() throws Exception {
         Department empty = new ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder).department("VA_EMPTY");
         grantAs(GRANT, "VA_EMPTY");
+        long historyBefore = changeRepository.count();
+
+        MvcResult refused = call(HttpMethod.DELETE, "/api/departments/VA_EMPTY", admin, null);
+        assertEquals(409, refused.getResponse().getStatus());
+        assertTrue(refused.getResponse().getContentAsString().contains("Manager access grant") && refused.getResponse().getContentAsString().contains("Revoke"),
+                refused.getResponse().getContentAsString());
+        grantRepository.flush();
+        assertTrue(grantedCodes().containsAll(List.of(GRANT, "VA_EMPTY")), "Both grants are still there: nothing was cascaded away");
+        assertTrue(departmentRepository.findById(empty.getId()).isPresent());
+        assertEquals(historyBefore, changeRepository.count(), "The grant history is untouched");
+
+        grantAs(GRANT); // revoke VA_EMPTY on purpose
         assertEquals(204, status(HttpMethod.DELETE, "/api/departments/VA_EMPTY", admin, null));
         grantRepository.flush();
         assertEquals(List.of(GRANT), grantedCodes());

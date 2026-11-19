@@ -22,12 +22,12 @@ test('only a real true for "managed" counts: a department the Manager does not m
   assert.deepEqual(managedDepartmentList(null, 'D'), []);
 });
 
-test('useDepartments: a Manager gets the managed list (never the built-in six, not even while loading or when it fails)', () => {
+test('useDepartments: a Manager gets the managed list; nobody gets a built-in fallback, not even while loading or when it fails', () => {
   const hook = read('hooks', 'useDepartments.js');
   assert.ok(hook.includes("const isManager = getUserRole() === 'MANAGER';"));
-  assert.ok(hook.includes('useState(isManager ? [] : FALLBACK_DEPARTMENTS)'));
+  assert.ok(hook.includes('useState([])') && !hook.includes('FALLBACK_DEPARTMENTS') && !hook.includes('BUILT_IN_DEPARTMENT_NAMES'));
   assert.ok(hook.includes('managedDepartmentList(list, profile?.departmentCode)'));
-  assert.ok(hook.includes('} else if (Array.isArray(list) && list.length > 0) {'), 'Admin and Staff keep the old behaviour');
+  assert.ok(hook.includes('setDepartments(Array.isArray(list) ? list : [])'), 'Admin and Staff get exactly the list the server returned');
 });
 
 test('every department dropdown and filter goes through the shared hook, so each one follows the Manager rule', () => {

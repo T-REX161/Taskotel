@@ -7,7 +7,8 @@
  * requests. It is plain module state with no React and no side effects other than remembering names.
  */
 
-// The six departments that exist in every installation, and their full names
+// Full names of the six starting departments, used only to label a code that carries no name of its own. This is NOT a list of the
+// departments that exist: an Admin can remove any of them, and what exists comes only from the API.
 export const BUILT_IN_DEPARTMENT_NAMES = {
   HOUSEKEEPING: 'Housekeeping',
   FRONT_DESK: 'Front Desk',

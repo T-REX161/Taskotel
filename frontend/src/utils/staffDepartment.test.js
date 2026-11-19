@@ -211,7 +211,7 @@ describe('Filters and search', () => {
 
 describe('Existing flows are unchanged', () => {
   it('(11) other fields, labels and defaults still behave as before', () => {
-    assert.ok(addSource.includes("department: 'HOUSEKEEPING',"), 'Add form still starts on a real department');
+    assert.ok(addSource.includes("department: '',"), 'Add form assumes no built-in department: the first active department of the loaded list is chosen');
     assert.ok(addSource.includes('temporaryPassword: formData.temporaryPassword,'));
     assert.ok(addSource.includes("const canChooseRole = getUserRole() === 'ADMIN';"));
     assert.ok(editSource.includes('active: formData.active,'));

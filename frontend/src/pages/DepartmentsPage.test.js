@@ -155,6 +155,14 @@ describe('Remove Department', () => {
     assert.ok(apiSource.includes('export const deleteDepartment = (code)') && /method: 'DELETE'/.test(apiSource));
   });
 
+  it('built-in departments are removed like any other: the dialog has no built-in rule, and the server decides (409 only while staff, tasks or assignments use it)', () => {
+    const code = removeSource.replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.ok(!/built-in|isBuiltIn|BUILT_IN/.test(code), 'No built-in check in the dialog code');
+    assert.ok(!removeSource.includes('departmentRegistry'), 'The dialog does not consult any built-in list');
+    assert.ok(/disabled=\{isRemoving\}\s*\n\s*className=\{`px-5 py-2 bg-red-600/.test(removeSource), 'The red button is disabled only while a removal is running');
+    assert.ok(removeSource.includes('err.status === 409') && removeSource.includes('setError(err.message'), 'The server explanation for a department in use is shown');
+  });
+
   it('sends at most one request per confirmation, and no placeholder remains', () => {
     assert.ok(/if \(inFlight\.current\) return;\s*inFlight\.current = true;/.test(removeSource), 'A second click is ignored immediately');
     assert.ok(/disabled=\{isRemoving\}/.test(removeSource), 'The buttons are disabled while removing');

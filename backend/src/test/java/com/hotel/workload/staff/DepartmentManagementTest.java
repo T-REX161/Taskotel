@@ -44,6 +44,8 @@ public class DepartmentManagementTest {
     @Autowired private StaffRepository staffRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private AssignmentRepository assignmentRepository;
+    @Autowired private ManagerViewGrantRepository grantRepository;
+    @Autowired private ManagerViewGrantChangeRepository grantChangeRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -169,7 +171,7 @@ public class DepartmentManagementTest {
         housekeeping.setName("Housekeeping & Laundry");
         departmentRepository.saveAndFlush(housekeeping);
 
-        new DepartmentBootstrap(departmentRepository).run();
+        new DepartmentBootstrap(departmentRepository, userRepository, staffRepository).run();
 
         assertEquals(before, departmentRepository.count());
         assertEquals("Housekeeping & Laundry", departmentRepository.findByCode("HOUSEKEEPING").orElseThrow().getName(),
@@ -439,9 +441,106 @@ public class DepartmentManagementTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("Admin keeps the existing protections: built-in departments cannot be deleted")
-    public void testAdminStillCannotDeleteBuiltInDepartment() throws Exception {
-        mockMvc.perform(delete("/api/departments/SECURITY")).andExpect(status().isConflict());
+    @DisplayName("An admin can delete an unused built-in department, and it stays deleted when the bootstrap runs again (a restart)")
+    public void testAdminCanDeleteUnusedBuiltInAndItStaysDeleted() throws Exception {
+        assertTrue(departmentRepository.findByCode("SECURITY").isPresent());
+        mockMvc.perform(delete("/api/departments/SECURITY")).andExpect(status().isNoContent());
+        assertTrue(departmentRepository.findByCode("SECURITY").isEmpty());
+        mockMvc.perform(delete("/api/departments/ROOM_SERVICE")).andExpect(status().isNoContent());
+
+        // A restart runs the bootstrap again: it must not bring either department back
+        new DepartmentBootstrap(departmentRepository, userRepository, staffRepository).run();
+        assertTrue(departmentRepository.findByCode("SECURITY").isEmpty(), "SECURITY stays deleted");
+        assertTrue(departmentRepository.findByCode("ROOM_SERVICE").isEmpty(), "ROOM_SERVICE stays deleted");
+        assertEquals(DepartmentCatalog.BUILT_IN.size() - 2, departmentRepository.count());
+
+        // and it no longer appears in the list the frontend reads
+        MvcResult list = mockMvc.perform(get("/api/departments")).andExpect(status().isOk()).andReturn();
+        for (JsonNode node : body(list)) {
+            assertNotEquals("SECURITY", node.get("code").asText());
+            assertNotEquals("ROOM_SERVICE", node.get("code").asText());
+        }
+    }
+
+    private MvcResult setViewDepartments(User manager, String... codes) throws Exception {
+        String list = codes.length == 0 ? "" : "\"" + String.join("\", \"", codes) + "\"";
+        return mockMvc.perform(put("/api/users/" + manager.getId() + "/view-departments").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"departments\": [" + list + "]}")).andReturn();
+    }
+
+    @Test
+    @WithMockUser(username = "testadmin", roles = "ADMIN")
+    @DisplayName("A department that a Manager has an additional-department grant for is refused (409); the grant and its history stay; after revoking, it can be removed")
+    public void testDepartmentWithManagerGrantIsRefusedAndTheGrantStays() throws Exception {
+        String custom = newDepartment("Conference Hall");
+        User manager = userRepository.findByUsername("dm_manager").orElseThrow();
+        assertEquals(200, setViewDepartments(manager, custom).getResponse().getStatus());
+        Department department = departmentRepository.findByCode(custom).orElseThrow();
+        assertEquals(1, grantRepository.countByDepartment(department));
+        long historyBefore = grantChangeRepository.count();
+
+        MvcResult refused = deleteDepartment(custom);
+        assertEquals(409, refused.getResponse().getStatus());
+        String message = refused.getResponse().getContentAsString() + " " + refused.getResponse().getErrorMessage();
+        assertTrue(message.contains("cannot be removed because 1 Manager access grant still references it"), message);
+        assertTrue(message.contains("Revoke the access grant(s) first"), message);
+        assertTrue(departmentRepository.findByCode(custom).isPresent(), "The department stays");
+        assertEquals(1, grantRepository.countByDepartment(department), "The grant is NOT silently deleted");
+        assertEquals(historyBefore, grantChangeRepository.count(), "No grant history was removed or added by the refused delete");
+        MvcResult stillListed = mockMvc.perform(get("/api/users/" + manager.getId() + "/view-departments")).andExpect(status().isOk()).andReturn();
+        assertTrue(stillListed.getResponse().getContentAsString().contains(custom), "The Manager still sees the grant in the Admin dialog data");
+
+        // Revoke on purpose, then the department can be removed like any other unused department
+        assertEquals(200, setViewDepartments(manager).getResponse().getStatus());
+        assertEquals(0, grantRepository.countByDepartment(department));
+        assertEquals(204, deleteDepartment(custom).getResponse().getStatus());
+        assertTrue(departmentRepository.findByCode(custom).isEmpty());
+    }
+
+    @Test
+    @WithMockUser(username = "testadmin", roles = "ADMIN")
+    @DisplayName("A built-in department with a Manager grant is refused too, and several grants are counted")
+    public void testBuiltInWithManagerGrantsIsRefused() throws Exception {
+        User first = userRepository.findByUsername("dm_manager").orElseThrow();
+        // a second valid Manager, in another built-in department
+        new com.hotel.workload.security.ScopeFixtures(userRepository, staffRepository, departmentRepository, passwordEncoder)
+                .manager("dm_manager2", departmentRepository.findByCode("MAINTENANCE").orElseThrow());
+        User second = userRepository.findByUsername("dm_manager2").orElseThrow();
+        assertEquals(200, setViewDepartments(first, "SECURITY").getResponse().getStatus());
+        assertEquals(200, setViewDepartments(second, "SECURITY").getResponse().getStatus());
+
+        MvcResult refused = deleteDepartment("SECURITY");
+        assertEquals(409, refused.getResponse().getStatus());
+        assertTrue((refused.getResponse().getContentAsString() + refused.getResponse().getErrorMessage()).contains("2 Manager access grants"));
+        assertEquals(2, grantRepository.countByDepartment(departmentRepository.findByCode("SECURITY").orElseThrow()));
+    }
+
+    @Test
+    @WithMockUser(username = "testadmin", roles = "ADMIN")
+    @DisplayName("Removing a department no Manager has a grant for is unaffected by the grant check")
+    public void testDepartmentWithoutGrantsStillRemovable() throws Exception {
+        String custom = newDepartment("Garden Services");
+        assertEquals(204, deleteDepartment(custom).getResponse().getStatus());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    @DisplayName("A built-in department that staff belong to is still refused (409) and stays")
+    public void testBuiltInWithStaffIsStillRefused() throws Exception {
+        savedStaff("builtin_in_use", "FRONT_DESK", true);
+        MvcResult result = mockMvc.perform(delete("/api/departments/FRONT_DESK")).andExpect(status().isConflict()).andReturn();
+        assertTrue(body(result).get("message").asText().contains("staff member"));
+        assertTrue(departmentRepository.findByCode("FRONT_DESK").isPresent());
+    }
+
+    @Test
+    @WithMockUser(username = "testadmin", roles = "ADMIN")
+    @DisplayName("A built-in department that has tasks is still refused (409) and stays")
+    public void testBuiltInWithTasksIsStillRefused() throws Exception {
+        mockMvc.perform(post("/api/tasks").contentType(MediaType.APPLICATION_JSON).content(taskJson("Guard the gate", "SECURITY", 30)))
+                .andExpect(status().isCreated());
+        MvcResult result = mockMvc.perform(delete("/api/departments/SECURITY")).andExpect(status().isConflict()).andReturn();
+        assertTrue(body(result).get("message").asText().contains("task"));
         assertTrue(departmentRepository.findByCode("SECURITY").isPresent());
     }
 
@@ -661,11 +760,12 @@ public class DepartmentManagementTest {
 
     @Test
     @WithMockUser(roles = "ADMIN")
-    @DisplayName("The built-in departments cannot be removed, even when empty")
-    public void testBuiltInDepartmentsCannotBeRemoved() throws Exception {
+    @DisplayName("Every built-in department is removable by an Admin unless something references it: only HOUSEKEEPING (the test Manager's staff record) is refused")
+    public void testBuiltInDepartmentsFollowTheSameRulesAsAnyOther() throws Exception {
         for (DepartmentCatalog.BuiltIn builtIn : DepartmentCatalog.BUILT_IN) {
-            assertEquals(409, deleteDepartment(builtIn.code()).getResponse().getStatus(), builtIn.code());
-            assertTrue(departmentRepository.findByCode(builtIn.code()).isPresent());
+            int expected = "HOUSEKEEPING".equals(builtIn.code()) ? 409 : 204;
+            assertEquals(expected, deleteDepartment(builtIn.code()).getResponse().getStatus(), builtIn.code());
+            assertEquals(expected == 409, departmentRepository.findByCode(builtIn.code()).isPresent(), builtIn.code());
         }
     }
 

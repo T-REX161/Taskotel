@@ -8,8 +8,8 @@ import Spinner from '../common/Spinner';
 
 /**
  * Confirms and removes a department through the department API; nothing is simulated.
- * The server refuses (409, with an explanation shown here) while staff or tasks still belong to the department,
- * and for the built-in departments, so no staff, task or assignment is ever deleted or reassigned from here.
+ * The server refuses (409, with an explanation shown here) while staff, tasks or assignments still belong to the department, so no staff,
+ * task or assignment is ever deleted or reassigned from here. Built-in departments are removed like any other unused department.
  *
  * Props:
  *  - department: the department to remove, or null when closed

@@ -96,9 +96,9 @@ describe("a Manager's Workload page shows the authorized departments only", () =
 });
 
 describe('Admin and Staff see the page exactly as before', () => {
-  it('without strict mode the built-in fallback and a card for any department in the rows are unchanged', () => {
+  it('without strict mode there is no built-in fallback, and a card for any department in the rows is unchanged', () => {
     const fallback = calculateDepartmentWorkloads([], []);
-    assert.equal(fallback.length, 6, 'the six built-in departments, as before');
+    assert.equal(fallback.length, 0, 'no department is invented: a removed built-in must never come back');
     const adminCards = calculateDepartmentWorkloads([row('1', 'Ana', 'SECURITY', 50)], [{ code: 'SECURITY', name: 'Security', active: true }]);
     assert.deepEqual(adminCards.map((c) => c.code), ['SECURITY']);
     const dynamic = calculateDepartmentWorkloads([row('1', 'Ana', 'SPA', 50)], [{ code: 'SECURITY', name: 'Security', active: true }]);

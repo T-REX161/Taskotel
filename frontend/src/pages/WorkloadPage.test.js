@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 import {
   calculateWorkloadSummary,
   calculateDepartmentWorkloads,
-  SUPPORTED_DEPARTMENTS,
   sortWorkloadAlphabetically } from '../utils/workloadUtils.js';
 import { decideWorkloadRefresh } from '../utils/workloadRefresh.js';
 
@@ -446,13 +445,13 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       );
     });
 
-    it('renders all backend-supported departments with proportional progress bars', () => {
-      assert.strictEqual(SUPPORTED_DEPARTMENTS.length, 6);
+    it('renders every department of the list with proportional progress bars', () => {
       const sampleWorkload = [
         { department: 'HOUSEKEEPING', totalEstimatedDuration: 200, activeTaskCount: 2 },
         { department: 'FRONT_DESK', totalEstimatedDuration: 100, activeTaskCount: 1 },
       ];
-      const deptResults = calculateDepartmentWorkloads(sampleWorkload);
+      const deptList = [['HOUSEKEEPING', 'Housekeeping'], ['FRONT_DESK', 'Front Desk'], ['MAINTENANCE', 'Maintenance'], ['ROOM_SERVICE', 'Room Service'], ['FOOD_AND_BEVERAGE', 'Food & Beverage'], ['SECURITY', 'Security']].map(([code, name]) => ({ code, name, active: true }));
+      const deptResults = calculateDepartmentWorkloads(sampleWorkload, deptList);
       assert.strictEqual(deptResults.length, 6);
 
       const hk = deptResults.find((d) => d.code === 'HOUSEKEEPING');

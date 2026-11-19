@@ -357,22 +357,16 @@ describe('workloadUtils', () => {
   });
 
   describe('calculateDepartmentWorkloads', () => {
-    it('returns all supported backend departments with 0 minutes when list is empty', () => {
-      const res = calculateDepartmentWorkloads([]);
-      assert.strictEqual(res.length, 6);
-      const codes = res.map((d) => d.code);
-      assert.ok(codes.includes('HOUSEKEEPING'));
-      assert.ok(codes.includes('FRONT_DESK'));
-      assert.ok(codes.includes('MAINTENANCE'));
-      assert.ok(codes.includes('ROOM_SERVICE'));
-      assert.ok(codes.includes('FOOD_AND_BEVERAGE'));
-      assert.ok(codes.includes('SECURITY'));
+    it('invents no department when there is no list and no workload: nothing is shown instead of the old built-in six', () => {
+      assert.deepStrictEqual(calculateDepartmentWorkloads([]), []);
+      assert.deepStrictEqual(calculateDepartmentWorkloads([], []), []);
+    });
 
-      res.forEach((d) => {
-        assert.strictEqual(d.totalMinutes, 0);
-        assert.strictEqual(d.activeTaskCount, 0);
-        assert.strictEqual(d.percentage, 0);
-      });
+    it('shows exactly the departments of the list: a built-in an Admin removed does not come back, a new one appears', () => {
+      const list = [{ code: 'HOUSEKEEPING', name: 'Housekeeping' }, { code: 'SPA', name: 'Spa' }];
+      const res = calculateDepartmentWorkloads([], list);
+      assert.deepStrictEqual(res.map((d) => d.code).sort(), ['HOUSEKEEPING', 'SPA']);
+      assert.ok(!res.some((d) => d.code === 'SECURITY' || d.code === 'ROOM_SERVICE'));
     });
 
     it('aggregates workload by department consistent with staff workload totals', () => {
@@ -539,7 +533,7 @@ describe('getDepartmentShareBarColor (department bar colour from the percentage 
       { department: 'MAINTENANCE', totalEstimatedDuration: 460, activeTaskCount: 1 },
       { department: 'ROOM_SERVICE', totalEstimatedDuration: 140, activeTaskCount: 1 },
     ];
-    const res = calculateDepartmentWorkloads(rows);
+    const res = calculateDepartmentWorkloads(rows, [['HOUSEKEEPING', 'Housekeeping'], ['FRONT_DESK', 'Front Desk'], ['MAINTENANCE', 'Maintenance'], ['ROOM_SERVICE', 'Room Service'], ['FOOD_AND_BEVERAGE', 'Food & Beverage'], ['SECURITY', 'Security']].map(([code, name]) => ({ code, name, active: true })));
     const colorOf = (code) => getDepartmentShareBarColor(res.find((d) => d.code === code).percentage);
     assert.equal(res.find((d) => d.code === 'HOUSEKEEPING').percentage, 27);
     assert.equal(colorOf('HOUSEKEEPING'), GREEN);
