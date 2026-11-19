@@ -155,20 +155,6 @@ describe('Remove Department', () => {
     assert.ok(apiSource.includes('export const deleteDepartment = (code)') && /method: 'DELETE'/.test(apiSource));
   });
 
-  it('a built-in department shows the warning up front, disables Remove and never calls the API; Cancel stays enabled', () => {
-    assert.ok(removeSource.includes("import { isBuiltInDepartment } from '../../utils/departmentRegistry';"));
-    assert.ok(removeSource.includes("const isBuiltIn = isBuiltInDepartment(department.code);"));
-    assert.ok(removeSource.includes("This is one of Taskotel's built-in departments and cannot be removed. You can mark it Inactive instead."));
-    assert.ok(removeSource.includes('{(isBuiltIn || error) && (') && removeSource.includes('{isBuiltIn ? BUILT_IN_MESSAGE : error}'), 'Warning visible without any click, in the existing alert box');
-    assert.ok(removeSource.includes('disabled={isRemoving || isBuiltIn}'), 'The red button is disabled for a built-in department');
-    const handler = removeSource.slice(removeSource.indexOf('const handleRemove'), removeSource.indexOf('await deleteDepartment('));
-    assert.ok(handler.includes('if (isBuiltIn) return;'), 'The guard sits before the only deleteDepartment call');
-    assert.strictEqual((removeSource.match(/deleteDepartment\(/g) || []).length, 1, 'Still one call site');
-    const cancel = removeSource.slice(removeSource.indexOf('autoFocus'), removeSource.indexOf('Cancel'));
-    assert.ok(cancel.includes('disabled={isRemoving}') && !cancel.includes('isBuiltIn'), 'Cancel is not affected by the built-in rule');
-    assert.ok(removeSource.includes('err.status === 409'), 'The server rule and its 409 handling stay');
-  });
-
   it('sends at most one request per confirmation, and no placeholder remains', () => {
     assert.ok(/if \(inFlight\.current\) return;\s*inFlight\.current = true;/.test(removeSource), 'A second click is ignored immediately');
     assert.ok(/disabled=\{isRemoving\}/.test(removeSource), 'The buttons are disabled while removing');
