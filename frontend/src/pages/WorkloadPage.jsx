@@ -395,31 +395,43 @@ export default function WorkloadPage() {
         </div>
       </section>
 
-      {/* 2. Workload Status Thresholds Legend (unchanged) */}
-      <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-gray-700">Workload Thresholds:</span>
-          <span className="text-gray-400 text-2xs">(480m Shift Baseline)</span>
+      {/* 2. Workload Status Thresholds: a header row, then four evenly spaced status tiles (display only; the statuses come from the backend) */}
+      <section className="bg-white rounded-xl border border-gray-100 shadow-2xs px-4 py-3 space-y-2.5" aria-label="Workload thresholds">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+          <h2 className="text-sm font-semibold text-gray-900">Workload Thresholds</h2>
+          <p className="text-xs text-gray-500">Based on a 480-minute shift · Can exceed 100%</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 sm:gap-5">
-          <span className="inline-flex items-center gap-1.5 text-blue-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            LOW: 0 – 120 mins
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-emerald-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            NORMAL: 121 – 240 mins
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-orange-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-orange-500" />
-            HIGH: 241 – 360 mins
-          </span>
-          <span className="inline-flex items-center gap-1.5 text-red-700 font-medium">
-            <span className="w-2 h-2 rounded-full bg-red-500" />
-            AT RISK: &gt; 360 mins
-          </span>
-        </div>
-      </div>
+        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+          <li className="flex items-center justify-between gap-3 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-blue-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500" aria-hidden="true" />
+              LOW
+            </span>
+            <span className="text-sm font-medium text-gray-900">0–25%</span>
+          </li>
+          <li className="flex items-center justify-between gap-3 rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-emerald-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+              NORMAL
+            </span>
+            <span className="text-sm font-medium text-gray-900">Above 25%–50%</span>
+          </li>
+          <li className="flex items-center justify-between gap-3 rounded-lg border border-orange-100 bg-orange-50 px-3 py-2">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-orange-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-orange-500" aria-hidden="true" />
+              HIGH
+            </span>
+            <span className="text-sm font-medium text-gray-900">Above 50%–75%</span>
+          </li>
+          <li className="flex items-center justify-between gap-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2">
+            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-red-700">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500" aria-hidden="true" />
+              AT RISK
+            </span>
+            <span className="text-sm font-medium text-gray-900">Above 75%</span>
+          </li>
+        </ul>
+      </section>
 
       {/* 3. Workload by Department: full width container with one card per department */}
       <section className="min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department">
