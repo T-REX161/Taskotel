@@ -272,19 +272,6 @@ export function calculateWorkloadSummary(workloadList = []) {
 }
 
 /**
- * The built-in departments. Used only when the department list from the API is not available,
- * so the workload panel still shows something sensible against an older backend.
- */
-export const SUPPORTED_DEPARTMENTS = [
-  { code: 'HOUSEKEEPING', name: 'Housekeeping' },
-  { code: 'FRONT_DESK', name: 'Front Desk' },
-  { code: 'MAINTENANCE', name: 'Maintenance' },
-  { code: 'ROOM_SERVICE', name: 'Room Service' },
-  { code: 'FOOD_AND_BEVERAGE', name: 'Food & Beverage' },
-  { code: 'SECURITY', name: 'Security' },
-];
-
-/**
  * The workload rows of the departments in `departmentList` only. Used for a Manager, whose page is about the departments they manage:
  * the server already sends only those, and this keeps the cards, totals, table and pages consistent with the department list. Without a
  * department list (not loaded, or it failed) the rows are returned as they are, because the server has already limited them.
@@ -325,9 +312,9 @@ export function calculateDepartmentWorkloads(workloadList = [], departmentList =
     }
   });
 
-  // Departments come from the database, so a department created later appears here without any code change.
-  // Without a list, the built-in six are used.
-  const seeds = deptMetaMap.size > 0 ? Array.from(deptMetaMap.values()) : strict ? [] : SUPPORTED_DEPARTMENTS;
+  // Departments come from the database, so a department created later appears here without any code change, and one an Admin removed
+  // never does. Without a list there is nothing to seed: a department then appears only through a workload row that carries its code.
+  const seeds = Array.from(deptMetaMap.values());
 
   const deptMap = new Map();
   seeds.forEach((dept) => {

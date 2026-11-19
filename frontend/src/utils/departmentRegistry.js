@@ -7,7 +7,8 @@
  * requests. It is plain module state with no React and no side effects other than remembering names.
  */
 
-// The six departments that exist in every installation, and their full names
+// Full names of the six starting departments, used only to label a code that carries no name of its own. This is NOT a list of the
+// departments that exist: an Admin can remove any of them, and what exists comes only from the API.
 export const BUILT_IN_DEPARTMENT_NAMES = {
   HOUSEKEEPING: 'Housekeeping',
   FRONT_DESK: 'Front Desk',
@@ -20,14 +21,6 @@ export const BUILT_IN_DEPARTMENT_NAMES = {
 const registered = new Map();
 
 const upper = (code) => String(code || '').trim().toUpperCase();
-
-/**
- * True for the six built-in departments (matched by code, ignoring case). The backend refuses to remove these (409), so the Remove dialog
- * uses this to disable its button instead of sending a request that is certain to fail. The backend rule is unchanged and still enforced.
- */
-export function isBuiltInDepartment(code) {
-  return Object.prototype.hasOwnProperty.call(BUILT_IN_DEPARTMENT_NAMES, upper(code));
-}
 
 /** SPA_AND_WELLNESS becomes "Spa And Wellness": a readable name when nothing better is known. */
 export function humanizeDepartmentCode(code) {

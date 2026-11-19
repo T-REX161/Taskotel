@@ -1,13 +1,11 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  BUILT_IN_DEPARTMENT_NAMES,
   clearDepartmentRegistry,
   displayDepartmentName,
   departmentLabel,
   getDepartmentName,
   humanizeDepartmentCode,
-  isBuiltInDepartment,
   registerDepartmentNames,
   registerDepartments,
 } from './departmentRegistry.js';
@@ -106,28 +104,7 @@ describe('workload by department uses the real department list', () => {
     assert.strictEqual(result.reduce((sum, d) => sum + d.totalMinutes, 0), 400);
   });
 
-  it('still returns the built-in six when no department list is available', () => {
-    assert.strictEqual(calculateDepartmentWorkloads([], []).length, 6);
-  });
-});
-
-describe('isBuiltInDepartment', () => {
-  it('is true for all six built-in departments, including Room Service, whatever the case or spacing', () => {
-    for (const code of ['HOUSEKEEPING', 'FRONT_DESK', 'MAINTENANCE', 'ROOM_SERVICE', 'FOOD_AND_BEVERAGE', 'SECURITY']) {
-      assert.equal(isBuiltInDepartment(code), true, code);
-    }
-    assert.equal(isBuiltInDepartment('room_service'), true);
-    assert.equal(isBuiltInDepartment(' Room_Service '), true);
-  });
-
-  it('is false for a department created later and for missing or inherited-property codes', () => {
-    for (const code of ['SPA_AND_WELLNESS', 'LAUNDRY', 'DEPT_8F3A', 'ROOM', '', null, undefined, 'constructor', 'toString', '__proto__']) {
-      assert.equal(isBuiltInDepartment(code), false, String(code));
-    }
-  });
-
-  it('agrees with the six names the registry already knows', () => {
-    assert.equal(Object.keys(BUILT_IN_DEPARTMENT_NAMES).length, 6);
-    for (const code of Object.keys(BUILT_IN_DEPARTMENT_NAMES)) assert.equal(isBuiltInDepartment(code), true, code);
+  it('returns no department at all when no department list is available (no built-in fallback)', () => {
+    assert.strictEqual(calculateDepartmentWorkloads([], []).length, 0);
   });
 });

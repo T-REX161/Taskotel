@@ -31,13 +31,16 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final TaskRepository taskRepository;
     private final AssignmentRepository assignmentRepository;
     private final CurrentUserScopeResolver scopeResolver;
+    private final ManagerViewGrantRepository grantRepository;
 
     public DepartmentServiceImpl(DepartmentRepository departmentRepository,
                                  StaffRepository staffRepository,
                                  TaskRepository taskRepository,
                                  AssignmentRepository assignmentRepository,
-                                 CurrentUserScopeResolver scopeResolver) {
+                                 CurrentUserScopeResolver scopeResolver,
+                                 ManagerViewGrantRepository grantRepository) {
         this.scopeResolver = scopeResolver;
+        this.grantRepository = grantRepository;
         this.departmentRepository = departmentRepository;
         this.staffRepository = staffRepository;
         this.taskRepository = taskRepository;
@@ -151,12 +154,12 @@ public class DepartmentServiceImpl implements DepartmentService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Department not found"));
         String name = department.getName();
 
-        // The built-ins are part of the product (and are re-created at startup outside production)
-        if (DepartmentCatalog.BUILT_IN.stream().anyMatch(builtIn -> builtIn.code().equals(department.getCode()))) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "\"" + name + "\" is one of Taskotel's built-in departments and cannot be removed. You can mark it Inactive instead.");
-        }
+        // Hold the department row until this transaction ends. A Manager grant is inserted with a foreign key to this row, so a grant created
+        // while we check cannot slip in between the check below and the delete (the database cascade would otherwise remove it silently).
+        departmentRepository.lockByCodes(List.of(department.getCode()));
 
+        // Any department, built-in or custom, can be removed by an Admin while nothing references it. A removed built-in stays removed:
+        // production never re-seeds (Flyway V4 ran once) and DepartmentBootstrap only seeds an empty, brand-new database.
         // Staff and tasks reference the department (and assignments hang off them); nothing is deleted or
         // reassigned on their behalf
         long staff = staffRepository.countByDepartment(department);
@@ -170,6 +173,15 @@ public class DepartmentServiceImpl implements DepartmentService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "\"" + name + "\" cannot be removed because it still has " + joinParts(parts)
                             + ". Move them to another department first, or mark the department Inactive.");
+        }
+
+        // Administrator-granted Manager access (additional departments) references the department. The database would silently cascade-delete
+        // those grants, so refuse instead: an Admin must revoke them on purpose first, and the grants and their history stay intact.
+        long grants = grantRepository.countByDepartment(department);
+        if (grants > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "\"" + name + "\" cannot be removed because " + grants + (grants == 1 ? " Manager access grant still references it." : " Manager access grants still reference it.")
+                            + " Revoke the access grant(s) first (Users page, Department View Access), then remove the department.");
         }
 
         try {

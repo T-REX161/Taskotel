@@ -155,18 +155,12 @@ describe('Remove Department', () => {
     assert.ok(apiSource.includes('export const deleteDepartment = (code)') && /method: 'DELETE'/.test(apiSource));
   });
 
-  it('a built-in department shows the warning up front, disables Remove and never calls the API; Cancel stays enabled', () => {
-    assert.ok(removeSource.includes("import { isBuiltInDepartment } from '../../utils/departmentRegistry';"));
-    assert.ok(removeSource.includes("const isBuiltIn = isBuiltInDepartment(department.code);"));
-    assert.ok(removeSource.includes("This is one of Taskotel's built-in departments and cannot be removed. You can mark it Inactive instead."));
-    assert.ok(removeSource.includes('{(isBuiltIn || error) && (') && removeSource.includes('{isBuiltIn ? BUILT_IN_MESSAGE : error}'), 'Warning visible without any click, in the existing alert box');
-    assert.ok(removeSource.includes('disabled={isRemoving || isBuiltIn}'), 'The red button is disabled for a built-in department');
-    const handler = removeSource.slice(removeSource.indexOf('const handleRemove'), removeSource.indexOf('await deleteDepartment('));
-    assert.ok(handler.includes('if (isBuiltIn) return;'), 'The guard sits before the only deleteDepartment call');
-    assert.strictEqual((removeSource.match(/deleteDepartment\(/g) || []).length, 1, 'Still one call site');
-    const cancel = removeSource.slice(removeSource.indexOf('autoFocus'), removeSource.indexOf('Cancel'));
-    assert.ok(cancel.includes('disabled={isRemoving}') && !cancel.includes('isBuiltIn'), 'Cancel is not affected by the built-in rule');
-    assert.ok(removeSource.includes('err.status === 409'), 'The server rule and its 409 handling stay');
+  it('built-in departments are removed like any other: the dialog has no built-in rule, and the server decides (409 only while staff, tasks or assignments use it)', () => {
+    const code = removeSource.replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.ok(!/built-in|isBuiltIn|BUILT_IN/.test(code), 'No built-in check in the dialog code');
+    assert.ok(!removeSource.includes('departmentRegistry'), 'The dialog does not consult any built-in list');
+    assert.ok(/disabled=\{isRemoving\}\s*\n\s*className=\{`px-5 py-2 bg-red-600/.test(removeSource), 'The red button is disabled only while a removal is running');
+    assert.ok(removeSource.includes('err.status === 409') && removeSource.includes('setError(err.message'), 'The server explanation for a department in use is shown');
   });
 
   it('sends at most one request per confirmation, and no placeholder remains', () => {

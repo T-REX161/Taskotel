@@ -26,6 +26,9 @@ public final class DepartmentCatalog {
     /** The departments that existed as an enum before departments became database records, in their original order. */
     public record BuiltIn(String code, String name, String iconKey, String colorKey) {}
 
+    // These six are only the starting data of a new database (Flyway V4 and DepartmentBootstrap). They carry no special status afterwards:
+    // an Admin can edit or remove them like any other department, and a removed one is never re-created.
+
     public static final List<BuiltIn> BUILT_IN = List.of(
             new BuiltIn("HOUSEKEEPING", "Housekeeping", "sprout", "green"),
             new BuiltIn("FRONT_DESK", "Front Desk", "bell", "blue"),

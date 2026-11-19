@@ -27,7 +27,9 @@ import java.util.UUID;
  * {@code DepartmentScope.managedDepartments}). Only an Administrator can grant or revoke it. Grants are
  * read from the database on every request ({@code CurrentUserScopeResolver}), so revoking one takes effect on the next request.
  *
- * <p>The rows go with the account or the department (ON DELETE CASCADE): a grant never outlives either.
+ * <p>The rows go with the account (ON DELETE CASCADE). A department that still has a grant is not removed: the service refuses (409)
+ * until an Administrator revokes the grants, so a grant is never deleted silently. The cascade on the department side stays as a database
+ * backstop that the service never reaches.
  */
 @Entity
 @Table(name = "manager_view_access",

@@ -36,7 +36,7 @@ export default function CreateTaskPage() {
     title: '',
     assignTo: '',
     description: '',
-    department: isManager ? '' : 'HOUSEKEEPING',
+    department: '',
     category: 'Cleaning',
     priority: 'MEDIUM',
     estimatedDuration: '45',

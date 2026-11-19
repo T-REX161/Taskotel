@@ -3,16 +3,13 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { CloseIcon, TrashIcon } from '../icons/Icons';
 import { deleteDepartment } from '../../services/api';
-import { isBuiltInDepartment } from '../../utils/departmentRegistry';
 import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import Spinner from '../common/Spinner';
 
-const BUILT_IN_MESSAGE = "This is one of Taskotel's built-in departments and cannot be removed. You can mark it Inactive instead.";
-
 /**
  * Confirms and removes a department through the department API; nothing is simulated.
- * The server refuses (409, with an explanation shown here) while staff or tasks still belong to the department,
- * and for the built-in departments, so no staff, task or assignment is ever deleted or reassigned from here.
+ * The server refuses (409, with an explanation shown here) while staff, tasks or assignments still belong to the department, so no staff,
+ * task or assignment is ever deleted or reassigned from here. Built-in departments are removed like any other unused department.
  *
  * Props:
  *  - department: the department to remove, or null when closed
@@ -46,17 +43,12 @@ function RemoveDepartmentModal({ department, onClose, onRemoved, closing = false
 
   if (!isOpen) return null;
 
-  // A built-in department cannot be removed (the server refuses it with 409): the warning is shown up front and the button is disabled
-  const isBuiltIn = isBuiltInDepartment(department.code);
-
   const handleClose = () => {
     if (isRemoving) return;
     onClose();
   };
 
   const handleRemove = async () => {
-    // Never send a request that the server is certain to refuse
-    if (isBuiltIn) return;
     // The ref blocks a second click immediately; the state only takes effect on the next render
     if (inFlight.current) return;
     inFlight.current = true;
@@ -126,13 +118,13 @@ function RemoveDepartmentModal({ department, onClose, onRemoved, closing = false
           </button>
         </div>
 
-        {(isBuiltIn || error) && (
+        {error && (
           <div className="px-5 sm:px-6 pb-4">
             <div role="alert" className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-2.5">
               <svg className="w-5 h-5 flex-shrink-0 text-red-600 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              <span>{isBuiltIn ? BUILT_IN_MESSAGE : error}</span>
+              <span>{error}</span>
             </div>
           </div>
         )}
@@ -150,10 +142,10 @@ function RemoveDepartmentModal({ department, onClose, onRemoved, closing = false
           <button
             type="button"
             onClick={handleRemove}
-            disabled={isRemoving || isBuiltIn}
-            className={`px-5 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-sm font-semibold rounded-lg transition-colors inline-flex items-center gap-2 shadow-sm ${
-              isBuiltIn ? 'opacity-50 cursor-not-allowed hover:bg-red-600 active:bg-red-600' : 'cursor-pointer'
-            } ${isRemoving ? 'opacity-80 cursor-wait' : ''}`}
+            disabled={isRemoving}
+            className={`px-5 py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-sm font-semibold rounded-lg transition-colors inline-flex items-center gap-2 cursor-pointer shadow-sm ${
+              isRemoving ? 'opacity-80 cursor-wait' : ''
+            }`}
           >
             {isRemoving ? (
               <>

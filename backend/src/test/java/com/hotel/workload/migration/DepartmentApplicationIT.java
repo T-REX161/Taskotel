@@ -214,7 +214,7 @@ public class DepartmentApplicationIT {
 
     @Test
     @WithMockUser(username = "rehearsal_admin", roles = "ADMIN")
-    @DisplayName("On the real data: DELETE /api/departments/{code} removes an unused department and refuses built-in or in-use ones (rolled back afterwards)")
+    @DisplayName("On the real data: DELETE /api/departments/{code} removes an unused department and refuses in-use ones, built-in or not (rolled back afterwards)")
     public void removeDepartmentOnRealData() throws Exception {
         User admin = new User();
         admin.setUsername("rehearsal_admin");
@@ -235,10 +235,10 @@ public class DepartmentApplicationIT {
         assertEquals(6, json(mockMvc.perform(get("/api/departments")).andReturn()).size());
         assertEquals(404, mockMvc.perform(delete("/api/departments/" + valet)).andReturn().getResponse().getStatus(), "Already removed");
 
-        // A built-in department with real staff is refused and untouched
+        // A built-in department is protected only by what references it: with real staff it is refused and untouched
         MvcResult builtIn = mockMvc.perform(delete("/api/departments/MAINTENANCE")).andReturn();
         assertEquals(409, builtIn.getResponse().getStatus());
-        assertTrue(json(builtIn).get("message").asText().contains("built-in"));
+        assertTrue(json(builtIn).get("message").asText().contains("still has") && json(builtIn).get("message").asText().contains("staff member"), "Refused because staff belong to it, not because it is built-in");
         assertEquals(1, jdbc.queryForObject("SELECT count(*) FROM departments WHERE code = 'MAINTENANCE'", Integer.class));
 
         // A custom department with staff, a task and an assignment is refused, naming every blocker
@@ -261,7 +261,7 @@ public class DepartmentApplicationIT {
         assertEquals(staffBefore + 1, jdbc.queryForObject("SELECT count(*) FROM staff", Long.class), "Nothing was deleted with it");
         assertEquals(tasksBefore + 1, jdbc.queryForObject("SELECT count(*) FROM tasks", Long.class));
         assertEquals(assignmentsBefore + 1, jdbc.queryForObject("SELECT count(*) FROM assignments", Long.class));
-        System.out.println("REMOVE OK: unused removed (204), built-in refused (409), in-use refused (409): " + json(inUse).get("message").asText());
+        System.out.println("REMOVE OK: unused removed (204), built-in with staff refused (409), in-use refused (409): " + json(inUse).get("message").asText());
     }
 
     @Test

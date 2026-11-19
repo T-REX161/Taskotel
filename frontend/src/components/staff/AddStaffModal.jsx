@@ -35,7 +35,7 @@ const initialFormState = {
   email: '',
   phone: '',
   role: 'STAFF',
-  department: 'HOUSEKEEPING',
+  department: '',
   availability: 'AVAILABLE',
   username: '',
   temporaryPassword: '',
@@ -152,6 +152,9 @@ function AddStaffModal({
     usernameInvalidReason === 'empty' ? 'idle' : usernameInvalidReason !== 'ok' ? 'invalid' : usernameCheck.status === 'idle' ? 'checking' : usernameCheck.status;
   const feedback = { ...usernameCheck, status: usernameStatus, reason: usernameInvalidReason };
   const hasPickedAlternative = useRef(false);
+  // False until the user touches the department select (and again after the form is reset): while it is false the form follows the loaded
+  // department list and starts on its first active department. No department (for example Housekeeping) is ever assumed to exist.
+  const departmentChosen = useRef(false);
 
   // A generated username that is already taken is replaced by the first alternative the server confirmed free
   useEffect(() => {
@@ -165,6 +168,10 @@ function AddStaffModal({
   // If the default department cannot take new staff (for example it is inactive), start on the first one that can. An empty choice
   // ("None (Unassigned)") is left alone while it is allowed (an Admin, whatever role is selected, so it survives role changes).
   useEffect(() => {
+    if (!departmentChosen.current && formData.department === '' && activeDepartments.length > 0) {
+      setFormData((prev) => (prev.department === '' ? { ...prev, department: activeDepartments[0].code } : prev));
+      return;
+    }
     if (formData.department === '' && allowNoDepartment) return;
     if (activeDepartments.length > 0 && !activeDepartments.some((department) => department.code === formData.department)) {
       setFormData((prev) => ({ ...prev, department: activeDepartments[0].code }));
@@ -176,6 +183,7 @@ function AddStaffModal({
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     if (name === 'username') setUsernameEdited(value !== '');
+    if (name === 'department') departmentChosen.current = true;
     if (name === 'temporaryPassword') setPasswordLocked(value !== '');
     if (name === 'temporaryPassword' || name === 'fullName') setCopyState('idle');
     setFormData((prev) => ({
@@ -216,6 +224,7 @@ function AddStaffModal({
     setUsernameEdited(false);
     setPasswordLocked(false);
     setCopyState('idle');
+    departmentChosen.current = false;
     setFormData(initialFormState);
     setShowTemporaryPassword(false);
     setFormError('');
@@ -285,6 +294,7 @@ function AddStaffModal({
 
       const newStaff = await createStaff(payload);
 
+      departmentChosen.current = false;
       setFormData(initialFormState);
       setUsernameEdited(false);
       setPasswordLocked(false);

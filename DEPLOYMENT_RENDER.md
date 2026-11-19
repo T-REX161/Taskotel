@@ -1,13 +1,14 @@
 # Deploying the Taskotel backend on Render
 
-This document prepares the **backend** (Spring Boot 4, Java 25) for Render with an external **Neon PostgreSQL** database and a future
-**Vercel** frontend. Nothing here has been deployed yet. No credential appears in this file: only variable **names** are listed, and every
-value is supplied in the Render dashboard.
+This document describes the **backend** (Spring Boot 4, Java 25) on Render with an external **Supabase PostgreSQL** database (Session Pooler)
+and the **Vercel** frontend. (It was first written for a Neon database; production now runs on Supabase, and this file has been updated to
+match.) No credential appears in this file: only variable **names** are listed, and every value is supplied in the Render dashboard.
+For the release routine, migrations and rollbacks see `DEPLOYMENT_PIPELINE.md`.
 
 ## 1. Architecture
 
 ```
-Browser ──► Vercel (React frontend) ──► Render Web Service (Docker, Spring Boot) ──► Neon PostgreSQL
+Browser ──► Vercel (React frontend) ──► Render Web Service (Docker, Spring Boot) ──► Supabase PostgreSQL
                                                   ├──► SendGrid   (verification, reset and notification emails)
                                                   └──► Cloudinary (profile pictures)
 ```
@@ -56,9 +57,9 @@ Local development is unchanged: the default profile still uses `localhost:8080`,
 ### Required
 | Name | Meaning |
 |---|---|
-| `DB_HOST` | Neon host name (use the **direct** endpoint, not the `-pooler` one; see section 6). Not needed if `DB_URL` is set |
-| `DB_NAME` | Database name (default `workload_balancer` if omitted) |
-| `DB_USER` | Database user |
+| `DB_HOST` | Database host. For Supabase use the **Session Pooler** host (`aws-0-<region>.pooler.supabase.com`); see section 6. Not needed if `DB_URL` is set |
+| `DB_NAME` | Database name (default `workload_balancer` if omitted; Supabase uses `postgres`, so it must be set) |
+| `DB_USER` | Database user. The application reads `DB_USER` (not `DB_USERNAME`). On the Supabase pooler it must include the project reference, `postgres.<project-ref>`, or the pooler answers `no tenant identifier provided` |
 | `DB_PASSWORD` | Database password |
 | `JWT_SECRET` | Base64 text that decodes to **at least 32 bytes**. The application refuses to start otherwise. Generate one with `openssl rand -base64 48` |
 | `SENDGRID_API_KEY` | SendGrid key with the Mail Send permission. Startup fails in production if it is missing or a placeholder |
@@ -72,7 +73,7 @@ Local development is unchanged: the default profile still uses `localhost:8080`,
 |---|---|---|
 | `DB_URL` | built from the parts above | A complete JDBC URL; when set it is used as given |
 | `DB_PORT` | `5432` | |
-| `DB_SSLMODE` | `require` | TLS mode in the built URL (Neon requires TLS) |
+| `DB_SSLMODE` | `require` | TLS mode in the built URL (managed PostgreSQL requires TLS) |
 | `DB_POOL_MAX_SIZE` / `DB_POOL_MIN_IDLE` / `DB_POOL_CONNECTION_TIMEOUT_MS` | `5` / `1` / `30000` | Connection pool for a small deployment |
 | `SPRING_PROFILES_ACTIVE` | `prod` (set in the image) | `production` also works and loads the same settings |
 | `JWT_EXPIRATION` | `86400000` | Token lifetime in milliseconds |
@@ -89,40 +90,45 @@ Never set `DEMO_DATA_ENABLED`: demo data never runs under the production profile
 * The schema is built by `backend/src/main/resources/db/migration` (V1 to V24). On an **empty** database Flyway runs them in order; V4 also
   inserts the six built-in departments, and `DepartmentBootstrap`/`DemoDataSeeder` do not run in production.
 * In production `baseline-on-migrate` is `false`: a **non-empty** database without Flyway history makes startup fail instead of being adopted
-  silently. Neon starts empty, so this is the intended behaviour.
-* Set `WB_FLYWAY_ENABLED=true` and leave it on, so later releases apply their new migrations on startup.
+  silently. A new managed database starts empty, so this is the intended behaviour.
+* `WB_FLYWAY_ENABLED=true` makes Flyway run at startup (it is `false` by default). Production was built from an empty database with it on and
+  then switched off; **with it off, a release that adds a migration fails startup validation**. Set it to `true` for such a release (see
+  `DEPLOYMENT_PIPELINE.md`, section 4) and decide one standing policy.
 * After Flyway, Hibernate validates every entity against the schema (`ddl-auto: validate`). A mismatch stops startup with a clear message
   instead of changing the database.
-* **Not yet proven here.** The migrations are PostgreSQL SQL and the repository has PostgreSQL migration tests (`mvn -Pmigration-it test`,
-  against rehearsal databases only), but a fresh-database run against PostgreSQL was **not** executed while preparing this change. Do a
-  dry run on a disposable Neon branch before the real deployment (section 9, step 2).
+* The migrations have been applied to the production Supabase database (V1 to V24, all successful). The repository also has PostgreSQL
+  migration tests (`mvn -Pmigration-it test`, against rehearsal databases only). Rehearse any new migration on a disposable database first.
+* Departments: V4 seeds the six starting departments once. An Admin can later remove **any** department (built-in or not) that no staff,
+  task, assignment or Manager access grant uses (a grant must be revoked first; it is never deleted silently), and a removed department is never re-created: production does not re-seed, and `DepartmentBootstrap` (outside
+  production only) seeds a brand-new, empty database and nothing else.
 
-## 6. Neon PostgreSQL
+## 6. Supabase PostgreSQL (Session Pooler)
 
-1. Create a Neon project and database. Note the host, database, role and password (do not paste them into Git or chat).
-2. Use the **direct** connection host (without `-pooler`). The Hikari pool in the application is already small (5), and the pooled
-   (PgBouncer) endpoint does not suit Flyway's session behaviour.
-3. TLS is required; the default `sslmode=require` is right. Neon connection strings that include `channel_binding=require` can be passed
-   whole through `DB_URL`.
-4. Neon may suspend an idle compute. The first request after a pause can be slow while it wakes (connection timeout is 30 s), and connections
-   are retired every 15 minutes so the pool never holds a connection the server has dropped.
-5. The data in your local PostgreSQL **does not move to Neon automatically**. The first start gives an empty schema plus the six departments.
+1. Note the pooler host, port, database (`postgres`), the user (`postgres.<project-ref>`) and the database password. Do not paste them into
+   Git or chat.
+2. Use the **Session Pooler** on port **5432**. (Port 6543 is transaction mode and is not used.) Flyway and the Hikari pool (small, 5)
+   both work with session mode.
+3. TLS is required; the default `sslmode=require` is right. It encrypts the connection but does not verify the server certificate.
+4. **Turn the Supabase Data API off** (Project Settings, Data API). Taskotel's tables live in the `public` schema without row-level
+   security, so the public REST API would otherwise expose them. The application connects directly and does not use the Data API.
+5. Data in a local PostgreSQL database **does not move to Supabase automatically**. A first start with `WB_FLYWAY_ENABLED=true` gives an
+   empty schema plus the six starting departments.
 
-## 7. First administrator (manual step required)
+## 7. First administrator
 
-Production never creates accounts by itself, so a fresh Neon database has **nobody who can sign in**. Create the first Administrator once,
-directly in the database, with a BCrypt hash of a password you choose (generate the hash offline; never put the clear password in SQL, Git or
-chat):
+Production never creates accounts by itself, so a new database has **nobody who can sign in**, and no clear password may be written into
+SQL, Git or chat. The first Admin is created once with a reviewed, parameterised bootstrap that inserts exactly one `ADMIN` user and its four
+notification-preference rows (`TASK_ASSIGNED`, `TASK_STATUS`, `WORKLOAD_ALERT`, `TASK_REMINDER`) in one transaction, after strict checks
+(the schema matches, Flyway is at the last version with every migration successful, `users` and `notification_preferences` are empty). The
+account is created with a random, unknown BCrypt hash, `email_verified = false` and `credentials_setup_required = true`.
 
-```sql
--- Run once in the Neon SQL editor after the first successful start (the tables exist). Replace the three <...> values.
--- <BCRYPT_HASH>: for example the output of  htpasswd -bnBC 10 "" '<password>' | tr -d ':\n'   (a $2y$ hash is accepted)
-INSERT INTO users (id, username, email, password, role, active, email_verified, credentials_setup_required, created_at)
-VALUES (gen_random_uuid(), '<admin-username>', '<admin-email>', '<BCRYPT_HASH>', 'ADMIN', TRUE, TRUE, FALSE, now());
-```
+The Admin then sets a password through the application itself, with no password ever shown to anyone else:
+1. On the login page choose **Forgot password** and enter the Admin's email: a reset code arrives by email (SendGrid must be configured).
+2. Enter the code and choose a password (at least 8 characters with upper case, lower case, a digit and a special character).
+3. Sign in: a verification code is emailed; entering it opens the credentials-setup page, where the username and password are confirmed.
 
-This mirrors what the demo seeder creates for its administrator (a user row, email already verified), so signing in works without SendGrid.
-Verify the column list against your schema (`\d users`) first. Create every other account from the application.
+Create every other account from the application. (The reviewed bootstrap scripts are not stored in this repository. If another environment
+needs one, add them under review rather than writing an ad-hoc INSERT.)
 
 ## 8. CORS and the frontend on Vercel
 
@@ -138,7 +144,7 @@ Verify the column list against your schema (`\d users`) first. Create every othe
 ## 9. Deployment procedure
 
 1. **Prepare secrets** in a password manager: database credentials, `JWT_SECRET`, SendGrid key and verified sender, Cloudinary values.
-2. **Dry run** (recommended, no production data): create a disposable Neon branch or database and start the application locally against it
+2. **Dry run** (recommended, no production data): create a disposable database and start the application locally against it
    with the production variables and `WB_FLYWAY_ENABLED=true`; confirm Flyway applies V1 to V24 and the application starts. Delete it after.
 3. **Create the Render Web Service** with the settings in section 3 and set every variable of section 4. Leave Auto-Deploy off.
 4. **Deploy.** Watch the logs for `Started WorkloadBalancerApplication`, Flyway applying the migrations, and no startup validation error.
@@ -162,7 +168,9 @@ Verify the column list against your schema (`\d users`) first. Create every othe
 | `Production startup failed: ... SENDGRID_API_KEY` / `SENDGRID_FROM_EMAIL` | Missing, blank, a `test-` placeholder, or the sender has no `@` |
 | `Schema-validation: missing table` | Flyway did not run: set `WB_FLYWAY_ENABLED=true` on the first start |
 | `Found non-empty schema(s) ... without schema history table` | The target database is not empty. Use a fresh database; the production profile deliberately does not baseline |
-| `The connection attempt failed` / `connection timed out` | Wrong host or port, or Neon is waking. Retry after a few seconds; check `DB_HOST` and that it is not the `-pooler` host |
+| `The connection attempt failed` / `connection timed out` | Wrong host or port, or the database is waking. Retry after a few seconds; check `DB_HOST` and `DB_PORT` |
+| `FATAL: (ENOTIDENTIFIER) no tenant identifier provided` | Supabase pooler without the project reference: set `DB_USER` (not `DB_USERNAME`) to `postgres.<project-ref>` |
+| The first request after a quiet period fails with "A server error occurred" | A Render instance that spins down needs more than a minute to wake and the proxy times out. See `DEPLOYMENT_PIPELINE.md` (cold starts) |
 | `FATAL: no pg_hba.conf entry ... SSL` or `SSL required` | Keep `DB_SSLMODE=require` (the default) |
 | `CORS_ALLOWED_ORIGINS must list exact origins` | A wildcard, path or non-http(s) entry; fix the value |
 | Browser shows a CORS error | The Vercel origin is not in `CORS_ALLOWED_ORIGINS` exactly (scheme and host must match; no trailing path) |

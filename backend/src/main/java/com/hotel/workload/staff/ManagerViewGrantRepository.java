@@ -9,6 +9,10 @@ import java.util.UUID;
 
 public interface ManagerViewGrantRepository extends JpaRepository<ManagerViewGrant, UUID> {
 
+    /** How many Manager additional-department grants reference this department (any Manager, valid or not). */
+    @Query("SELECT COUNT(g) FROM ManagerViewGrant g WHERE g.department = :department")
+    long countByDepartment(@Param("department") Department department);
+
     /** Every grant of one Manager, with its department, in department order. */
     @Query("SELECT g FROM ManagerViewGrant g JOIN FETCH g.department d WHERE g.manager.id = :managerUserId ORDER BY d.name ASC")
     List<ManagerViewGrant> findByManagerId(@Param("managerUserId") UUID managerUserId);

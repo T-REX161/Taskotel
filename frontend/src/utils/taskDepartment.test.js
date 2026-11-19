@@ -57,9 +57,10 @@ test('Edit Task: Admin may change the department, a Manager may not', () => {
 
 // ── wiring: Create Task page ─────────────────────────────────────────────────────────────────────────────────
 
-test('Create Task: a Manager is never defaulted to Housekeeping; the Admin default is unchanged', () => {
+test('Create Task: nobody is defaulted to Housekeeping; the first active department of the loaded list is chosen for an Admin', () => {
   const page = read('pages', 'CreateTaskPage.jsx');
-  assert.match(page, /department: isManager \? '' : 'HOUSEKEEPING',/);
+  assert.match(page, /department: '',/);
+  assert.doesNotMatch(page, /'HOUSEKEEPING'/);
   // the "first active department" fallback is skipped for a Manager, so it cannot replace their own department
   assert.match(page, /useEffect\(\(\) => \{\s*if \(isManager\) return;\s*if \(activeDepartments\.length > 0/);
 });
