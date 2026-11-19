@@ -73,6 +73,25 @@ export function getWorkloadProgressBarColor(status) {
 }
 
 /**
+ * Fill colour of a department's bar on the Workload page, from the percentage of the total load shown on its card (the whole number that is
+ * displayed): 0-25 LOW blue, above 25-50 NORMAL green, above 50-75 HIGH orange, above 75 AT RISK red (the legend's hues).
+ * The 600 shades (#2563EB, #059669, #EA580C, #DC2626) are strong on the light theme; the dark theme uses the brighter 500 shades so the
+ * fill stays clear against the dark track. Not a number: neutral grey.
+ *
+ * @param {number|string|null|undefined} percentage
+ * @returns {string}
+ */
+export function getDepartmentShareBarColor(percentage) {
+  const value = Number(percentage);
+  if (percentage === null || percentage === undefined || percentage === '' || !Number.isFinite(value)) return 'bg-gray-400';
+  const share = Math.max(0, value);
+  if (share <= 25) return 'bg-blue-600 dark:bg-blue-500';
+  if (share <= 50) return 'bg-emerald-600 dark:bg-emerald-500';
+  if (share <= 75) return 'bg-orange-600 dark:bg-orange-500';
+  return 'bg-red-600 dark:bg-red-500';
+}
+
+/**
  * One standard shift in minutes (8 hours). Every workload percentage in the app (Dashboard, Workload page, Assign dialog) is a share of
  * this, so the same person shows the same percentage everywhere.
  */

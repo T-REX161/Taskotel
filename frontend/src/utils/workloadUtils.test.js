@@ -4,6 +4,7 @@ import {
   deriveWorkloadStatus,
   getWorkloadStatusBadge,
   getWorkloadProgressBarColor,
+  getDepartmentShareBarColor,
   calculateWorkloadPercentage,
   calculateProjectedWorkload,
   calculateWorkloadSummary,
@@ -500,3 +501,51 @@ describe('workloadUtils', () => {
 });
 
 
+
+describe('getDepartmentShareBarColor (department bar colour from the percentage of total load)', () => {
+  const BLUE = 'bg-blue-600 dark:bg-blue-500';
+  const GREEN = 'bg-emerald-600 dark:bg-emerald-500';
+  const ORANGE = 'bg-orange-600 dark:bg-orange-500';
+  const RED = 'bg-red-600 dark:bg-red-500';
+
+  it('the examples: Housekeeping 27, Front Desk 13, Maintenance 46, Food and Beverage 10, Security 4', () => {
+    assert.equal(getDepartmentShareBarColor(27), GREEN);
+    assert.equal(getDepartmentShareBarColor(13), BLUE);
+    assert.equal(getDepartmentShareBarColor(46), GREEN);
+    assert.equal(getDepartmentShareBarColor(10), BLUE);
+    assert.equal(getDepartmentShareBarColor(4), BLUE);
+  });
+
+  it('every boundary: 0, 25 | 26, 50 | 51, 75 | 76, 100', () => {
+    for (const [value, color] of [[0, BLUE], [25, BLUE], [26, GREEN], [50, GREEN], [51, ORANGE], [75, ORANGE], [76, RED], [100, RED]]) {
+      assert.equal(getDepartmentShareBarColor(value), color, String(value));
+    }
+  });
+
+  it('is not capped at 100, ignores negatives, and gives a neutral colour for a missing or invalid value', () => {
+    assert.equal(getDepartmentShareBarColor(250), RED);
+    assert.equal(getDepartmentShareBarColor(-5), BLUE);
+    for (const bad of [null, undefined, '', NaN, 'abc']) assert.equal(getDepartmentShareBarColor(bad), 'bg-gray-400', String(bad));
+  });
+
+  it('uses the strong 600 shades on the light theme (#2563EB, #059669, #EA580C, #DC2626) and brighter 500 shades on the dark theme', () => {
+    assert.ok([BLUE, GREEN, ORANGE, RED].every((c) => /^bg-[a-z]+-600 dark:bg-[a-z]+-500$/.test(c)));
+  });
+
+  it('works on the aggregated department data: the colour follows the share that is displayed', () => {
+    const rows = [
+      { department: 'HOUSEKEEPING', totalEstimatedDuration: 270, activeTaskCount: 1 },
+      { department: 'FRONT_DESK', totalEstimatedDuration: 130, activeTaskCount: 1 },
+      { department: 'MAINTENANCE', totalEstimatedDuration: 460, activeTaskCount: 1 },
+      { department: 'ROOM_SERVICE', totalEstimatedDuration: 140, activeTaskCount: 1 },
+    ];
+    const res = calculateDepartmentWorkloads(rows);
+    const colorOf = (code) => getDepartmentShareBarColor(res.find((d) => d.code === code).percentage);
+    assert.equal(res.find((d) => d.code === 'HOUSEKEEPING').percentage, 27);
+    assert.equal(colorOf('HOUSEKEEPING'), GREEN);
+    assert.equal(colorOf('FRONT_DESK'), BLUE);
+    assert.equal(colorOf('MAINTENANCE'), GREEN);
+    assert.equal(colorOf('ROOM_SERVICE'), BLUE);
+    assert.equal(colorOf('SECURITY'), BLUE, 'no work: 0% is LOW');
+  });
+});

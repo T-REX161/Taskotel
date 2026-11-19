@@ -162,9 +162,9 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       const section = pageSource.slice(start, pageSource.indexOf('</section>', start));
       assert.ok(pageSource.includes('min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department"'), 'Same container style as the summary');
       assert.ok(section.includes('grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))]'), 'Auto-fill grid, so rows are added as departments grow');
-      assert.ok(section.includes('{departmentWorkloads.map((dept, index) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
+      assert.ok(section.includes('{departmentWorkloads.map((dept) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
       assert.ok(section.includes('min-w-0 bg-white rounded-xl p-4 shadow-2xs border border-gray-100'), 'Each department is a card');
-      for (const field of ['{dept.name}', '{dept.totalMinutes} mins', 'dept.percentage', 'dept.activeTaskCount', 'dept.staffCount', 'getDepartmentBarColor(index)']) {
+      for (const field of ['{dept.name}', '{dept.totalMinutes} mins', 'dept.percentage', 'dept.activeTaskCount', 'dept.staffCount', 'getDepartmentShareBarColor(dept.percentage)']) {
         assert.ok(section.includes(field), 'Card shows ' + field);
       }
       for (const fixed of ['lg:grid-cols-3', 'md:grid-cols-2', 'SUPPORTED_DEPARTMENTS', 'departmentWorkloads[', 'slice(']) {
@@ -572,9 +572,12 @@ describe('Workload Thresholds card: header row plus four status tiles, percentag
 
   it('tints each tile with its own status colour (blue, emerald, orange, red) and keeps a coloured dot; the theme palette maps these for dark mode', () => {
     for (const hue of ['blue', 'emerald', 'orange', 'red']) {
-      assert.ok(card.includes('border-' + hue + '-100 bg-' + hue + '-50') && card.includes('bg-' + hue + '-500') && card.includes('text-' + hue + '-700'), hue);
+      assert.ok(card.includes('border-' + hue + '-200 bg-' + hue + '-100 dark:border-' + hue + '-100 dark:bg-' + hue + '-50'), hue + ' tile: stronger tint on light, original on dark');
+      assert.ok(card.includes('w-3 h-3 rounded-full bg-' + hue + '-600 dark:bg-' + hue + '-500'), hue + ' dot: 12px, strong 600 on light, 500 on dark (same as the department bars)');
+      assert.ok(card.includes('text-' + hue + '-700'), hue + ' label keeps its readable shade');
     }
-    assert.ok(!card.includes('dark:'), 'no per-component dark overrides: the shared palette handles both themes');
+    const darkUtilities = card.match(/dark:[a-z0-9:-]+/g) || [];
+    assert.ok(darkUtilities.length > 0 && darkUtilities.every((u) => /^dark:(bg|border)-(blue|emerald|orange|red)-(50|100|500)$/.test(u)), 'dark variants only keep the dark look: tint, border and dot colours');
   });
 
   it('is responsive: one column on phones, two on small screens, four on desktop', () => {
@@ -583,5 +586,24 @@ describe('Workload Thresholds card: header row plus four status tiles, percentag
 
   it('the percentage bands are the same boundaries as the minute thresholds over 480 minutes (120, 240, 360)', () => {
     assert.deepEqual([0.25, 0.5, 0.75].map((p) => p * 480), [120, 240, 360]);
+  });
+});
+
+describe('Workload by Department: the bar colour follows the percentage of total load shown on the card', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'WorkloadPage.jsx'), 'utf8');
+  const start = source.indexOf('aria-label="Workload by department"');
+  const section = source.slice(start, source.indexOf('</section>', start));
+
+  it('has no per-department palette and uses the shared colour helper', () => {
+    assert.ok(!source.includes('getDepartmentBarColor'));
+    for (const hue of ['bg-indigo-500', 'bg-amber-500', 'bg-purple-500', 'bg-teal-500']) assert.ok(!section.includes(hue), hue);
+    assert.ok(section.includes('getDepartmentShareBarColor(dept.percentage)'));
+  });
+
+  it('keeps the label, the bar width and the counts exactly as they were', () => {
+    assert.ok(section.includes('{dept.percentage}% of total load'));
+    assert.ok(section.includes('Math.min(dept.percentage, 100)'));
+    assert.ok(section.includes('text-2xs text-gray-500') && section.includes("dept.activeTaskCount === 1 ? 'task' : 'tasks'"));
+    assert.ok(!section.includes('of capacity') && !section.includes('No available capacity'));
   });
 });

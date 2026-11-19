@@ -134,7 +134,7 @@ describe('WorkloadPage wiring', () => {
   });
 
   it('renders one card for each entry of the computed list and nothing else', () => {
-    assert.ok(page.includes('{departmentWorkloads.map((dept, index) => {'));
+    assert.ok(page.includes('{departmentWorkloads.map((dept) => {'));
     assert.ok(page.includes('key={dept.code}'));
     assert.equal(page.split('departmentWorkloads.map(').length - 1, 1, 'no second source of department cards');
   });
