@@ -139,7 +139,7 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
   describe('Stacked Full-Width Layout', () => {
     it('orders the sections: summary container, thresholds, department panel, staff table', () => {
       const at = (m) => pageSource.indexOf(m);
-      const order = ['aria-label="Workload summary"', 'Workload Thresholds:', '<h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>', 'Staff Workload Distribution</h2>'].map(at);
+      const order = ['aria-label="Workload summary"', 'aria-label="Workload thresholds"', '<h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>', 'Staff Workload Distribution</h2>'].map(at);
       assert.ok(order.every((i) => i > 0), 'All four sections must exist');
       assert.deepStrictEqual(order, [...order].sort((x, y) => x - y), 'Sections must appear in the required order');
     });
@@ -544,5 +544,44 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       assert.ok(pageSource.includes('if (decision.allStaff !== null) setAllStaff(decision.allStaff);'));
       assert.ok(pageSource.includes("navigate('/login')"), 'Expired sessions still go to login');
     });
+  });
+});
+
+describe('Workload Thresholds card: header row plus four status tiles, percentages of the 480-minute shift', () => {
+  const source = fs.readFileSync(path.join(__dirname, 'WorkloadPage.jsx'), 'utf8');
+  const start = source.indexOf('aria-label="Workload thresholds"');
+  const card = source.slice(start, source.indexOf('</section>', start));
+  const text = card.replace(/<[^>]+>/g, '|').replace(/\s+/g, ' ');
+
+  it('has the heading and the supporting text on one header row', () => {
+    assert.ok(card.includes('<h2 className="text-sm font-semibold text-gray-900">Workload Thresholds</h2>'));
+    assert.ok(card.includes('Based on a 480-minute shift · Can exceed 100%'));
+  });
+
+  it('shows four tiles with the required names and ranges, in order', () => {
+    const expected = [['LOW', '0–25%'], ['NORMAL', 'Above 25%–50%'], ['HIGH', 'Above 50%–75%'], ['AT RISK', 'Above 75%']];
+    const tiles = card.split('<li ').slice(1);
+    assert.equal(tiles.length, 4);
+    tiles.forEach((tile, i) => {
+      const t = tile.replace(/<[^>]+>/g, '|').replace(/\s+/g, ' ');
+      assert.ok(t.includes(expected[i][0]) && t.includes(expected[i][1]), 'tile ' + i + ': ' + expected[i].join(' / '));
+    });
+    assert.ok(!/\bmins?\b/.test(text), 'no minute-based labels remain');
+    assert.ok(!text.includes('100%') || text.includes('Can exceed 100%'), 'AT RISK is never capped at 100%');
+  });
+
+  it('tints each tile with its own status colour (blue, emerald, orange, red) and keeps a coloured dot; the theme palette maps these for dark mode', () => {
+    for (const hue of ['blue', 'emerald', 'orange', 'red']) {
+      assert.ok(card.includes('border-' + hue + '-100 bg-' + hue + '-50') && card.includes('bg-' + hue + '-500') && card.includes('text-' + hue + '-700'), hue);
+    }
+    assert.ok(!card.includes('dark:'), 'no per-component dark overrides: the shared palette handles both themes');
+  });
+
+  it('is responsive: one column on phones, two on small screens, four on desktop', () => {
+    assert.ok(card.includes('grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'));
+  });
+
+  it('the percentage bands are the same boundaries as the minute thresholds over 480 minutes (120, 240, 360)', () => {
+    assert.deepEqual([0.25, 0.5, 0.75].map((p) => p * 480), [120, 240, 360]);
   });
 });
