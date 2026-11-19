@@ -21,6 +21,14 @@ const registered = new Map();
 
 const upper = (code) => String(code || '').trim().toUpperCase();
 
+/**
+ * True for the six built-in departments (matched by code, ignoring case). The backend refuses to remove these (409), so the Remove dialog
+ * uses this to disable its button instead of sending a request that is certain to fail. The backend rule is unchanged and still enforced.
+ */
+export function isBuiltInDepartment(code) {
+  return Object.prototype.hasOwnProperty.call(BUILT_IN_DEPARTMENT_NAMES, upper(code));
+}
+
 /** SPA_AND_WELLNESS becomes "Spa And Wellness": a readable name when nothing better is known. */
 export function humanizeDepartmentCode(code) {
   return String(code || '')
