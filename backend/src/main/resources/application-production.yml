@@ -43,6 +43,11 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: ${JWT_EXPIRATION:86400000}
 
+taskotel:
+  # Links in emails (the account invitation's login button and its fallback link): FRONTEND_BASE_URL if set, otherwise the production address
+  # defined once in application.yml. Production never falls back to the local development address.
+  frontend-base-url: ${FRONTEND_BASE_URL:${taskotel.production-frontend-base-url}}
+
 sendgrid:
   api-key: ${SENDGRID_API_KEY}
   from-email: ${SENDGRID_FROM_EMAIL}

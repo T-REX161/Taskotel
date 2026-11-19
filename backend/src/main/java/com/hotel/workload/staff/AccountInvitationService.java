@@ -38,11 +38,9 @@ public class AccountInvitationService {
 
     /** The login page link for a configured base address: trailing slashes removed, http or https only, otherwise the development default. */
     static String loginUrlFor(String frontendBaseUrl) {
-        String base = frontendBaseUrl == null ? "" : frontendBaseUrl.trim();
-        while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
-        boolean usable = (base.startsWith("http://") || base.startsWith("https://")) && base.length() > "https://".length()
-                && base.chars().noneMatch(c -> Character.isWhitespace(c) || c == '"' || c == '<' || c == '>');
-        if (!usable) {
+        String base = com.hotel.workload.config.FrontendBaseUrl.normalizeOrNull(frontendBaseUrl);
+        if (base == null) {
+            // Development only in practice: the production profile refuses to start with an unusable address (ProductionFrontendUrlValidator)
             log.warn("taskotel.frontend-base-url is not a usable http(s) address; invitation links use the development default");
             base = DEFAULT_FRONTEND_BASE_URL;
         }

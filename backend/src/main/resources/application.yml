@@ -73,9 +73,12 @@ app:
 # Notification emails are handed, after the database commit, to one bounded in-memory worker (see NotificationDeliveryConfig): the request
 # does not wait for SendGrid. A full queue drops (and logs) the event; queued events are lost if the process is killed. Best effort only.
 taskotel:
-  # The address of the web app, used for the login link in account invitation emails. Set FRONTEND_BASE_URL in every deployment
-  # (for example https://taskotel.example.com); the default is the local development frontend.
+  # The address of the web app, used for the login link in account invitation emails. FRONTEND_BASE_URL overrides it in any deployment;
+  # the default is the local development frontend. The production profiles (application-prod.yml and its production twin) default to
+  # production-frontend-base-url below instead, so a production start never links to localhost even when FRONTEND_BASE_URL is not set.
   frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+  # The one place the production web address is written down.
+  production-frontend-base-url: https://taskotel.vercel.app
   # Browser origins allowed to call the API from another site (a comma-separated list, exact origins only, for example the Vercel URL
   # https://taskotel.vercel.app). Empty (the default) switches CORS support off completely: the local development frontend uses the Vite
   # proxy and needs none. A wildcard is refused at startup. See CorsConfig.

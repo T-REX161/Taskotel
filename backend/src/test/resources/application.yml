@@ -28,6 +28,9 @@ jwt:
 # Notification delivery runs inline in the tests, so assertions made right after a request are deterministic. NotificationAsyncDeliveryTest
 # switches the asynchronous worker on with its own property source.
 taskotel:
+  # This file replaces the main application.yml in tests. The production profile files (application-prod.yml and its production twin) default their
+  # frontend address to this key, so tests that start the production profile need it here too (the main file is the one place it is defined).
+  production-frontend-base-url: https://taskotel.vercel.app
   notifications:
     async: false
 
