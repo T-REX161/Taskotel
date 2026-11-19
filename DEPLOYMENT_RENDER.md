@@ -99,7 +99,7 @@ Never set `DEMO_DATA_ENABLED`: demo data never runs under the production profile
 * The migrations have been applied to the production Supabase database (V1 to V24, all successful). The repository also has PostgreSQL
   migration tests (`mvn -Pmigration-it test`, against rehearsal databases only). Rehearse any new migration on a disposable database first.
 * Departments: V4 seeds the six starting departments once. An Admin can later remove **any** department (built-in or not) that no staff,
-  task or assignment uses, and a removed department is never re-created: production does not re-seed, and `DepartmentBootstrap` (outside
+  task, assignment or Manager access grant uses (a grant must be revoked first; it is never deleted silently), and a removed department is never re-created: production does not re-seed, and `DepartmentBootstrap` (outside
   production only) seeds a brand-new, empty database and nothing else.
 
 ## 6. Supabase PostgreSQL (Session Pooler)
