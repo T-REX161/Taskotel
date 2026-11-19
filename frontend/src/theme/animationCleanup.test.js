@@ -51,7 +51,7 @@ test('spinners still animate while an operation is in progress', () => {
   // Stage 5D: the page loaders of Tasks, Staff, Assignments, Workload and Departments became page skeletons (6 → 1 page spinner: the
   // Dashboard's, reserved for Stage 5E), so 24 shared spinner uses remain: that one, and buttons, dialogs and inline messages.
   assert.equal(count(/animate-spin\b/g), 4, 'every loading spinner kept');
-  assert.equal(count(/<Spinner\b/g), 24, 'shared spinner uses: 15 former local-function calls and 9 former inline spinners');
+  assert.equal(count(/<Spinner\b/g), 25, 'shared spinner uses: 15 former local-function calls, 9 former inline spinners and the Staff My Workload loader');
   assert.deepEqual(filesWith(/function Spinner|const Spinner =/), [], 'no local copies left');
   assert.ok(readFileSync(join(SRC, 'components/common/Spinner.js'), 'utf8').includes("['animate-spin',"), 'the shared spinner spins');
   assert.ok(read('pages/LoginPage.jsx').includes('animate-spin'));
