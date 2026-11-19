@@ -65,7 +65,7 @@ Local development is unchanged: the default profile still uses `localhost:8080`,
 | `SENDGRID_API_KEY` | SendGrid key with the Mail Send permission. Startup fails in production if it is missing or a placeholder |
 | `SENDGRID_FROM_EMAIL` | The verified Single Sender / authenticated-domain address. Startup fails if it is missing or has no `@` |
 | `WB_FLYWAY_ENABLED` | Set to `true` (see section 5). Flyway is off by default, and the production profile validates the schema, so an empty database would fail without it |
-| `FRONTEND_BASE_URL` | The Vercel URL, used for the sign-in link in invitation emails (default is the local frontend) |
+| `FRONTEND_BASE_URL` | The web app's address, used for the sign-in link in invitation emails. Optional in production: if unset, the production profile uses `https://taskotel.vercel.app` (defined once in `application.yml`); set it only to point somewhere else. If it is set to something invalid (empty or whitespace, not `https://`, malformed, with credentials, a query or a fragment, or pointing at localhost or a private/local network address) the application **refuses to start** with `Production startup failed: FRONTEND_BASE_URL is invalid`, so an email never carries a wrong link. Local development defaults to `http://localhost:3000` |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated **exact** origins, for example `https://taskotel.vercel.app`. See section 8 |
 
 ### Optional
@@ -171,6 +171,7 @@ needs one, add them under review rather than writing an ad-hoc INSERT.)
 | `The connection attempt failed` / `connection timed out` | Wrong host or port, or the database is waking. Retry after a few seconds; check `DB_HOST` and `DB_PORT` |
 | `FATAL: (ENOTIDENTIFIER) no tenant identifier provided` | Supabase pooler without the project reference: set `DB_USER` (not `DB_USERNAME`) to `postgres.<project-ref>` |
 | The first request after a quiet period fails with "A server error occurred" | A Render instance that spins down needs more than a minute to wake and the proxy times out. See `DEPLOYMENT_PIPELINE.md` (cold starts) |
+| `Production startup failed: FRONTEND_BASE_URL is invalid: ...` | `FRONTEND_BASE_URL` is set to an empty, non-https, malformed or local/private-address value. Set it to the web app's https address (no path needed), or delete the variable to use the production default |
 | `FATAL: no pg_hba.conf entry ... SSL` or `SSL required` | Keep `DB_SSLMODE=require` (the default) |
 | `CORS_ALLOWED_ORIGINS must list exact origins` | A wildcard, path or non-http(s) entry; fix the value |
 | Browser shows a CORS error | The Vercel origin is not in `CORS_ALLOWED_ORIGINS` exactly (scheme and host must match; no trailing path) |
