@@ -14,7 +14,7 @@ import WorkloadOverview from '../components/dashboard/WorkloadOverview';
 import TaskStatusSummary from '../components/dashboard/TaskStatusSummary';
 import DepartmentBreakdown from '../components/dashboard/DepartmentBreakdown';
 import { coveringLine } from '../utils/departmentBreakdown';
-import AssignmentsOverview from '../components/dashboard/AssignmentsOverview';
+import StaffDashboardView from '../components/dashboard/StaffDashboardParts';
 import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
 
@@ -94,6 +94,7 @@ export default function Dashboard() {
     Promise.all([
       fetchDashboardData(silent),
       ...(getUserRole() !== 'STAFF' ? [loadStaffWorkload(), loadRecommendations(), loadTasks()] : []),
+      ...(getUserRole() === 'STAFF' ? [loadTasks()] : []), // Staff load only their own tasks (the server returns just those)
     ]);
 
   // The guard is created once, so only one refresh runs at a time across renders; it always calls the latest closure
@@ -163,25 +164,28 @@ export default function Dashboard() {
         <LiveClock />
       </div>
 
-      {/* KPI cards */}
-      <SummaryCards data={data} isStaff={isStaff} />
+      {isStaff ? (
+        <StaffDashboardView data={data} tasks={tasks} />
+      ) : (
+        <>
+        {/* KPI cards */}
+        <SummaryCards data={data} isStaff={isStaff} />
 
-      {/* items-start: each panel keeps the height its content needs, so the chart card is not stretched to the workload list */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        <div className="lg:col-span-7">
-          <WorkloadOverview data={data} isStaff={isStaff} staffWorkload={isStaff ? undefined : staffWorkload} />
+        {/* items-start: each panel keeps the height its content needs, so the chart card is not stretched to the workload list */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+          <div className="lg:col-span-7">
+            <WorkloadOverview data={data} isStaff={isStaff} staffWorkload={isStaff ? undefined : staffWorkload} />
+          </div>
+          <div className="lg:col-span-5 space-y-5">
+            <TaskStatusSummary data={data} isStaff={isStaff} />
+            <OperationsInsights insights={insights} />
+          </div>
         </div>
-        <div className="lg:col-span-5 space-y-5">
-          <TaskStatusSummary data={data} isStaff={isStaff} />
-          <OperationsInsights insights={insights} />
-        </div>
-      </div>
 
-      {/* A Manager of several departments: each department's own figures (nothing for one department, Admin or Staff) */}
-      <DepartmentBreakdown data={data} />
-
-      {/* Staff also see their recent assignments (their summary carries them) */}
-      {isStaff && <AssignmentsOverview data={data} isStaff={isStaff} />}
+        {/* A Manager of several departments: each department's own figures (nothing for one department, Admin or Staff) */}
+        <DepartmentBreakdown data={data} />
+        </>
+      )}
     </div>
   );
 }
