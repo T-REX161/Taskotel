@@ -431,7 +431,7 @@ public class ResponseStabilityRegressionTest {
             List<String> created = new ArrayList<>();
             rows.forEach(r -> created.add(r.get("createdAt").asText()));
             assertEquals(List.of(now.minusHours(1), now.minusHours(2), now.minusHours(3)),
-                    created.stream().map(java.time.LocalDateTime::parse).toList(), "newest first");
+                    created.stream().map(text -> java.time.LocalDateTime.ofInstant(java.time.Instant.parse(text), java.time.ZoneId.systemDefault())).toList(), "newest first"); // sent as an instant with a zone
         }
     }
 
@@ -502,9 +502,9 @@ public class ResponseStabilityRegressionTest {
 
     /** Each element's date-time field is not later than the one before it (newest first). */
     private static void assertNonIncreasing(JsonNode array, String field) {
-        java.time.LocalDateTime previous = null;
+        java.time.Instant previous = null; // the API sends every moment as an instant with a zone (UtcTimestamps)
         for (JsonNode element : array) {
-            java.time.LocalDateTime value = java.time.LocalDateTime.parse(element.get(field).asText());
+            java.time.Instant value = java.time.Instant.parse(element.get(field).asText());
             if (previous != null) assertTrue(!value.isAfter(previous), field + " out of order: " + value + " after " + previous);
             previous = value;
         }

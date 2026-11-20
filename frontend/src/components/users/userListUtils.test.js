@@ -1,3 +1,6 @@
+// The viewer's zone: the server sends UTC and every time is shown in the viewer's own zone (a user in India here)
+process.env.TZ = 'Asia/Kolkata';
+
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getPaginationState } from '../../utils/assignmentUtils.js';
@@ -79,9 +82,10 @@ describe('badges and dates', () => {
     assert.deepStrictEqual(statusBadge(false), { label: 'Inactive', className: 'bg-red-50 text-red-600' });
   });
 
-  it('created dates use the chosen date format (DD/MM/YYYY by default) and never shift with the timezone', () => {
+  it('created dates use the chosen date format (DD/MM/YYYY by default) and are the calendar day in the zone of the viewer (the server sends UTC)', () => {
     assert.strictEqual(formatCreatedDate('2026-08-20T08:00:00'), '20/08/2026');
-    assert.strictEqual(formatCreatedDate('2026-09-01T23:59:59.123'), '01/09/2026');
+    assert.strictEqual(formatCreatedDate('2026-09-01T10:29:59.123Z'), '01/09/2026');
+    assert.strictEqual(formatCreatedDate('2026-09-01T23:59:59.123Z'), '02/09/2026', '23:59 UTC is already the next morning in India');
     assert.strictEqual(formatCreatedDate('2026-12-31T00:00:00Z'), '31/12/2026');
     assert.strictEqual(formatCreatedDate([2026, 8, 25, 9, 0]), '25/08/2026');
     assert.strictEqual(formatCreatedDate(null), '—');

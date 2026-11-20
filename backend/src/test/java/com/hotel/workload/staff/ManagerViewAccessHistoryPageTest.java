@@ -145,7 +145,7 @@ public class ManagerViewAccessHistoryPageTest {
             assertEquals(p < 2, page.get("hasMore").asBoolean());
             for (JsonNode item : page.get("items")) {
                 ids.add(item.get("id").asText());
-                times.add(LocalDateTime.parse(item.get("changedAt").asText()));
+                times.add(LocalDateTime.ofInstant(java.time.Instant.parse(item.get("changedAt").asText()), java.time.ZoneOffset.UTC)); // sent as an instant with a zone
             }
         }
         assertEquals(25, new HashSet<>(ids).size(), "no record appears twice");

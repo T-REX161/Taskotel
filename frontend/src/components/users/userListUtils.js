@@ -8,6 +8,7 @@
  */
 import { formatDate } from '../tasks/taskFormatters.js';
 import { isActive } from '../staff/staffFormatters.js';
+import { parseServerInstant } from '../../utils/dateTimeFormat.js';
 
 export const ROLE_OPTIONS = [
   { value: '', label: 'All Roles' },
@@ -57,14 +58,11 @@ export function statusBadge(active) {
  */
 export function formatCreatedDate(value) {
   if (!value) return '—';
-  let isoDay = null;
-  if (Array.isArray(value) && value.length >= 3) {
-    const [year, month, day] = value;
-    isoDay = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-  } else {
-    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) isoDay = match[0];
-  }
+  // A moment (UTC from the server) shown as the calendar day it is in the viewer's own time zone
+  const moment = parseServerInstant(value);
+  const isoDay = moment
+    ? `${String(moment.getFullYear()).padStart(4, '0')}-${String(moment.getMonth() + 1).padStart(2, '0')}-${String(moment.getDate()).padStart(2, '0')}`
+    : null;
   return (isoDay && formatDate(isoDay)) || '—';
 }
 

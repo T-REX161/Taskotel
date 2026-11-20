@@ -1,3 +1,6 @@
+// The viewer's zone: the server sends UTC and every time is shown in the viewer's own zone (a user in India here)
+process.env.TZ = 'Asia/Kolkata';
+
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -144,14 +147,14 @@ describe('every date and time in Taskotel follows the chosen formats', () => {
     assert.deepEqual(splitAssignedAt(past), { date: '10/16/2026', time: '14:29' }, '24-hour times split onto their own line too');
     assert.equal(formatAssignedAt(new Date(2026, 9, 20, 8, 30), new Date(2026, 9, 20, 12, 0)), 'Today, 08:30');
     assert.equal(formatDashboardDate(new Date(2026, 8, 29)), 'Tue, 09/29/2026');
-    assert.equal(formatActivityTime('2026-11-02T17:27:51.123'), '11/02/2026, 17:27');
+    assert.equal(formatActivityTime('2026-11-02T11:57:51.123Z'), '11/02/2026, 17:27');
     assert.equal(formatCreatedDate('2026-08-20T08:00:00'), '08/20/2026');
   });
 
   it('YYYY-MM-DD with 12-hour', () => {
     choose({ themePreference: 'DARK', dateFormat: 'YMD', timeFormat: 'H12' });
     assert.equal(formatDueDate('2026-10-13', '17:00'), '2026-10-13, 5:00 PM');
-    assert.equal(formatActivityTime('2026-11-02T00:05:00'), '2026-11-02, 12:05 AM');
+    assert.equal(formatActivityTime('2026-11-01T18:35:00Z'), '2026-11-02, 12:05 AM');
     assert.equal(formatCreatedDate('2026-08-20T08:00:00'), '2026-08-20');
   });
 
