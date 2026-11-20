@@ -9,7 +9,7 @@ import StaffPage from './pages/StaffPage';
 import TasksPage from './pages/TasksPage';
 import CreateTaskPage from './pages/CreateTaskPage';
 import AssignmentsPage from './pages/AssignmentsPage';
-import WorkloadPage from './pages/WorkloadPage';
+import WorkloadRoute from './pages/WorkloadRoute';
 import DepartmentsPage from './pages/DepartmentsPage';
 import UsersPage from './pages/UsersPage';
 import ProfilePage from './pages/ProfilePage';
@@ -33,7 +33,7 @@ function App() {
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/tasks/create" element={<CreateTaskPage />} />
             <Route path="/assignments" element={<AssignmentsPage />} />
-            <Route path="/workload" element={<WorkloadPage />} />
+            <Route path="/workload" element={<WorkloadRoute />} />
             <Route path="/departments" element={<DepartmentsPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/profile" element={<ProfilePage />} />

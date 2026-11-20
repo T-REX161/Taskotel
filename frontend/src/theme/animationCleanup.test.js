@@ -51,7 +51,7 @@ test('spinners still animate while an operation is in progress', () => {
   // Stage 5D: the page loaders of Tasks, Staff, Assignments, Workload and Departments became page skeletons (6 → 1 page spinner: the
   // Dashboard's, reserved for Stage 5E), so 24 shared spinner uses remain: that one, and buttons, dialogs and inline messages.
   assert.equal(count(/animate-spin\b/g), 4, 'every loading spinner kept');
-  assert.equal(count(/<Spinner\b/g), 24, 'shared spinner uses: 15 former local-function calls and 9 former inline spinners');
+  assert.equal(count(/<Spinner\b/g), 25, 'shared spinner uses: 15 former local-function calls, 9 former inline spinners and the Staff My Workload loader');
   assert.deepEqual(filesWith(/function Spinner|const Spinner =/), [], 'no local copies left');
   assert.ok(readFileSync(join(SRC, 'components/common/Spinner.js'), 'utf8').includes("['animate-spin',"), 'the shared spinner spins');
   assert.ok(read('pages/LoginPage.jsx').includes('animate-spin'));
@@ -75,7 +75,7 @@ test('no transition-all: each transition names what actually changes', () => {
   assert.deepEqual(filesWith(/\btransition-all\b/), []);
   // progress bars animate their width (and colour where the colour follows the status), at the shared slow duration
   assert.equal(count(/transition-\[width\] duration-slow ease-standard/g), 5, 'fixed-colour bars: 4 staff table bars and the dashboard list bar');
-  assert.equal(count(/transition-\[width,background-color\] duration-slow ease-standard/g), 5, 'status-coloured bars');
+  assert.equal(count(/transition-\[width,background-color\] duration-slow ease-standard/g), 6, 'status-coloured bars (the sixth is the Staff My Workload shift-utilization bar)');
   assert.ok(read('components/dashboard/StaffWorkloadList.jsx').includes('transition-[width] duration-slow ease-standard'), 'dashboard bar 250ms, not 500ms');
   assert.ok(read('pages/LoginPage.jsx').includes('transition-[color,background-color,border-color,box-shadow,opacity]'), 'inputs and buttons: colours and focus ring');
   assert.ok(read('pages/ProfilePage.jsx').includes('transition-[filter,box-shadow] duration-moderate') && read('pages/ProfilePage.jsx').includes('transition-[opacity,transform] duration-moderate'));
