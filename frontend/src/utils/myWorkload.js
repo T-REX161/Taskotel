@@ -25,6 +25,7 @@ export function personalWorkload(summary) {
     percent: calculateWorkloadPercentage(minutes, SHIFT_MINUTES),
     status: typeof record.workloadStatus === 'string' && record.workloadStatus ? record.workloadStatus.toUpperCase() : null,
     availability: typeof record.availability === 'string' ? record.availability : null,
+    homeDepartment: record.department || null,
     // Present only while the person is on temporary cross-department support; those minutes are already inside `minutes`
     supportDepartmentName: record.supportDepartmentName || null,
   };
@@ -44,4 +45,28 @@ export function activeTasksOf(tasks) {
     const pb = PRIORITY_RANK[b.priority] ?? 9;
     return pa !== pb ? pa - pb : String(a.title || '').localeCompare(String(b.title || ''));
   });
+}
+
+/**
+ * How many of the person's own tasks are Pending, Assigned, In Progress and Completed, counted from the task list the server returned for them.
+ * Each task is counted once (by id); Cancelled and unknown statuses are in none of the four, so `total` is just the sum of the four.
+ */
+export function taskBreakdown(tasks) {
+  const result = { pending: 0, assigned: 0, inProgress: 0, completed: 0, total: 0 };
+  const seen = new Set();
+  for (const task of Array.isArray(tasks) ? tasks : []) {
+    if (!task || (task.id !== undefined && task.id !== null && seen.has(task.id))) continue;
+    if (task.id !== undefined && task.id !== null) seen.add(task.id);
+    const key = { PENDING: 'pending', ASSIGNED: 'assigned', IN_PROGRESS: 'inProgress', COMPLETED: 'completed' }[task.status];
+    if (key) {
+      result[key] += 1;
+      result.total += 1;
+    }
+  }
+  return result;
+}
+
+/** True when a task belongs to another department than the person's own: it is there because of cross-department support. */
+export function isSupportTask(task, personal) {
+  return Boolean(task && personal && personal.homeDepartment && task.department && task.department !== personal.homeDepartment);
 }

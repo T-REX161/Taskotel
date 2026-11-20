@@ -75,7 +75,7 @@ test('no transition-all: each transition names what actually changes', () => {
   assert.deepEqual(filesWith(/\btransition-all\b/), []);
   // progress bars animate their width (and colour where the colour follows the status), at the shared slow duration
   assert.equal(count(/transition-\[width\] duration-slow ease-standard/g), 5, 'fixed-colour bars: 4 staff table bars and the dashboard list bar');
-  assert.equal(count(/transition-\[width,background-color\] duration-slow ease-standard/g), 5, 'status-coloured bars');
+  assert.equal(count(/transition-\[width,background-color\] duration-slow ease-standard/g), 6, 'status-coloured bars (the sixth is the Staff My Workload shift-utilization bar)');
   assert.ok(read('components/dashboard/StaffWorkloadList.jsx').includes('transition-[width] duration-slow ease-standard'), 'dashboard bar 250ms, not 500ms');
   assert.ok(read('pages/LoginPage.jsx').includes('transition-[color,background-color,border-color,box-shadow,opacity]'), 'inputs and buttons: colours and focus ring');
   assert.ok(read('pages/ProfilePage.jsx').includes('transition-[filter,box-shadow] duration-moderate') && read('pages/ProfilePage.jsx').includes('transition-[opacity,transform] duration-moderate'));

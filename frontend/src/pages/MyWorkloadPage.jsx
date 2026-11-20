@@ -2,24 +2,45 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDashboardSummary, getTasks } from '../services/api';
 import { keepIfSame, singleFlight, startPolling } from '../utils/polling';
-import { activeTasksOf, personalWorkload } from '../utils/myWorkload';
-import { getWorkloadStatusBadge } from '../utils/workloadUtils';
+import { activeTasksOf, isSupportTask, personalWorkload, taskBreakdown } from '../utils/myWorkload';
+import { getWorkloadProgressBarColor, getWorkloadStatusBadge } from '../utils/workloadUtils';
 import { dashboardLoadErrorMessage } from '../utils/dashboardView';
 import { formatDueDate, formatDuration, formatPriority, formatStatus, getPriorityColor, getStatusColor, isTaskOverdue } from '../components/tasks/taskFormatters';
 import { getAvailabilityColor } from '../components/staff/staffFormatters';
-import UtilizationMeter from '../components/workload/UtilizationMeter';
+import { CalendarIcon, ClipboardIcon, ClockIcon, TasksIcon, UserIcon, WorkloadIcon } from '../components/icons/Icons';
 import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
 
 const REFRESH_MS = 30000;
-const CARD ='bg-white rounded-xl border border-gray-100 shadow-2xs';
+const CARD = 'bg-white rounded-xl border border-gray-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)]';
 const availabilityText = (value) => (value ? String(value).replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()) : 'Unavailable');
 
-function Kpi({ title, children }) {
+// Presentation only: what each server-provided status looks like. The status itself (and its thresholds) always comes from the server.
+const STATUS_TONE = {
+  LOW: { chip: 'bg-blue-50 text-blue-600 ring-blue-100', text: 'Light load' },
+  NORMAL: { chip: 'bg-emerald-50 text-emerald-600 ring-emerald-100', text: 'Balanced load' },
+  HIGH: { chip: 'bg-orange-50 text-orange-600 ring-orange-100', text: 'Heavy load' },
+  AT_RISK: { chip: 'bg-red-50 text-red-500 ring-red-100', text: 'At risk of overload' },
+};
+const NEUTRAL_CHIP = 'bg-gray-100 text-gray-500 ring-gray-200';
+
+const BREAKDOWN = [
+  { key: 'pending', label: 'Pending', dot: 'bg-amber-500' },
+  { key: 'assigned', label: 'Assigned', dot: 'bg-blue-500' },
+  { key: 'inProgress', label: 'In Progress', dot: 'bg-indigo-500' },
+  { key: 'completed', label: 'Completed', dot: 'bg-emerald-500' },
+];
+
+function StatCard({ title, Icon, chip, children }) {
   return (
-    <div className={`${CARD} p-4`}>
-      <p className="text-xs font-medium text-gray-500">{title}</p>
-      <div className="mt-1.5 text-2xl font-bold text-gray-900 tabular-nums">{children}</div>
+    <div className={`${CARD} p-4 min-h-[6rem] flex items-start justify-between gap-3`}>
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-600">{title}</p>
+        <div className="mt-2 min-h-[2rem] flex items-center text-3xl font-bold leading-none tabular-nums text-gray-900">{children}</div>
+      </div>
+      <div className={`w-10 h-10 shrink-0 rounded-lg ring-1 ring-inset flex items-center justify-center ${chip}`}>
+        <Icon className="w-5 h-5" aria-hidden="true" />
+      </div>
     </div>
   );
 }
@@ -106,65 +127,149 @@ export default function MyWorkloadPage() {
   }
 
   const active = activeTasksOf(tasks);
+  const counts = taskBreakdown(tasks);
+  const tone = STATUS_TONE[personal.status] || null;
+  const statusText = personal.status ? personal.status.replace('_', ' ') : '-';
+  const fill = Math.min(Math.max(personal.percent, 0), 100);
+  const available = String(personal.availability || '').toUpperCase() === 'AVAILABLE';
 
   return (
     <div className="w-full space-y-5">
       {header}
 
       {personal.supportDepartmentName && (
-        <div role="status" className="px-4 py-3 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-900">
-          You are currently supporting <span className="font-semibold">{personal.supportDepartmentName}</span>. Those tasks are included in your workload below.
+        <div role="status" className="flex items-start gap-3 px-4 py-3 rounded-xl bg-blue-50 border border-blue-100 text-sm text-blue-900">
+          <UserIcon className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+          <p>
+            You are currently supporting <span className="font-semibold">{personal.supportDepartmentName}</span>. Those tasks are included in your workload below.
+          </p>
         </div>
       )}
 
-      <section aria-label="My workload summary" className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <Kpi title="My Active Tasks">{personal.activeTasks}</Kpi>
-        <Kpi title="My Workload">{formatDuration(personal.minutes, '0 min')}</Kpi>
-        <Kpi title="My Workload Status">
-          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-bold uppercase tracking-wide ${getWorkloadStatusBadge(personal.status)}`}>
-            {personal.status ? personal.status.replace('_', ' ') : '-'}
-          </span>
-        </Kpi>
-        <Kpi title="My Availability">
+      {/* Summary cards */}
+      <section aria-label="My workload summary" className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard title="My Active Tasks" Icon={TasksIcon} chip="bg-emerald-50 text-emerald-600 ring-emerald-100">{personal.activeTasks}</StatCard>
+        <StatCard title="My Workload" Icon={ClockIcon} chip="bg-emerald-50 text-emerald-600 ring-emerald-100">{formatDuration(personal.minutes, '0 min')}</StatCard>
+        <StatCard title="My Workload Status" Icon={WorkloadIcon} chip={tone ? tone.chip : NEUTRAL_CHIP}>
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-bold uppercase tracking-wide ${getWorkloadStatusBadge(personal.status)}`}>{statusText}</span>
+        </StatCard>
+        <StatCard title="My Availability" Icon={UserIcon} chip={available ? 'bg-emerald-50 text-emerald-600 ring-emerald-100' : NEUTRAL_CHIP}>
           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${getAvailabilityColor(personal.availability)}`}>{availabilityText(personal.availability)}</span>
-        </Kpi>
+        </StatCard>
       </section>
 
-      <section aria-label="Shift utilization" className={`${CARD} p-4 sm:p-5`}>
-        <h2 className="text-base font-bold text-gray-900">Shift Utilization</h2>
-        <div className="mt-3">
-          <UtilizationMeter percentage={personal.percent} status={personal.status || ''} minutes={personal.minutes} baseline={personal.capacity} />
-        </div>
-        <p className="mt-3 text-xs text-gray-500">Measured against a {personal.capacity}-minute shift.</p>
-      </section>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
+        {/* Shift utilization */}
+        <section aria-label="Shift utilization" className={`${CARD} p-5 lg:col-span-2 flex flex-col`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-bold text-gray-900">Shift Utilization</h2>
+              <p className="mt-0.5 text-xs text-gray-500">Your active tasks against one {personal.capacity}-minute (8-hour) shift.</p>
+            </div>
+            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide whitespace-nowrap ${getWorkloadStatusBadge(personal.status)}`}>{statusText}</span>
+          </div>
 
-      <section aria-label="My assigned tasks" className={CARD}>
-        <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-gray-100">
-          <h2 className="text-base font-bold text-gray-900">My Assigned Tasks</h2>
-          <Link to="/tasks" className="text-sm font-medium text-emerald-700 hover:text-emerald-800 hover:underline">View all my tasks</Link>
-        </div>
-        {active.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-gray-500">You have no active tasks right now.</p>
-        ) : (
-          <ul className="divide-y divide-gray-100">
-            {active.map((task) => (
-              <li key={task.id} className="px-4 sm:px-5 py-3 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-2 sm:items-center">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate" title={task.title}>{task.title}</p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${getPriorityColor(task.priority)}`}>{formatPriority(task.priority)}</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${getStatusColor(task.status)}`}>{formatStatus(task.status)}</span>
-                    {task.departmentName && <span className="text-xs text-gray-500">{task.departmentName}</span>}
-                  </div>
-                </div>
-                <div className="flex sm:flex-col sm:items-end gap-x-5 gap-y-0.5 text-xs text-gray-500">
-                  <span className="font-semibold text-gray-800 tabular-nums">{formatDuration(task.estimatedDuration)}</span>
-                  <span className={isTaskOverdue(task) ? 'font-semibold text-red-700' : ''}>
-                    {formatDueDate(task.dueDate, task.deadlineTime)}{isTaskOverdue(task) ? ' · Overdue' : ''}
+          <div className="my-auto pt-5">
+          <div className="flex items-baseline gap-3">
+            <span className="text-4xl font-bold leading-none tabular-nums text-gray-900">{personal.percent}%</span>
+            {tone && <span className="text-sm font-medium text-gray-500">{tone.text}</span>}
+          </div>
+
+          <div
+            className="mt-3 w-full h-3 rounded-full bg-gray-100 overflow-hidden"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={fill}
+            aria-label={`Shift utilization ${personal.percent}%`}
+          >
+            <div
+              className={`h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${getWorkloadProgressBarColor(personal.status)}`}
+              style={{ width: `${fill}%` }}
+            />
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-gray-500">
+            <span className="font-semibold text-gray-700 tabular-nums">{personal.minutes} / {personal.capacity} mins</span>
+            <span>
+              {personal.minutes > personal.capacity ? 'Above one full shift' : `${Math.max(personal.capacity - personal.minutes, 0)} mins of shift capacity left`}
+            </span>
+          </div>
+          </div>
+        </section>
+
+        {/* Task breakdown */}
+        <section aria-label="My task breakdown" className={`${CARD} p-5`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 className="text-base font-bold text-gray-900">My Task Breakdown</h2>
+            <span className="text-xs text-gray-500 tabular-nums">{counts.total} {counts.total === 1 ? 'task' : 'tasks'}</span>
+          </div>
+          <ul className="mt-4 space-y-3">
+            {BREAKDOWN.map((row) => (
+              <li key={row.key}>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="inline-flex items-center gap-2 text-gray-600">
+                    <span className={`w-2.5 h-2.5 rounded-full ${row.dot}`} aria-hidden="true" />
+                    {row.label}
                   </span>
+                  <span className="font-bold text-gray-900 tabular-nums">{counts[row.key]}</span>
+                </div>
+                <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
+                  <div className={`h-full rounded-full ${row.dot}`} style={{ width: counts.total ? `${(counts[row.key] / counts.total) * 100}%` : '0%' }} />
                 </div>
               </li>
             ))}
+          </ul>
+        </section>
+      </div>
+
+      {/* Assigned tasks */}
+      <section aria-label="My assigned tasks" className={CARD}>
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100">
+          <h2 className="text-base font-bold text-gray-900">My Assigned Tasks</h2>
+          {active.length > 0 && <Link to="/tasks" className="text-sm font-medium text-emerald-700 hover:text-emerald-800 hover:underline">View all my tasks</Link>}
+        </div>
+        {active.length === 0 ? (
+          <div data-testid="no-active-tasks" className="flex flex-col items-center text-center px-5 py-10">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 ring-1 ring-inset ring-emerald-100 flex items-center justify-center">
+              <ClipboardIcon className="w-6 h-6" aria-hidden="true" />
+            </div>
+            <h3 className="mt-3 text-sm font-semibold text-gray-900">No active tasks</h3>
+            <p className="mt-1 max-w-sm text-sm text-gray-500">Tasks assigned to you will show up here. You are all caught up for now.</p>
+            <Link to="/tasks" className="mt-4 inline-flex items-center px-3.5 py-2 rounded-lg border border-gray-200 text-sm font-medium text-emerald-700 hover:bg-emerald-50 transition-colors duration-base">
+              Go to My Tasks
+            </Link>
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {active.map((task) => {
+              const overdue = isTaskOverdue(task);
+              return (
+                <li key={task.id} className="px-5 py-3.5 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-2 sm:items-center">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate" title={task.title}>{task.title}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${getPriorityColor(task.priority)}`}>{formatPriority(task.priority)}</span>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${getStatusColor(task.status)}`}>{formatStatus(task.status)}</span>
+                      {task.departmentName && <span className="text-xs text-gray-500">{task.departmentName}</span>}
+                      {isSupportTask(task, personal) && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100">Support</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex sm:flex-col sm:items-end gap-x-5 gap-y-1 text-xs text-gray-500">
+                    <span className="inline-flex items-center gap-1.5 tabular-nums">
+                      <ClockIcon className="w-3.5 h-3.5" aria-hidden="true" />
+                      <span className="font-semibold text-gray-800">{formatDuration(task.estimatedDuration, 'No estimate')}</span>
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 ${overdue ? 'font-semibold text-red-700' : ''}`}>
+                      <CalendarIcon className="w-3.5 h-3.5" aria-hidden="true" />
+                      {task.dueDate ? formatDueDate(task.dueDate, task.deadlineTime) : 'No due date'}{overdue ? ' · Overdue' : ''}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
