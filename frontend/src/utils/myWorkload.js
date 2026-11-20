@@ -70,3 +70,12 @@ export function taskBreakdown(tasks) {
 export function isSupportTask(task, personal) {
   return Boolean(task && personal && personal.homeDepartment && task.department && task.department !== personal.homeDepartment);
 }
+
+/** The person's newest active tasks (most recently created first), at most `limit`, for the dashboard preview. Nothing is added or altered. */
+export function latestActiveTasks(tasks, limit = 3) {
+  const stamp = (t) => (typeof t?.createdAt === 'string' ? t.createdAt : '');
+  return (Array.isArray(tasks) ? tasks.filter((t) => t && ACTIVE_TASK_STATUSES.includes(t.status)) : [])
+    .slice()
+    .sort((a, b) => (stamp(a) < stamp(b) ? 1 : stamp(a) > stamp(b) ? -1 : String(a.title || '').localeCompare(String(b.title || ''))))
+    .slice(0, Math.max(0, limit));
+}

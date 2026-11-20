@@ -8,42 +8,17 @@ import { dashboardLoadErrorMessage } from '../utils/dashboardView';
 import { formatDueDate, formatDuration, formatPriority, formatStatus, getPriorityColor, getStatusColor, isTaskOverdue } from '../components/tasks/taskFormatters';
 import { getAvailabilityColor } from '../components/staff/staffFormatters';
 import { CalendarIcon, ClipboardIcon, ClockIcon, TasksIcon, UserIcon, WorkloadIcon } from '../components/icons/Icons';
+import { CARD, GREEN_CHIP, NEUTRAL_CHIP, STATUS_TONE, StatCard, availabilityText } from '../components/staff/StaffPortalParts';
 import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
 
 const REFRESH_MS = 30000;
-const CARD = 'bg-white rounded-xl border border-gray-200 shadow-[0_1px_2px_rgba(16,24,40,0.04)]';
-const availabilityText = (value) => (value ? String(value).replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase()) : 'Unavailable');
-
-// Presentation only: what each server-provided status looks like. The status itself (and its thresholds) always comes from the server.
-const STATUS_TONE = {
-  LOW: { chip: 'bg-blue-50 text-blue-600 ring-blue-100', text: 'Light load' },
-  NORMAL: { chip: 'bg-emerald-50 text-emerald-600 ring-emerald-100', text: 'Balanced load' },
-  HIGH: { chip: 'bg-orange-50 text-orange-600 ring-orange-100', text: 'Heavy load' },
-  AT_RISK: { chip: 'bg-red-50 text-red-500 ring-red-100', text: 'At risk of overload' },
-};
-const NEUTRAL_CHIP = 'bg-gray-100 text-gray-500 ring-gray-200';
-
 const BREAKDOWN = [
   { key: 'pending', label: 'Pending', dot: 'bg-amber-500' },
   { key: 'assigned', label: 'Assigned', dot: 'bg-blue-500' },
   { key: 'inProgress', label: 'In Progress', dot: 'bg-indigo-500' },
   { key: 'completed', label: 'Completed', dot: 'bg-emerald-500' },
 ];
-
-function StatCard({ title, Icon, chip, children }) {
-  return (
-    <div className={`${CARD} p-4 min-h-[6rem] flex items-start justify-between gap-3`}>
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-600">{title}</p>
-        <div className="mt-2 min-h-[2rem] flex items-center text-3xl font-bold leading-none tabular-nums text-gray-900">{children}</div>
-      </div>
-      <div className={`w-10 h-10 shrink-0 rounded-lg ring-1 ring-inset flex items-center justify-center ${chip}`}>
-        <Icon className="w-5 h-5" aria-hidden="true" />
-      </div>
-    </div>
-  );
-}
 
 /**
  * My Workload (Staff only): the signed-in person's OWN workload, utilization, status, availability and assigned tasks. Nothing about any other
@@ -148,12 +123,12 @@ export default function MyWorkloadPage() {
 
       {/* Summary cards */}
       <section aria-label="My workload summary" className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard title="My Active Tasks" Icon={TasksIcon} chip="bg-emerald-50 text-emerald-600 ring-emerald-100">{personal.activeTasks}</StatCard>
-        <StatCard title="My Workload" Icon={ClockIcon} chip="bg-emerald-50 text-emerald-600 ring-emerald-100">{formatDuration(personal.minutes, '0 min')}</StatCard>
+        <StatCard title="My Active Tasks" Icon={TasksIcon} chip={GREEN_CHIP}>{personal.activeTasks}</StatCard>
+        <StatCard title="My Workload" Icon={ClockIcon} chip={GREEN_CHIP}>{formatDuration(personal.minutes, '0 min')}</StatCard>
         <StatCard title="My Workload Status" Icon={WorkloadIcon} chip={tone ? tone.chip : NEUTRAL_CHIP}>
           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-bold uppercase tracking-wide ${getWorkloadStatusBadge(personal.status)}`}>{statusText}</span>
         </StatCard>
-        <StatCard title="My Availability" Icon={UserIcon} chip={available ? 'bg-emerald-50 text-emerald-600 ring-emerald-100' : NEUTRAL_CHIP}>
+        <StatCard title="My Availability" Icon={UserIcon} chip={available ? GREEN_CHIP : NEUTRAL_CHIP}>
           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-sm font-semibold ${getAvailabilityColor(personal.availability)}`}>{availabilityText(personal.availability)}</span>
         </StatCard>
       </section>

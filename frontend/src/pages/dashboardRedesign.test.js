@@ -483,7 +483,8 @@ describe('dashboard page', () => {
     assert.ok(read('components', 'dashboard', 'TaskStatusSummary.jsx').includes('Task Status Overview'));
     assert.ok(page.includes('lg:col-span-7') && page.includes('lg:col-span-5'));
     assert.ok(!page.includes('<DepartmentOverview'), 'no hard-coded department tiles');
-    assert.ok(page.includes('{isStaff && <AssignmentsOverview'), 'only Staff get recent assignments');
+    assert.ok(page.includes('{isStaff ? (') && page.includes('<StaffDashboardView data={data} tasks={tasks} />'), 'Staff get their own task-home dashboard (Admin / Manager keep the layout above)');
+    assert.ok(!page.includes('AssignmentsOverview'), 'the recent-assignments panel is replaced by the Staff dashboard My Tasks preview');
   });
 
   it('routing and the favicon link are unchanged', () => {

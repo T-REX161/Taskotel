@@ -261,7 +261,7 @@ describe('Dashboard wiring', () => {
   });
 
   it('the Dashboard keeps its other sections', () => {
-    for (const part of ['<SummaryCards', '<WorkloadOverview', '<TaskStatusSummary', '<OperationsInsights', '<AssignmentsOverview']) assert.ok(dashboard.includes(part), part);
+    for (const part of ['<SummaryCards', '<WorkloadOverview', '<TaskStatusSummary', '<OperationsInsights', '<StaffDashboardView']) assert.ok(dashboard.includes(part), part);
   });
 });
 
