@@ -82,6 +82,9 @@ public class JwtUtil implements InitializingBean {
     /** The claim that holds the password version (see {@link #passwordVersion}) the token was issued under. */
     static final String PASSWORD_VERSION_CLAIM = "pwv";
 
+    /** The claim that holds the session version (see {@link #sessionVersion}) the token was issued under. */
+    static final String SESSION_VERSION_CLAIM = "sv";
+
     /**
      * A token without a password version (the form used before password changes ended sessions). The filter then falls back to comparing
      * the issue time with the last password change, at one-second precision.
@@ -111,6 +114,48 @@ public class JwtUtil implements InitializingBean {
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSigningKey())
                 .compact();
+    }
+
+    /**
+     * A token for a session that starts now, recording both the password version and the session version (the account's
+     * {@code sessionsValidAfter}, which an Administrator's role change moves). A later role change ends this session exactly: the filter
+     * compares the claim with the account's current session version on every request, so no timing (not even the same second or the same
+     * millisecond as the change) can let an earlier token through.
+     */
+    public String generateToken(String username, Role role, LocalDateTime passwordChangedAt, LocalDateTime sessionsValidAfter) {
+        return Jwts.builder()
+                .subject(username)
+                .claim("role", role.name())
+                .claim(PASSWORD_VERSION_CLAIM, passwordVersion(passwordChangedAt))
+                .claim(SESSION_VERSION_CLAIM, sessionVersion(sessionsValidAfter))
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey())
+                .compact();
+    }
+
+    /**
+     * The session version of an account: the moment its sessions were last invalidated (a role change) as epoch milliseconds, or 0 when it
+     * never was. Pure arithmetic on the stored value, like {@link #passwordVersion}. Writers store whole milliseconds and strictly increase
+     * it, so two invalidations never share a version.
+     */
+    public static long sessionVersion(LocalDateTime sessionsValidAfter) {
+        return sessionsValidAfter == null ? 0L : sessionsValidAfter.toInstant(ZoneOffset.UTC).toEpochMilli();
+    }
+
+    /**
+     * Whether a token belongs to the account's CURRENT sessions. The token's session version (0 when it has none: every token issued before
+     * this check existed, and every token of an account that was never invalidated) must equal the account's current one. So after a role
+     * change a token without the claim, or with an older one, is refused, whatever second it was issued in.
+     */
+    public static boolean matchesCurrentSession(Long tokenVersion, LocalDateTime sessionsValidAfter) {
+        return (tokenVersion == null ? 0L : tokenVersion) == sessionVersion(sessionsValidAfter);
+    }
+
+    /** The token's session-version claim, or null when it has none. */
+    public Long extractSessionVersion(String token) {
+        Object value = extractAllClaims(token).get(SESSION_VERSION_CLAIM);
+        return value instanceof Number number ? number.longValue() : null;
     }
 
     /**

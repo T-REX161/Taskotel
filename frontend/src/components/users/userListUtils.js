@@ -138,6 +138,8 @@ export function getUserActions(user, { staff = null, currentUsername = '', isAdm
   if (isAdmin && hasStaff && normalizeRole(user?.role) === 'MANAGER') actions.push('department');
   // Granting view-only access to other departments is Admin only too (the server refuses everyone else)
   if (isAdmin && hasStaff && normalizeRole(user?.role) === 'MANAGER') actions.push('viewAccess');
+  // Changing the system role is Admin only and never for your own account (the server refuses both); it works on the account itself
+  if (isAdmin && !own) actions.push('changeRole');
   if (active) {
     if (!own) actions.push('deactivate');
   } else {

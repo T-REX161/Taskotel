@@ -27,6 +27,7 @@ import useUsernameAvailability from '../../hooks/useUsernameAvailability';
 import { generateUsername, validateUsername, USERNAME_INVALID_MESSAGES } from '../../utils/username';
 import { generateTemporaryPassword, copyText } from '../../utils/passwordGenerator';
 import UsernameFeedback from './UsernameFeedback';
+import { normalizePhone, validateOptionalPhone } from '../../utils/phoneNumber';
 import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import Spinner from '../common/Spinner';
 
@@ -278,13 +279,19 @@ function AddStaffModal({
       return;
     }
 
+    const phoneProblem = validateOptionalPhone(formData.phone);
+    if (phoneProblem) {
+      setFormError(phoneProblem);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
       const payload = {
         fullName: formData.fullName.trim(),
         email: formData.email.trim(),
-        phone: formData.phone.trim() || null,
+        phone: normalizePhone(formData.phone) || null,
         role: canChooseRole ? formData.role : 'STAFF',
         department: departmentPayload(formData.department),
         availability: formData.availability,

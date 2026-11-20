@@ -179,6 +179,8 @@ public class StaffServiceImpl implements StaffService {
         // refuses it) until an Administrator assigns one; an Admin account keeps full global access either way.
         boolean noDepartment = request.getDepartment() == null || request.getDepartment().isBlank();
 
+        // The phone number is optional but must be valid when given: checked before anything is saved
+        String phone = resolvePhone(request.getPhone(), null);
         passwordValidatorService.validate(request.getTemporaryPassword());
 
         if (userRepository.existsByUsername(request.getUsername())) {
@@ -215,7 +217,8 @@ public class StaffServiceImpl implements StaffService {
         staff.setUser(user);
         staff.setName(request.getFullName());
         staff.setEmail(request.getEmail());
-        staff.setPhone(request.getPhone());
+        staff.setPhone(phone);
+        user.setPhone(phone); // the account keeps the same number (the profile reads either)
         // For a Manager the department is the managed department from their own records that the request named (checked above), never a
         // department looked up from the request
         staff.setDepartment(scope.isDepartment() ? managedDepartment(scope, request.getDepartment())
@@ -302,7 +305,9 @@ public class StaffServiceImpl implements StaffService {
         if (workloadAlerts != null && departmentChanged && hasActiveAssignments(staff.getId())) workloadAlerts.track(List.of(staff.getId()));
 
         staff.setName(request.getFullName());
-        staff.setPhone(request.getPhone());
+        String previousPhone = staff.getPhone();
+        staff.setPhone(resolvePhone(request.getPhone(), previousPhone));
+        boolean phoneChanged = !Objects.equals(previousPhone, staff.getPhone());
         staff.setDepartment(targetDepartment);
         staff.setAvailability(request.getAvailability());
         staff.setActive(request.isActive());
@@ -311,6 +316,9 @@ public class StaffServiceImpl implements StaffService {
         boolean accountWasActive = user != null && user.isActive();
         if (user != null) {
             user.setActive(request.isActive());
+            // One number for the person: when the staff number changes the account (profile) number follows. An edit that leaves the number
+            // alone never touches the account's, so an older record whose two numbers differ loses nothing.
+            if (phoneChanged) user.setPhone(staff.getPhone());
         }
         announceActiveChange(user, accountWasActive, scope);
 
@@ -462,13 +470,35 @@ public class StaffServiceImpl implements StaffService {
         if (account == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This staff member has no login account.");
         }
-        if (account.getRole() != Role.STAFF) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "A login email change can be requested for Staff accounts only.");
+        // Eligible accounts: Staff (by an Admin, or a Manager for their own department) and Manager accounts (by an Admin only). Never an Admin
+        // account, and a Manager never reaches a Manager account (requireMayManage above refuses it; checked again here as a second guard).
+        boolean eligible = account.getRole() == Role.STAFF || (account.getRole() == Role.MANAGER && scope.isAll());
+        if (!eligible) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, LOGIN_EMAIL_ELIGIBILITY_MESSAGE);
         }
         if (emailChangeService == null) {
             throw new IllegalStateException("Email change service is not available");
         }
         return emailChangeService.requestForAccount(account.getUsername(), client, newEmail);
+    }
+
+    /**
+     * The phone number is optional: blank or missing clears it (null). A number that differs from the stored one must be a valid phone number
+     * (the same rules as the profile screen, 400 otherwise). An unchanged stored value is kept as it is, so an older record whose number would not
+     * pass today's rules never blocks an edit of something else. The number is only saved, never verified.
+     */
+    static final String LOGIN_EMAIL_ELIGIBILITY_MESSAGE = "A login email change can be requested for Staff accounts, and for Manager accounts by an administrator.";
+
+    static String resolvePhone(String requested, String current) {
+        String trimmed = requested == null ? "" : requested.strip();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        String stored = current == null ? "" : current.strip().replaceAll("\\s+", " ");
+        if (trimmed.replaceAll("\\s+", " ").equals(stored)) {
+            return current;
+        }
+        return com.hotel.workload.profile.PhoneNumbers.validate(trimmed);
     }
 
     /**

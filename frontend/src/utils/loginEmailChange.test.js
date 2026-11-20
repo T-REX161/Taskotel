@@ -22,8 +22,12 @@ describe('who may be given a login email change', () => {
     assert.equal(canRequestEmailChange({ role: 'STAFF', active: true }), true);
     assert.equal(canRequestEmailChange({ role: 'STAFF' }), true);
     assert.equal(canRequestEmailChange({ role: 'STAFF', active: false }), false);
-    assert.equal(canRequestEmailChange({ role: 'MANAGER', active: true }), false);
-    assert.equal(canRequestEmailChange({ role: 'ADMIN', active: true }), false);
+    assert.equal(canRequestEmailChange({ role: 'MANAGER', active: true }), false, 'a Manager account: not unless an Admin is looking');
+    assert.equal(canRequestEmailChange({ role: 'MANAGER', active: true }, 'MANAGER'), false, 'a Manager never changes a Manager account');
+    assert.equal(canRequestEmailChange({ role: 'MANAGER', active: true }, 'ADMIN'), true, 'an Admin may start one for a Manager');
+    assert.equal(canRequestEmailChange({ role: 'MANAGER', active: false }, 'ADMIN'), false);
+    assert.equal(canRequestEmailChange({ role: 'ADMIN', active: true }, 'ADMIN'), false, 'never for an Admin account');
+    assert.equal(canRequestEmailChange({ role: 'STAFF', active: true }, 'MANAGER'), true);
     assert.equal(canRequestEmailChange({ active: true }), false, 'an unknown role is not offered the action');
     assert.equal(canRequestEmailChange(null), false);
   });
@@ -134,7 +138,7 @@ describe('edit screen wiring (source checks: the project has no DOM test environ
   });
 
   it('the action is offered only for eligible accounts, and the screen never confirms a change on the staff member\'s behalf', () => {
-    assert.ok(modal.includes('canRequestEmailChange(staff) ?'));
+    assert.ok(modal.includes('canRequestEmailChange(staff, getUserRole()) ?'));
     assert.ok(!/confirmEmailChange|email-change\/confirm/.test(modal));
   });
 

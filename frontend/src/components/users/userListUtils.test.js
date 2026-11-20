@@ -107,13 +107,13 @@ describe('row actions', () => {
   it('an account without a staff record can still be managed: no view/edit, but activate, deactivate and remove, with a note about details', () => {
     const noStaff = { id: 'u9', username: 'carlos', role: 'STAFF', active: true };
     const active = getUserActions(noStaff, { staff: null, currentUsername: 'admin', isAdmin: true });
-    assert.deepStrictEqual(active.actions, ['deactivate']);
+    assert.deepStrictEqual(active.actions, ['changeRole', 'deactivate']);
     assert.match(active.note, /no staff record/);
     const inactive = getUserActions({ ...noStaff, active: false }, { staff: null, currentUsername: 'admin', isAdmin: true });
-    assert.deepStrictEqual(inactive.actions, ['activate', 'remove']);
+    assert.deepStrictEqual(inactive.actions, ['changeRole', 'activate', 'remove']);
     assert.deepStrictEqual(getUserActions({ ...noStaff, active: false }, { staff: null, currentUsername: 'admin', isAdmin: false }).actions, ['activate'], 'remove stays admin only');
     for (const role of ['ADMIN', 'MANAGER', 'STAFF']) {
-      assert.deepStrictEqual(getUserActions({ ...noStaff, role }, { staff: null, currentUsername: 'admin', isAdmin: true }).actions, ['deactivate'], role);
+      assert.deepStrictEqual(getUserActions({ ...noStaff, role }, { staff: null, currentUsername: 'admin', isAdmin: true }).actions, ['changeRole', 'deactivate'], role);
     }
   });
 
@@ -124,11 +124,11 @@ describe('row actions', () => {
   });
 
   it('an active account: view, edit and deactivate (deactivation is confirmed in a dialog)', () => {
-    assert.deepStrictEqual(getUserActions(users[0], { staff: activeStaff, currentUsername: 'admin', isAdmin: true }).actions, ['view', 'edit', 'deactivate']);
+    assert.deepStrictEqual(getUserActions(users[0], { staff: activeStaff, currentUsername: 'admin', isAdmin: true }).actions, ['view', 'edit', 'changeRole', 'deactivate']);
   });
 
   it('an inactive account: activate, and remove only for administrators', () => {
-    assert.deepStrictEqual(getUserActions(users[2], { staff: inactiveStaff, currentUsername: 'admin', isAdmin: true }).actions, ['view', 'edit', 'activate', 'remove']);
+    assert.deepStrictEqual(getUserActions(users[2], { staff: inactiveStaff, currentUsername: 'admin', isAdmin: true }).actions, ['view', 'edit', 'changeRole', 'activate', 'remove']);
     assert.deepStrictEqual(getUserActions(users[2], { staff: inactiveStaff, currentUsername: 'admin', isAdmin: false }).actions, ['view', 'edit', 'activate']);
   });
 

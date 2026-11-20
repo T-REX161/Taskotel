@@ -29,6 +29,8 @@ public class ManagerViewGrantChange {
     public static final String SOURCE_ADMIN = "ADMIN_VIEW_ACCESS";
     /** A grant made redundant because the Manager's primary department became that department. */
     public static final String SOURCE_PRIMARY_CHANGE = "PRIMARY_DEPARTMENT_CHANGE";
+    /** Every grant ended because the account stopped being a Manager (an Administrator changed its system role). */
+    public static final String SOURCE_ROLE_CHANGE = "ROLE_CHANGE";
     /**
      * A grant that existed under the earlier view-only model and became full management with the access-model change. Written only by the
      * hand-run migration V23 (never by the application), with the change source {@link #SOURCE_ACCESS_MODEL_V23}.

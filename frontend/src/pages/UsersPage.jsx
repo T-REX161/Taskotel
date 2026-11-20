@@ -35,6 +35,8 @@ import DeactivateStaffModal from '../components/staff/DeactivateStaffModal';
 import RemoveStaffModal from '../components/staff/RemoveStaffModal';
 import ManagerDepartmentModal from '../components/users/ManagerDepartmentModal';
 import ManagerViewAccessModal from '../components/users/ManagerViewAccessModal';
+import RoleChangeModal from '../components/users/RoleChangeModal';
+import { ROLE_LABELS } from '../utils/roleChange';
 import ManagerAdditionalAccess from '../components/users/ManagerAdditionalAccess';
 import { showsAdditionalAccess } from '../utils/managerViewAccess';
 import { toastMotion, usePresence } from '../theme/presence';
@@ -110,6 +112,7 @@ export default function UsersPage() {
   const [isRemoving, setIsRemoving] = useState(false);
   const [removeError, setRemoveError] = useState('');
   const [assigningDepartment, setAssigningDepartment] = useState(null); // the Manager account row (Admin only)
+  const [changingRole, setChangingRole] = useState(null); // the account row whose system role is being changed (Admin only)
   const [grantingViewAccess, setGrantingViewAccess] = useState(null); // the Manager account row (Admin only)
 
   // Users from /api/users; staff records (with workload, as on the Staff page) to manage the linked accounts
@@ -206,6 +209,11 @@ export default function UsersPage() {
   // Accounts with a staff record are managed through it (same dialogs and rules as the Staff page); accounts without one are
   // managed directly by user id. Either way the server enforces the rules.
   const handleAction = async (action, user, staff) => {
+    if (action === 'changeRole') {
+      // Admin only and never your own account (the server refuses both too); works on the account itself, with or without a staff record
+      if (isAdmin && !isCurrentUser(user, currentUsername)) setChangingRole(user);
+      return;
+    }
     if (action === 'viewAccess') {
       // Admin only (the server refuses anyone else too); kept on the Manager's account
       if (isAdmin) setGrantingViewAccess(user);
@@ -267,6 +275,13 @@ export default function UsersPage() {
   };
 
   // The dialog has already shown the result; refresh the list so the staff record's department is current everywhere on the page
+  const handleRoleChanged = async (updated, { from, to }) => {
+    const target = changingRole;
+    setChangingRole(null);
+    await fetchUsers(false);
+    notify(`Role of "${target?.username || updated?.username}" changed from ${ROLE_LABELS[from] || from} to ${ROLE_LABELS[to] || to}. Their sessions ended: they sign in again.`);
+  };
+
   const handleManagerDepartmentChanged = async (updated) => {
     await fetchUsers(false);
     notify(`Department of "${assigningDepartment?.username || updated?.username}" changed to ${updated?.departmentName || updated?.departmentCode}.`);
@@ -497,6 +512,13 @@ export default function UsersPage() {
         user={assigningDepartment}
         onClose={() => setAssigningDepartment(null)}
         onChanged={handleManagerDepartmentChanged}
+      />
+
+      <RoleChangeModal
+        isOpen={isAdmin && Boolean(changingRole)}
+        user={changingRole}
+        onClose={() => setChangingRole(null)}
+        onChanged={handleRoleChanged}
       />
 
       <ManagerViewAccessModal

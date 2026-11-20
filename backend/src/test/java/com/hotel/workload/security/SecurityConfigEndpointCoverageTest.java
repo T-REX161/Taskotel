@@ -73,8 +73,8 @@ public class SecurityConfigEndpointCoverageTest {
         allow(ALL, "POST", "/api/profile/picture", "/api/profile/email-change/request", "/api/profile/email-change/confirm");
         allow(ALL, "DELETE", "/api/profile/picture");
         // Users and Manager departments: Admin only
-        allow(A, "GET", "/api/users", "/api/users/{}/manager-department", "/api/users/{}/manager-department/history");
-        allow(A, "PUT", "/api/users/{}/manager-department");
+        allow(A, "GET", "/api/users", "/api/users/{}/manager-department", "/api/users/{}/manager-department/history", "/api/users/{}/role-history");
+        allow(A, "PUT", "/api/users/{}/manager-department", "/api/users/{}/role");
         // Manager view-only department access: Admin only
         allow(A, "GET", "/api/users/{}/view-departments", "/api/users/{}/view-departments/history",
                 "/api/users/{}/view-departments/history/page");

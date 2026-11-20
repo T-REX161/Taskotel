@@ -11,6 +11,7 @@ const MENU_LABELS = {
   edit: 'Edit User',
   department: 'Manager Department',
   viewAccess: 'Department Access',
+  changeRole: 'Change Role',
   deactivate: 'Deactivate',
   activate: 'Activate',
   remove: 'Remove User',
@@ -42,13 +43,14 @@ function CheckIcon({ className }) {
   );
 }
 
-const MENU_ICONS = { view: EyeIcon, edit: EditIcon, department: EditIcon, viewAccess: EyeIcon, deactivate: BanIcon, activate: CheckIcon, remove: TrashIcon };
+const MENU_ICONS = { view: EyeIcon, edit: EditIcon, department: EditIcon, viewAccess: EyeIcon, changeRole: EditIcon, deactivate: BanIcon, activate: CheckIcon, remove: TrashIcon };
 
 const MENU_ITEM_CLASS = {
   view: 'text-gray-700 hover:bg-gray-50 hover:text-emerald-700',
   edit: 'text-gray-700 hover:bg-gray-50 hover:text-emerald-700',
   department: 'text-gray-700 hover:bg-gray-50 hover:text-emerald-700',
   viewAccess: 'text-gray-700 hover:bg-gray-50 hover:text-emerald-700',
+  changeRole: 'text-gray-700 hover:bg-gray-50 hover:text-emerald-700',
   deactivate: 'text-red-600 hover:bg-red-50 font-medium',
   activate: 'text-emerald-700 hover:bg-emerald-50 font-medium',
   remove: 'text-red-600 hover:bg-red-50 font-medium',

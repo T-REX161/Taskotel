@@ -221,6 +221,7 @@ const MODALS = {
   'components/profile/ProfilePictureEditor.jsx': ['if (!isOpen) return null;', 'Boolean(props.isOpen)'],
   'components/staff/AddStaffModal.jsx': ['if (!isOpen) return null;', 'Boolean(props.isOpen)'],
   'components/staff/DeactivateStaffModal.jsx': ['if (!isOpen || !staff) return null;', 'Boolean(props.isOpen && props.staff)'],
+  'components/users/RoleChangeModal.jsx': ['if (!isOpen || !user) return null;', 'Boolean(props.isOpen && props.user)'],
   'components/staff/EditStaffModal.jsx': ['if (!isOpen || !staff) return null;', 'Boolean(props.isOpen && props.staff)'],
   'components/staff/RemoveStaffModal.jsx': ['if (!isOpen || !staff) return null;', 'Boolean(props.isOpen && props.staff)'],
   'components/staff/StaffDetailsModal.jsx': ['if (!staff) return null;', 'Boolean(props.staff)'],
@@ -239,7 +240,7 @@ describe('modals', () => {
     const overlays = sources.filter((s) => /className=[{"`][^\n]*fixed inset-0 z-50/.test(s.text)).map((s) => s.file).sort();
     const animated = sources.filter((s) => s.text.includes('${backdropMotion(closing)}')).map((s) => s.file).sort();
     assert.deepEqual(animated, overlays);
-    assert.equal(overlays.length, 23, '18 self-hiding modals and 5 support dialogs');
+    assert.equal(overlays.length, 24, '19 self-hiding modals (the 19th is the Admin role-change dialog) and 5 support dialogs');
   });
 
   it('each keeps its own open check, and its wrapper mirrors it, so it mounts and unmounts as before', () => {

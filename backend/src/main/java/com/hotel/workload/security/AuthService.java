@@ -122,7 +122,7 @@ public class AuthService {
 
         recordLogin(user);
 
-        String token = jwtUtil.generateToken(user.getUsername(), user.getRole(), user.getPasswordChangedAt());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getRole(), user.getPasswordChangedAt(), user.getSessionsValidAfter());
         return new LoginResponse(token, user.getUsername(), user.getRole());
     }
 
@@ -215,7 +215,7 @@ public class AuthService {
         }
 
         // Generate standard JWT now that setup is complete
-        String token = jwtUtil.generateToken(user.getUsername(), user.getRole(), user.getPasswordChangedAt());
+        String token = jwtUtil.generateToken(user.getUsername(), user.getRole(), user.getPasswordChangedAt(), user.getSessionsValidAfter());
         return LoginResponse.success(token, user.getUsername(), user.getRole());
     }
 }

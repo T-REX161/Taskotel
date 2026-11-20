@@ -127,6 +127,10 @@ public class User {
     @Column(name = "phone", length = 50)
     private String phone;
 
+    // Set when an Administrator changes the account's role: a token issued before this moment is refused (the session ends). Null = never.
+    @Column(name = "sessions_valid_after")
+    private LocalDateTime sessionsValidAfter;
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
@@ -149,6 +153,8 @@ public class User {
     public void setPassword(String password) { this.password = password; }
     public Role getRole() { return role; }
     public void setRole(Role role) { this.role = role; }
+    public LocalDateTime getSessionsValidAfter() { return sessionsValidAfter; }
+    public void setSessionsValidAfter(LocalDateTime sessionsValidAfter) { this.sessionsValidAfter = sessionsValidAfter; }
     public boolean isActive() { return active; }
     public void setActive(boolean active) { this.active = active; }
     /** The stored state, for every role: nothing is assumed from the role. */
