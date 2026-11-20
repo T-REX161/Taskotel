@@ -213,19 +213,47 @@ public class StaffLoginEmailChangeRequestTest {
     }
 
     @Test
-    @DisplayName("Only Staff accounts: a Manager cannot start a change for a Manager or Admin account (403), and neither can an Admin")
-    void onlyStaffAccountsAreEligible() throws Exception {
+    @DisplayName("Eligible targets: Staff (Admin, or a Manager in their department) and Manager accounts (Admin only); never an Admin account, and a Manager never reaches a Manager or Admin account")
+    void eligibleTargets() throws Exception {
         User otherManager = account("manager2", Role.MANAGER, "manager2");
         Staff otherManagerStaff = withStaffRecord(otherManager, TestDepartments.HOUSEKEEPING);
         User adminAccount = account("admin2", Role.ADMIN, "admin2");
         Staff adminStaff = withStaffRecord(adminAccount, TestDepartments.HOUSEKEEPING);
+        // a Manager: Staff only (403 for a Manager or an Admin account)
         assertEquals(403, initiate(manager, otherManagerStaff, newAddress("y1")).getResponse().getStatus());
         assertEquals(403, initiate(manager, adminStaff, newAddress("y2")).getResponse().getStatus());
-        assertEquals(403, initiate(admin, otherManagerStaff, newAddress("y3")).getResponse().getStatus());
+        // an Admin: not for another Admin account
         assertEquals(403, initiate(admin, adminStaff, newAddress("y4")).getResponse().getStatus());
         verify(emailService, never()).sendAdministratorEmailChangeVerificationEmail(anyString(), anyString());
         assertNothingPending(otherManager);
         assertNothingPending(adminAccount);
+
+        // an Admin: yes for a Manager account (the Manager still has to verify it themselves, below)
+        String fresh = newAddress("y3");
+        MvcResult result = initiate(admin, otherManagerStaff, fresh);
+        assertEquals(200, result.getResponse().getStatus(), body(result));
+        assertEquals(otherManager.getEmail(), reload(otherManager).getEmail(), "the Manager's active email is untouched until they verify");
+        assertEquals(fresh, reload(otherManager).getPendingEmail());
+        verify(emailService).sendAdministratorEmailChangeNotice(eq(otherManager.getEmail()), anyString());
+        assertNothingPending(adminAccount);
+    }
+
+    @Test
+    @DisplayName("A Manager account's email changes only when that Manager verifies it: the initiating Admin, another Manager and the Staff cannot complete it, and the holder can")
+    void managerAccountHolderMustVerify() throws Exception {
+        User otherManager = account("manager3", Role.MANAGER, "manager3");
+        Staff otherManagerStaff = withStaffRecord(otherManager, TestDepartments.HOUSEKEEPING);
+        String fresh = newAddress("mv1");
+        assertEquals(200, initiate(admin, otherManagerStaff, fresh).getResponse().getStatus());
+        String code = sentCode(fresh);
+        for (User other : List.of(admin, manager, holder)) {
+            assertEquals(400, confirm(other, code).getResponse().getStatus(), other.getRole() + " cannot complete it for the Manager");
+        }
+        assertEquals(otherManager.getEmail(), reload(otherManager).getEmail());
+        assertEquals(fresh, reload(otherManager).getPendingEmail(), "still pending");
+        assertEquals(200, confirm(otherManager, code).getResponse().getStatus(), "the Manager can finish it");
+        assertEquals(fresh, reload(otherManager).getEmail());
+        assertEquals(fresh, staffRepository.findById(otherManagerStaff.getId()).orElseThrow().getEmail(), "the staff record follows");
     }
 
     @Test

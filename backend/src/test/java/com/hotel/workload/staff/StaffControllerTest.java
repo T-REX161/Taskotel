@@ -243,7 +243,7 @@ public class StaffControllerTest {
                                 {
                                     "fullName": "Initial Staff",
                                     "email": "%s",
-                                    "phone": "123",
+                                    "phone": "123456789",
                                     "department": "FRONT_DESK",
                                     "availability": "AVAILABLE",
                                     "username": "%s",

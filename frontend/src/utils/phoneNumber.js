@@ -58,3 +58,16 @@ export async function savePhone(value, currentPhone, { save = updatePhone } = {}
   if (problem) throw Object.assign(new Error(problem), { status: 0 });
   return save(normalizePhone(value));
 }
+
+/**
+ * The staff forms (Admin / Manager editing someone else): the number is optional. Empty is fine; a number that differs from the saved one
+ * must be a valid phone number. An unchanged saved value is never re-checked, so an older record never blocks an edit of something else.
+ * Returns the message to show, or null.
+ */
+export function validateOptionalPhone(value, savedPhone = '') {
+  const phone = normalizePhone(value);
+  if (!phone) return null;
+  if (savedPhone && phone === normalizePhone(savedPhone)) return null;
+  const problem = validatePhone(phone);
+  return problem === PHONE_MESSAGES.required ? null : problem;
+}

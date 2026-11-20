@@ -16,6 +16,7 @@ import {
 import DepartmentOptions from '../common/DepartmentOptions';
 import { UNASSIGNED_MANAGER_NOTICE, canChooseNoDepartment, departmentPayload, departmentProblem, isUnassignedManager } from '../../utils/staffDepartment';
 import useDepartments from '../../hooks/useDepartments';
+import { normalizePhone, validateOptionalPhone } from '../../utils/phoneNumber';
 import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import Spinner from '../common/Spinner';
 
@@ -133,6 +134,12 @@ function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEmailChangeReques
       return;
     }
 
+    const phoneProblem = validateOptionalPhone(formData.phone, staff.phone);
+    if (phoneProblem) {
+      setFormError(phoneProblem);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -141,7 +148,7 @@ function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEmailChangeReques
         // The login email is shown but never edited here: the request carries the address the account already has, and the server refuses
         // any other. The staff member changes it themselves, with verification, from their own account settings.
         email: staff.email,
-        phone: formData.phone.trim() || null,
+        phone: normalizePhone(formData.phone) || null,
         // null clears the department (Admin only, Staff accounts only; the server refuses it while the person has active assignments)
         department: departmentPayload(formData.department),
         availability: formData.availability,
@@ -274,7 +281,7 @@ function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEmailChangeReques
                     </p>
                   </div>
                 )}
-                {canRequestEmailChange(staff) ? (
+                {canRequestEmailChange(staff, getUserRole()) ? (
                   <div className="space-y-1">
                     <label htmlFor="new-login-email" className="text-sm font-medium text-gray-700">
                       {pending ? 'Use a different address, or send a new code' : 'Change login email'}
@@ -303,7 +310,7 @@ function EditStaffModal({ isOpen, staff, onClose, onSuccess, onEmailChangeReques
                     {emailNotice && <p role="status" className="text-xs text-emerald-700">{emailNotice}</p>}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-500">A login email change can be requested for active Staff accounts only.</p>
+                  <p className="text-xs text-gray-500">A login email change can be requested for active Staff accounts, and for Manager accounts by an administrator.</p>
                 )}
               </div>
 

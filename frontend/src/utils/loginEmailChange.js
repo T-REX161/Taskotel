@@ -11,9 +11,14 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const SENT_MESSAGE =
   'Verification code sent to the new address. The login email stays the same until the staff member confirms it themselves from their own account.';
 
-/** Only Staff accounts that are active may be given a change (the server also enforces this, with department rules). */
-export function canRequestEmailChange(staff) {
-  return Boolean(staff) && staff.role === 'STAFF' && staff.active !== false;
+/**
+ * Active Staff accounts may be given a change (by an Admin, or a Manager for their own department); an active Manager account only by an
+ * Admin; an Admin account never. The server enforces all of this, with the department rules. The account holder always verifies it.
+ */
+export function canRequestEmailChange(staff, viewerRole = '') {
+  if (!staff || staff.active === false) return false;
+  if (staff.role === 'STAFF') return true;
+  return staff.role === 'MANAGER' && String(viewerRole || '').toUpperCase() === 'ADMIN';
 }
 
 /** Whole minutes until the code expires, rounded up, or 0 once it has. */
