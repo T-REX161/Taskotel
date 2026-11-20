@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V24 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V25 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -93,7 +93,8 @@ public class MigrationFilesTest {
                 "V21__department_constraints_reconcile.sql",
                 "V22__manager_view_access.sql",
                 "V23__manager_view_access_full_management.sql",
-                "V24__workload_alert_state.sql"), names);
+                "V24__workload_alert_state.sql",
+                "V25__user_role_management.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -101,7 +102,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24), versions, "Versions must be 1 to 24 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25), versions, "Versions must be 1 to 25 with no gaps or duplicates");
     }
 
     @Test
@@ -216,6 +217,37 @@ public class MigrationFilesTest {
         }
         for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
             assertTrue(read(Path.of("src/test/java/com/hotel/workload/config").resolve(test)).contains("classpath:db/h2-workload-alert-state.sql"), test);
+        }
+    }
+
+    @Test
+    @DisplayName("V25 only adds the role-management column and audit table: guarded, lock timeout, one nullable column, one table, no existing data changed, rollback stated, not applied automatically")
+    public void testV25AddsRoleManagementOnly() throws IOException {
+        String file = read(MIGRATIONS.resolve("V25__user_role_management.sql"));
+        String executable = withoutLineComments(file);
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertTrue(executable.indexOf("to_regclass") >= 0 && executable.indexOf("to_regclass") < executable.indexOf("CREATE TABLE"), "it checks before creating anything");
+        assertEquals(1, Pattern.compile("(?i)CREATE TABLE").matcher(executable).results().count(), "exactly one new table");
+        assertEquals(1, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "exactly one altered table");
+        assertTrue(executable.contains("ALTER TABLE users ADD COLUMN sessions_valid_after TIMESTAMP;"), "a nullable column: every existing row stays valid");
+        assertTrue(executable.contains("CREATE TABLE user_role_changes ("));
+        assertFalse(Pattern.compile("(?i)\\b(DROP|UPDATE|DELETE|INSERT|TRUNCATE)\\b").matcher(executable).find(), "no existing table or row is changed or removed");
+        assertTrue(executable.contains("previous_role IN ('ADMIN', 'MANAGER', 'STAFF')") && executable.contains("previous_role <> new_role"));
+        assertTrue(file.contains("Not applied automatically") && file.contains("Rollback") && file.contains("psql -1 -v ON_ERROR_STOP=1"));
+    }
+
+    @Test
+    @DisplayName("The production-profile test schema for V25 matches it, and both production tests load it")
+    public void testV25TestSchemaMatches() throws IOException {
+        String h2 = withoutLineComments(read(Path.of("src/test/resources/db/h2-user-role-management.sql")));
+        String v25 = withoutLineComments(read(MIGRATIONS.resolve("V25__user_role_management.sql")));
+        for (String part : new String[] {"sessions_valid_after TIMESTAMP", "id                   UUID         PRIMARY KEY", "target_user_id       UUID         NOT NULL",
+                "previous_role        VARCHAR(16)  NOT NULL", "new_role             VARCHAR(16)  NOT NULL", "revoked_grants       INTEGER      NOT NULL DEFAULT 0",
+                "changed_by_username  VARCHAR(255) NOT NULL", "changed_at           TIMESTAMP    NOT NULL", "previous_role <> new_role"}) {
+            assertTrue(h2.contains(part) && v25.contains(part), part);
+        }
+        for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
+            assertTrue(read(Path.of("src/test/java/com/hotel/workload/config").resolve(test)).contains("classpath:db/h2-user-role-management.sql"), test);
         }
     }
 

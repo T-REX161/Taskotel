@@ -196,6 +196,22 @@ public class ManagerViewAccessService {
         }
     }
 
+    /**
+     * Called when an Administrator changes a Manager's system role: a grant is a Manager privilege, so every additional-department grant ends
+     * with the role and each is audited. The primary department (the Staff record) is not touched. Returns how many grants ended. Runs inside
+     * the caller's transaction.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public int revokeAllForRoleChange(User manager, User admin) {
+        List<ManagerViewGrant> grants = grantRepository.findByManagerId(manager.getId());
+        for (ManagerViewGrant grant : grants) {
+            grantRepository.delete(grant);
+            audit(manager, grant.getDepartment(), ManagerViewGrantChange.ACTION_REVOKED, ManagerViewGrantChange.SOURCE_ROLE_CHANGE, admin);
+        }
+        grantRepository.flush();
+        return grants.size();
+    }
+
     private ManagerViewAccessDtos.ViewAccess view(User manager) {
         Department primary = primaryDepartment(manager);
         List<ManagerViewAccessDtos.Grant> grants = grantRepository.findByManagerId(manager.getId()).stream()

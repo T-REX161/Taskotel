@@ -443,6 +443,17 @@ export const activateUser = (id) => apiFetch(`/api/users/${id}/activate`, { meth
 export const removeUser = (id) => apiFetch(`/api/users/${id}`, { method: 'DELETE' });
 
 /**
+ * Admin only: change an account's system role (STAFF, MANAGER or ADMIN). The account is named by the path. `currentPassword` (the acting
+ * Administrator's own password) is sent only for a change to or from ADMIN. The server enforces every rule.
+ */
+export const changeUserRole = (id, role, currentPassword) => apiFetch(`/api/users/${id}/role`, {
+  method: 'PUT',
+  body: JSON.stringify(currentPassword ? { role, currentPassword } : { role }),
+});
+/** Admin only: the role changes of one account, newest first. */
+export const getUserRoleHistory = (id) => apiFetch(`/api/users/${id}/role-history`);
+
+/**
  * A Manager's department (Admin only; the server refuses everyone else). The department lives on the Manager's linked staff record.
  * assign: { department: <department code> }. The history is the audit trail of those changes, newest first.
  */

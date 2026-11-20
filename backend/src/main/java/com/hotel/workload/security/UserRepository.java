@@ -48,6 +48,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.role = com.hotel.workload.security.Role.ADMIN AND u.active = true ORDER BY u.id")
     List<User> findActiveAdminsForUpdate();
 
+    /** One account, locked for the rest of the transaction (SELECT ... FOR UPDATE), read fresh. Must be called inside a transaction. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.id = :id")
+    Optional<User> findByIdForUpdate(@org.springframework.data.repository.query.Param("id") java.util.UUID id);
+
     // A list: the unique constraint on email is case-sensitive, so two accounts could differ only in case
     List<User> findAllByEmailIgnoreCase(String email);
     Optional<User> findBySetupToken(String setupToken);

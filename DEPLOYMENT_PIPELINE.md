@@ -44,7 +44,7 @@ The repository proves how each service is *built*. It cannot show a dashboard's 
 7. **Verify** (section 5).
 8. Do **not** edit production data or environment variables as part of a normal release.
 
-## 4. Database migrations (Flyway, V1 to V24 today)
+## 4. Database migrations (Flyway, V1 to V25 today)
 
 Facts: schema changes live in `backend/src/main/resources/db/migration` (`V<n>__name.sql`). Production uses `baseline-on-migrate: false` and
 `ddl-auto: validate`: Hibernate never changes the schema and refuses to start if the code and schema differ. Flyway runs at startup **only
@@ -53,7 +53,7 @@ new backend would fail validation on start.
 
 Safe procedure for a release with a new migration:
 
-1. **Never edit an already-applied migration** (its checksum is stored). Add a new `V25__...sql`, `V26__...`, in order.
+1. **Never edit an already-applied migration** (its checksum is stored). Add a new `V26__...sql`, `V27__...`, in order (V25 is the latest).
 2. Test it on an empty local PostgreSQL and on a copy of production-like data (`mvn -Pmigration-it test` runs against rehearsal databases only).
 3. Make it **backward compatible** (add columns/tables, do not drop or rename in the same release) so the previous backend still runs if you roll back.
 4. **Back up first.** Supabase dashboard > Database > Backups (or a `pg_dump -Fc`), and note the time.

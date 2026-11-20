@@ -87,7 +87,7 @@ Never set `DEMO_DATA_ENABLED`: demo data never runs under the production profile
 
 ## 5. Flyway migration behaviour
 
-* The schema is built by `backend/src/main/resources/db/migration` (V1 to V24). On an **empty** database Flyway runs them in order; V4 also
+* The schema is built by `backend/src/main/resources/db/migration` (V1 to V25). On an **empty** database Flyway runs them in order; V4 also
   inserts the six built-in departments, and `DepartmentBootstrap`/`DemoDataSeeder` do not run in production.
 * In production `baseline-on-migrate` is `false`: a **non-empty** database without Flyway history makes startup fail instead of being adopted
   silently. A new managed database starts empty, so this is the intended behaviour.
@@ -96,7 +96,7 @@ Never set `DEMO_DATA_ENABLED`: demo data never runs under the production profile
   `DEPLOYMENT_PIPELINE.md`, section 4) and decide one standing policy.
 * After Flyway, Hibernate validates every entity against the schema (`ddl-auto: validate`). A mismatch stops startup with a clear message
   instead of changing the database.
-* The migrations have been applied to the production Supabase database (V1 to V24, all successful). The repository also has PostgreSQL
+* The migrations have been applied to the production Supabase database (V1 to V24, all successful). **V25 (Admin role management: one nullable `users.sessions_valid_after` column and the `user_role_changes` audit table) is new and NOT applied to production yet: apply it before deploying a backend that contains the role-management feature, or startup validation fails.** It is additive, so the previous backend keeps running against the migrated schema. The repository also has PostgreSQL
   migration tests (`mvn -Pmigration-it test`, against rehearsal databases only). Rehearse any new migration on a disposable database first.
 * Departments: V4 seeds the six starting departments once. An Admin can later remove **any** department (built-in or not) that no staff,
   task, assignment or Manager access grant uses (a grant must be revoked first; it is never deleted silently), and a removed department is never re-created: production does not re-seed, and `DepartmentBootstrap` (outside
@@ -145,7 +145,7 @@ needs one, add them under review rather than writing an ad-hoc INSERT.)
 
 1. **Prepare secrets** in a password manager: database credentials, `JWT_SECRET`, SendGrid key and verified sender, Cloudinary values.
 2. **Dry run** (recommended, no production data): create a disposable database and start the application locally against it
-   with the production variables and `WB_FLYWAY_ENABLED=true`; confirm Flyway applies V1 to V24 and the application starts. Delete it after.
+   with the production variables and `WB_FLYWAY_ENABLED=true`; confirm Flyway applies V1 to V25 and the application starts. Delete it after.
 3. **Create the Render Web Service** with the settings in section 3 and set every variable of section 4. Leave Auto-Deploy off.
 4. **Deploy.** Watch the logs for `Started WorkloadBalancerApplication`, Flyway applying the migrations, and no startup validation error.
 5. **Health check:** open `https://<service>.onrender.com/healthz`; expect `{"status":"UP"}`.
