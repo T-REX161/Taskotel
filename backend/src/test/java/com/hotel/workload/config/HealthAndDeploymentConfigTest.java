@@ -127,4 +127,14 @@ public class HealthAndDeploymentConfigTest {
         List<String> ignored = Files.readAllLines(Path.of(".dockerignore"));
         for (String must : List.of(".env", ".env.*", "target/", ".git/", ".idea/", ".vscode/", "*.log")) assertTrue(ignored.contains(must), must);
     }
+
+    @Test
+    @DisplayName("Dockerfile: the UTC zone is part of the launch command itself, after JAVA_OPTS, so a JAVA_OPTS defined on the platform cannot remove it; the default JVM options are unchanged")
+    public void testDockerfilePinsTheTimeZoneInTheLaunchCommand() throws Exception {
+        String docker = Files.readString(Path.of("Dockerfile")).replace("\r\n", "\n");
+        assertTrue(docker.contains("ENV JAVA_OPTS=\"-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError\""), "every existing JVM option kept, none added to the overridable default");
+        String entrypoint = docker.lines().filter(line -> line.startsWith("ENTRYPOINT")).findFirst().orElseThrow();
+        assertTrue(entrypoint.contains("exec java $JAVA_OPTS -Duser.timezone=UTC -jar /app/app.jar"), entrypoint);
+        assertTrue(entrypoint.indexOf("$JAVA_OPTS") < entrypoint.indexOf("-Duser.timezone=UTC"), "after JAVA_OPTS: the last -D wins");
+    }
 }

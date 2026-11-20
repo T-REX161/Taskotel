@@ -200,7 +200,9 @@ public class AccountActivityTest {
         assertFalse(alices.contains("2026-03-04") || alices.contains("2026-02-03"), "bob's times are not in alice's profile: " + alices);
 
         String bobs = body(profileOf(bob));
-        assertTrue(bobs.contains("\"lastLoginAt\":\"2026-03-04T05:06:07\"") && bobs.contains("\"passwordChangedAt\":\"2026-02-03T04:05:06\""), bobs);
+        // each moment is sent as an instant with its zone (the stored reading was written in this JVM's zone)
+        assertTrue(bobs.contains("\"lastLoginAt\":\"" + com.hotel.workload.config.UtcTimestamps.asInstant(java.time.LocalDateTime.of(2026, 3, 4, 5, 6, 7)) + "\"")
+                && bobs.contains("\"passwordChangedAt\":\"" + com.hotel.workload.config.UtcTimestamps.asInstant(java.time.LocalDateTime.of(2026, 2, 3, 4, 5, 6)) + "\""), bobs);
         for (String secret : new String[] {"password\"", "Hash", "hash", "setupToken", "secret-", "verificationCode", "passwordResetCodeHash"}) {
             assertFalse(bobs.contains(secret), "must not expose " + secret + ": " + bobs);
         }

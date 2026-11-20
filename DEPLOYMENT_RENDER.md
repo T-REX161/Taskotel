@@ -49,7 +49,8 @@ Local development is unchanged: the default profile still uses `localhost:8080`,
 * Build stage `eclipse-temurin:25-jdk`; `mvnw` is converted from CRLF to LF (it is committed with Windows line endings), dependencies
   are cached in their own layer, then `mvnw clean package` runs with tests skipped (run `mvn clean test` before releasing; see section 10).
 * Runtime stage `eclipse-temurin:25-jre`, user `taskotel` (not root), `SPRING_PROFILES_ACTIVE=prod` by default,
-  `JAVA_OPTS="-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"`, started with `exec java $JAVA_OPTS -jar /app/app.jar`.
+  `JAVA_OPTS="-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"`, started with `exec java $JAVA_OPTS -Duser.timezone=UTC -jar /app/app.jar`.
+  The UTC zone is in the launch command itself (after `$JAVA_OPTS`), so it applies even if you define `JAVA_OPTS` on Render, which replaces the default above: every stored timestamp is a UTC reading and the API sends each one with its zone.
 * No credential is written into any image layer. Everything secret is an environment variable at run time.
 
 ## 4. Environment variables (names only)
@@ -79,7 +80,7 @@ Local development is unchanged: the default profile still uses `localhost:8080`,
 | `JWT_EXPIRATION` | `86400000` | Token lifetime in milliseconds |
 | `SENDGRID_FROM_NAME` | `Taskotel` | Sender display name |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | empty | All three enable profile pictures. Without them the application still starts and uploads are simply unavailable |
-| `JAVA_OPTS` | see above | JVM options |
+| `JAVA_OPTS` | see above | JVM options. The launch command always adds `-Duser.timezone=UTC` after them, so do not set a different time zone here |
 | `NOTIFICATIONS_ASYNC`, `NOTIFICATIONS_QUEUE_CAPACITY`, `TEMPORARY_PASSWORD_LIFETIME_HOURS`, `LOGIN_RATE_LIMIT_*`, ... | see `application.yml` | Existing tuning knobs, unchanged |
 | `AUTH_CLIENT_ADDRESS_TRUSTED_PROXIES` | empty | See the rate-limit note in section 11 |
 

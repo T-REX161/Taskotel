@@ -1,3 +1,6 @@
+// The viewer's zone: the server sends UTC and every time is shown in the viewer's own zone (a user in India here)
+process.env.TZ = 'Asia/Kolkata';
+
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -75,7 +78,7 @@ describe('account activity: states from the shared profile', () => {
   });
 
   it('shows real, formatted times once loaded, and says "Not recorded yet" for a missing one', () => {
-    setCurrentProfile({ username: 'ayush', createdAt: '2026-01-05T08:30:00', lastLoginAt: '2026-11-02T10:27:51.123', passwordChangedAt: null });
+    setCurrentProfile({ username: 'ayush', createdAt: '2026-01-05T03:00:00Z', lastLoginAt: '2026-11-02T04:57:51.123Z', passwordChangedAt: null });
     assert.deepEqual(fields('ayush'), [
       { text: '05/01/2026, 8:30 AM', known: true },
       { text: '02/11/2026, 10:27 AM', known: true },
@@ -93,9 +96,9 @@ describe('account activity: states from the shared profile', () => {
   });
 
   it('follows the shared profile, and never shows another user\'s cached times', () => {
-    setCurrentProfile({ username: 'ayush', createdAt: '2026-01-05T08:30:00', lastLoginAt: '2026-11-02T10:27:51' });
+    setCurrentProfile({ username: 'ayush', createdAt: '2026-01-05T03:00:00Z', lastLoginAt: '2026-11-02T04:57:51Z' });
     assert.equal(fields('ayush')[1].text, '02/11/2026, 10:27 AM');
-    setCurrentProfile({ username: 'ayush', createdAt: '2026-01-05T08:30:00', lastLoginAt: '2026-11-03T21:00:00' }); // a later sign-in refreshes the shared profile
+    setCurrentProfile({ username: 'ayush', createdAt: '2026-01-05T03:00:00Z', lastLoginAt: '2026-11-03T15:30:00Z' }); // a later sign-in refreshes the shared profile
     assert.equal(fields('ayush')[1].text, '03/11/2026, 9:00 PM');
     assert.deepEqual(fields('maria'), Array(3).fill({ text: 'Loading…', known: false }));
   });

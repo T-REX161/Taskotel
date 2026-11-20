@@ -40,3 +40,37 @@ export function formatDate(date, dateFormat) {
 export function formatTime(date, timeFormat) {
   return formatTimeParts(date.getHours(), date.getMinutes(), timeFormat);
 }
+
+/**
+ * A timestamp from the server as a JavaScript Date (an instant), or null when it is not usable.
+ *
+ * The server stores and sends every moment in UTC. A string with a zone marker ("2026-11-20T05:25:00Z" or "+05:30") is exact. A string with
+ * no zone ("2026-11-20T05:25:00", or a [year, month, day, hour, minute, second] array) is the server's own UTC reading, so it is read as UTC
+ * too and never as the viewer's local time (that misreading is what showed the server's clock on screen instead of the viewer's). Format the
+ * returned Date with the local getters (formatDate, formatTime) to show it in the viewer's time zone.
+ */
+export function parseServerInstant(value) {
+  if (value === null || value === undefined || value === '') return null;
+  let date;
+  if (Array.isArray(value)) {
+    if (value.length < 3) return null;
+    const [year, month, day, hour = 0, minute = 0, second = 0, nano = 0] = value.map(Number);
+    date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, Math.floor(nano / 1e6)));
+    const exact = date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+      && date.getUTCHours() === hour && date.getUTCMinutes() === minute;
+    if (!exact) return null;
+  } else if (typeof value === 'string') {
+    const text = value.trim().replace(' ', 'T');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+      date = new Date(text + 'T00:00:00Z');
+    } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) {
+      const zoned = /(Z|[+-]\d{2}(?::?\d{2})?)$/i.test(text.slice(text.indexOf('T')));
+      date = new Date(zoned ? text : text + 'Z');
+    } else {
+      return null;
+    }
+  } else {
+    return null;
+  }
+  return Number.isNaN(date.getTime()) ? null : date;
+}

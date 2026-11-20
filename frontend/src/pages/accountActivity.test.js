@@ -1,15 +1,18 @@
+// The viewer's zone: the server sends UTC and every time is shown in the viewer's own zone (a user in India here)
+process.env.TZ = 'Asia/Kolkata';
+
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { describeActivity, formatActivityTime } from '../utils/accountActivity.js';
 
 
 describe('account activity formatting', () => {
-  it('shows the server time exactly as sent, in the chosen formats (DD/MM/YYYY, 12-hour by default) (no time-zone shift)', () => {
-    assert.equal(formatActivityTime('2026-11-02T10:27:51.123'), '02/11/2026, 10:27 AM');
-    assert.equal(formatActivityTime('2026-03-04T15:06:07'), '04/03/2026, 3:06 PM');
-    assert.equal(formatActivityTime('2026-03-04T00:05:00'), '04/03/2026, 12:05 AM');
-    assert.equal(formatActivityTime('2026-03-04T12:00:00'), '04/03/2026, 12:00 PM');
-    assert.equal(formatActivityTime([2026, 11, 2, 9, 5, 1]), '02/11/2026, 9:05 AM', 'array form');
+  it('shows the UTC moment from the server in the zone of the viewer (Asia/Kolkata here), in the chosen formats (DD/MM/YYYY, 12-hour by default)', () => {
+    assert.equal(formatActivityTime('2026-11-02T04:57:51.123Z'), '02/11/2026, 10:27 AM');
+    assert.equal(formatActivityTime('2026-03-04T09:36:07Z'), '04/03/2026, 3:06 PM');
+    assert.equal(formatActivityTime('2026-03-03T18:35:00Z'), '04/03/2026, 12:05 AM');
+    assert.equal(formatActivityTime('2026-03-04T06:30:00Z'), '04/03/2026, 12:00 PM');
+    assert.equal(formatActivityTime([2026, 11, 2, 3, 35, 1]), '02/11/2026, 9:05 AM', 'array form');
   });
 
   it('never invents a date: missing or unusable values give null', () => {
@@ -20,7 +23,7 @@ describe('account activity formatting', () => {
 });
 
 describe('account activity states', () => {
-  const profile = { createdAt: '2026-01-05T08:30:00', lastLoginAt: '2026-11-02T10:27:51', passwordChangedAt: null };
+  const profile = { createdAt: '2026-01-05T03:00:00Z', lastLoginAt: '2026-11-02T04:57:51Z', passwordChangedAt: null };
 
   it('an account with recorded activity shows real times', () => {
     assert.deepEqual(describeActivity(profile, 'createdAt'), { text: '05/01/2026, 8:30 AM', known: true });

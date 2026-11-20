@@ -36,4 +36,7 @@ ENV JAVA_OPTS="-XX:MaxRAMPercentage=70 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryEr
 
 # Render supplies PORT at run time and the application listens on it (server.port=${PORT:8080}); 8080 is only the local default
 EXPOSE 8080
-ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
+# -Duser.timezone=UTC is part of the launch command itself, AFTER $JAVA_OPTS (the last -D wins), so it holds even when a platform variable named
+# JAVA_OPTS (Render) replaces the default above: every stored timestamp is then a UTC reading on every deployment, and the API sends each one
+# with its zone (see UtcTimestamps).
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -Duser.timezone=UTC -jar /app/app.jar"]

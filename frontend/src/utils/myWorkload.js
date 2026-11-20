@@ -4,6 +4,7 @@
  * dashboard summary; only the progress-bar percentage uses the shared 480-minute shift helper. Pure functions, so they run in plain Node tests.
  */
 import { SHIFT_MINUTES, calculateWorkloadPercentage } from './workloadUtils.js';
+import { parseServerInstant } from './dateTimeFormat.js';
 
 /** The task statuses that count as active workload (Completed and Cancelled do not). */
 export const ACTIVE_TASK_STATUSES = Object.freeze(['PENDING', 'ASSIGNED', 'IN_PROGRESS']);
@@ -71,11 +72,28 @@ export function isSupportTask(task, personal) {
   return Boolean(task && personal && personal.homeDepartment && task.department && task.department !== personal.homeDepartment);
 }
 
-/** The person's newest active tasks (most recently created first), at most `limit`, for the dashboard preview. Nothing is added or altered. */
+/** The microsecond and nanosecond part of a server timestamp ("...:28.123456Z" gives 456000), which a JavaScript Date cannot hold. */
+function belowMillisecond(value) {
+  const match = typeof value === 'string' ? /\.(\d+)/.exec(value) : null;
+  return match ? Number(match[1].padEnd(9, '0').slice(3)) : 0;
+}
+
+/**
+ * The person's newest active tasks (most recently created first), at most `limit`, for the dashboard preview. Nothing is added or altered.
+ * Compared as instants, never as strings: the server drops trailing zero fractions ("...:28Z", "...:28.5Z", "...:28.123456Z") and "Z" sorts
+ * after a digit, so strings misorder tasks created in the same second. A task with no usable time counts as oldest; a tie falls back to the title.
+ */
 export function latestActiveTasks(tasks, limit = 3) {
-  const stamp = (t) => (typeof t?.createdAt === 'string' ? t.createdAt : '');
+  const millis = (task) => parseServerInstant(task?.createdAt)?.getTime() ?? -Infinity;
+  const newestFirst = (a, b) => {
+    const [ma, mb] = [millis(a), millis(b)];
+    if (ma !== mb) return mb > ma ? 1 : -1;
+    const [sa, sb] = [belowMillisecond(a.createdAt), belowMillisecond(b.createdAt)];
+    if (sa !== sb) return sb > sa ? 1 : -1;
+    return String(a.title || '').localeCompare(String(b.title || ''));
+  };
   return (Array.isArray(tasks) ? tasks.filter((t) => t && ACTIVE_TASK_STATUSES.includes(t.status)) : [])
     .slice()
-    .sort((a, b) => (stamp(a) < stamp(b) ? 1 : stamp(a) > stamp(b) ? -1 : String(a.title || '').localeCompare(String(b.title || ''))))
+    .sort(newestFirst)
     .slice(0, Math.max(0, limit));
 }
