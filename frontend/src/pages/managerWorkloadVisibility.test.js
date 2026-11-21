@@ -120,7 +120,9 @@ describe('WorkloadPage wiring', () => {
     assert.ok(page.includes('calculateWorkloadSummary(visibleWorkload)'));
     assert.ok(page.includes('calculateDepartmentWorkloads(visibleWorkload, departments, { strict: isManager })'));
     assert.ok(page.includes('sortWorkloadAlphabetically(visibleWorkload)'));
-    assert.ok(page.includes('Math.ceil(sortedWorkload.length / pageSize)'));
+    // The table's department filter narrows that same scoped list further; it can never reach rows the scoping removed
+    assert.ok(page.includes('return sortedWorkload.filter((row) =>') && page.includes('const filteredWorkload = useMemo(() => {'));
+    assert.ok(page.includes('Math.ceil(filteredWorkload.length / pageSize)'));
     // The raw rows are never passed on to anything that is shown
     for (const raw of ['calculateWorkloadSummary(workload)', 'calculateDepartmentWorkloads(workload', 'sortWorkloadAlphabetically(workload)']) {
       assert.ok(!page.includes(raw), raw);
@@ -134,7 +136,7 @@ describe('WorkloadPage wiring', () => {
   });
 
   it('renders one card for each entry of the computed list and nothing else', () => {
-    assert.ok(page.includes('{departmentWorkloads.map((dept) => {'));
+    assert.ok(page.includes('{departmentWorkloads.map((dept, deptIndex) => {'));
     assert.ok(page.includes('key={dept.code}'));
     assert.equal(page.split('departmentWorkloads.map(').length - 1, 1, 'no second source of department cards');
   });

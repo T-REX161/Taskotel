@@ -5,6 +5,28 @@ import TaskotelLogo from '../components/brand/TaskotelLogo';
 import './LoginPage.css';
 import { getLoginOutcome } from './loginResult';
 
+// Illustration only (decorative preview card on the photo panel): sample departments and loads, not live data
+const SAMPLE_LOADS = [
+  ['Housekeeping', 72],
+  ['Front Desk', 48],
+  ['Maintenance', 86],
+  ['Food & Beverage', 35],
+];
+
+// Soft mint specks that rise slowly over the photo panel (decorative; see LoginPage.css, off with reduced motion)
+const PARTICLES = [
+  { left: '7%', size: 5, dur: 19, delay: 0 },
+  { left: '16%', size: 8, dur: 26, delay: 6 },
+  { left: '27%', size: 4, dur: 21, delay: 12 },
+  { left: '38%', size: 6, dur: 24, delay: 3 },
+  { left: '49%', size: 9, dur: 30, delay: 9 },
+  { left: '58%', size: 4, dur: 20, delay: 15 },
+  { left: '68%', size: 7, dur: 27, delay: 1 },
+  { left: '77%', size: 5, dur: 23, delay: 8 },
+  { left: '86%', size: 8, dur: 29, delay: 13 },
+  { left: '94%', size: 4, dur: 22, delay: 5 },
+];
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -82,37 +104,56 @@ export default function LoginPage() {
   const hasBanner = loginSuccess || Boolean(loginError) || Boolean(verifiedMessage);
 
   return (
-    <div className="login-page min-h-screen text-gray-900 flex flex-col justify-center items-center px-4 py-6 sm:px-8 overflow-x-hidden selection:bg-emerald-100 selection:text-emerald-900">
-      {/* Split-screen container: login card on the left, hotel reception photo on the right */}
-      <main className="login-frame relative w-full max-w-[1024px] flex rounded-[20px] overflow-hidden shadow-2xl shadow-emerald-950/20 md:min-h-[519px]">
-        <div className="absolute inset-y-0 right-0 hidden md:block md:w-[50%]" aria-hidden="true">
+    <div className="login-page relative min-h-screen text-gray-900 flex flex-col overflow-x-hidden selection:bg-emerald-100 selection:text-emerald-900">
+      {/* Full-screen split: form on the left, green-tinted hotel photo with a short pitch on the right */}
+      <main className="login-frame relative flex-1 w-full min-h-screen overflow-hidden">
+        {/* One full-screen animated scene behind everything: the hotel photo (slow zoom), a green wash, drifting colour, a light sheen and rising gold specks (all decorative) */}
+        <div className="login-scene absolute inset-0" aria-hidden="true">
           <img
             src="/images/login-background.jpg"
             alt=""
-            className="login-photo h-full w-full object-cover object-center"
+            className="login-photo login-kenburns absolute inset-0 h-full w-full object-cover object-center"
           />
+          <div className="login-bg-tint absolute inset-0" />
+          <div className="login-orbs absolute inset-0 overflow-hidden pointer-events-none">
+            <span className="login-orb login-orb--one" />
+            <span className="login-orb login-orb--two" />
+          </div>
+          <div className="login-sheen absolute inset-0" />
+          <div className="absolute inset-0 overflow-hidden">
+            {PARTICLES.map((particle) => (
+              <span
+                key={particle.left}
+                className="login-particle"
+                style={{ left: particle.left, width: particle.size, height: particle.size, animationDuration: `${particle.dur}s`, animationDelay: `${particle.delay}s` }}
+              />
+            ))}
+          </div>
         </div>
 
-        <section className="relative z-10 w-full md:w-[54%] lg:w-[46.2%] m-3 sm:m-4 md:ml-[28px] md:mr-0 md:mt-[26px] md:mb-[23px] bg-white rounded-[16px] shadow-xl shadow-emerald-950/15 flex flex-col justify-center px-6 py-6 sm:px-10 lg:pl-16 lg:pr-12">
+        <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1400px] flex-col items-center justify-center gap-12 px-5 py-14 sm:px-10 md:flex-row lg:gap-24 lg:px-16">
+          {/* The form: a frosted card floating on the scene */}
+          <section className="login-card relative w-full max-w-[440px] shrink-0 rounded-[28px] p-7 sm:p-10">
+        <div className="login-stagger relative">
 
           {/* Taskotel Branding / Logo */}
           <div className="mb-[19px]">
-            <div className="flex items-center gap-2 sm:pl-2">
-              <TaskotelLogo className="w-[72px] h-[72px] shrink-0" />
+            <div className="flex items-center gap-4">
+              <span className="login-logo-tile inline-flex shrink-0 rounded-2xl p-2"><TaskotelLogo className="w-12 h-12 shrink-0" theme="dark" /></span>
               <div className="flex flex-col">
-                <span className="text-[34px] sm:text-[38px] font-extrabold tracking-tight text-[#04302a] leading-[40px] dark:text-neutral-100">
-                  Task<span className="text-[#0f9874]">otel</span>
+                <span className="login-wordmark text-[30px] font-bold tracking-tight text-white leading-[34px]">
+                  Task<span className="text-emerald-300">otel</span>
                 </span>
-                <span className="text-[13px] font-medium text-slate-500">
+                <span className="mt-1 text-[10.5px] font-semibold uppercase tracking-[0.18em] text-white/65">
                   Hotel Operations, Simplified
                 </span>
               </div>
             </div>
 
-            <h1 className="text-[27px] sm:text-[29px] leading-9 font-bold text-[#073638] tracking-tight mt-8 dark:text-neutral-100">
+            <h1 className="text-[27px] sm:text-[29px] leading-9 font-bold text-white tracking-tight mt-7">
               Welcome Back
             </h1>
-            <p className={`text-[15.5px] text-gray-500 mt-0.5 ${hasBanner ? "invisible" : ""}`}>
+            <p className={`text-[15.5px] text-white/75 mt-0.5 ${hasBanner ? "invisible" : ""}`}>
               Sign in to your Taskotel account
             </p>
           </div>
@@ -121,8 +162,8 @@ export default function LoginPage() {
           <div className="login-alert-slot">
             {/* Verification Success Banner (when returning from email verification) */}
             {verifiedMessage && !loginError && !loginSuccess && (
-              <div className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fade-in">
-                <svg className="w-4 h-4 text-emerald-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <div className="p-2 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2.5 animate-fade-in">
+                <svg className="w-4 h-4 text-green-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
                 <span>{verifiedMessage}</span>
@@ -134,9 +175,9 @@ export default function LoginPage() {
               <div
                 key={`success-${attemptId}`}
                 role="status"
-                className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fade-in"
+                className="p-2 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2.5 animate-fade-in"
               >
-                <span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center" aria-hidden="true">
+                <span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-green-500 flex items-center justify-center" aria-hidden="true">
                   <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                     <path className="login-result-icon__stroke" pathLength="1" strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
@@ -169,12 +210,12 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Username or Email Field (sent as `username`; the server accepts either) */}
             <div>
-              <label htmlFor="username" className="sr-only">
+              <label htmlFor="username" className="mb-1.5 block text-[13px] font-semibold text-white/90">
                 Username or Email
               </label>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
-                  <ProfileIcon className="w-4 h-4" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/55">
+                  <ProfileIcon className="w-[18px] h-[18px]" />
                 </div>
                 <input
                   id="username"
@@ -183,21 +224,30 @@ export default function LoginPage() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Username or Email"
+                  placeholder="Enter your username or email"
                   autoComplete="username"
-                  className="w-full h-[43px] pl-10 pr-4 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-[color,background-color,border-color,box-shadow,opacity] outline-none"
+                  className="w-full h-12 pl-11 pr-4 login-input text-sm text-white placeholder-white/45 rounded-xl focus:ring-4 focus:ring-emerald-400/20 transition-[color,background-color,border-color,box-shadow,opacity] outline-none"
                 />
               </div>
             </div>
 
             {/* Password Field with Show/Hide button */}
             <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label htmlFor="password" className="block text-[13px] font-semibold text-white/90">
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => navigate('/forgot-password')}
+                  className="text-[13px] font-medium text-emerald-300 hover:text-emerald-200 hover:underline transition-colors"
+                >
+                  Forgot password?
+                </button>
+              </div>
               <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-500">
-                  <LockIcon className="w-4 h-4" />
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-white/55">
+                  <LockIcon className="w-[18px] h-[18px]" />
                 </div>
                 <input
                   id="password"
@@ -206,15 +256,15 @@ export default function LoginPage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Password"
+                  placeholder="Enter your password"
                   autoComplete="current-password"
-                  className="w-full h-[43px] pl-10 pr-10 bg-gray-50 hover:bg-gray-100/70 focus:bg-white text-sm text-gray-900 placeholder-gray-400 rounded-md border border-gray-200 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-[color,background-color,border-color,box-shadow,opacity] outline-none"
+                  className="w-full h-12 pl-11 pr-11 login-input text-sm text-white placeholder-white/45 rounded-xl focus:ring-4 focus:ring-emerald-400/20 transition-[color,background-color,border-color,box-shadow,opacity] outline-none"
                 />
                 {/* Show/Hide password toggle */}
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-500 hover:text-[#0c6f50] dark:hover:text-emerald-400 transition-colors focus:outline-none"
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-white/55 hover:text-white transition-colors focus:outline-none"
                   aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? (
@@ -226,50 +276,102 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Forgot Password. (The "Remember me" box was removed: it changed nothing, a session is always kept until sign-out) */}
-            <div className="flex items-center justify-end pt-1.5">
-              <button
-                type="button"
-                onClick={() => navigate('/forgot-password')}
-                className="text-sm font-medium text-[#0c6f50] dark:text-emerald-400 hover:text-[#0a5e44] dark:hover:text-emerald-300 hover:underline transition-colors"
-              >
-                Forgot password?
-              </button>
-            </div>
-
             {/* Green Sign In Button */}
             <div className="pt-1.5">
               <button
                 type="submit"
                 disabled={isLoading || loginSuccess}
-                className={`w-full h-[43px] px-4 rounded-md text-base font-semibold text-white bg-[#0c6f50] hover:bg-[#0a5e44] active:bg-[#084f39] shadow-md shadow-emerald-900/20 hover:shadow-lg hover:shadow-emerald-900/25 transition-[color,background-color,border-color,box-shadow,opacity] duration-base flex items-center justify-center gap-2 cursor-pointer ${isLoading ? 'opacity-85 cursor-wait' : ''
+                className={`w-full h-12 px-4 login-cta rounded-xl text-[15px] font-semibold hover:shadow-lg hover:shadow-emerald-600/35 transition-[color,background-color,border-color,box-shadow,opacity] duration-base flex items-center justify-center gap-2 cursor-pointer ${isLoading ? 'opacity-85 cursor-wait' : ''
                   }`}
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-emerald-900" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
                     Signing in...
                   </>
                 ) : (
-                  'Sign In'
+                  <>
+                    Sign In
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                  </>
                 )}
               </button>
             </div>
           </form>
 
-          <p className="text-center text-[12.5px] text-gray-500 mt-6">
+          <p className="text-center text-[12.5px] text-white/60 mt-6">
             Manage staff, tasks and workloads effortlessly.
           </p>
-        </section>
+        </div>
+          </section>
+
+          {/* The pitch: plain text and a preview card straight on the scene (hidden on small screens and from assistive tech) */}
+          <div className="login-pitch hidden max-w-[520px] flex-1 flex-col text-white md:flex" aria-hidden="true">
+            <div className="mb-8 inline-flex w-fit items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-white/90">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Hotel operations platform
+            </div>
+            <div className="h-1 w-12 rounded-full bg-emerald-500 mb-5" />
+            <p className="text-[32px] lg:text-[44px] font-bold leading-[1.1] tracking-tight">
+              Balanced workloads.<br />Smarter operations.
+            </p>
+            <ul className="mt-7 space-y-3.5">
+              <li className="flex items-start gap-3 text-sm leading-snug text-white/85">
+                <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 ring-1 ring-emerald-400/60 text-emerald-300">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                </span>
+                Live workload visibility across every department
+              </li>
+              <li className="flex items-start gap-3 text-sm leading-snug text-white/85">
+                <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 ring-1 ring-emerald-400/60 text-emerald-300">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                </span>
+                Fair task assignment based on shift capacity
+              </li>
+              <li className="flex items-start gap-3 text-sm leading-snug text-white/85">
+                <span className="mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 ring-1 ring-emerald-400/60 text-emerald-300">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+                </span>
+                Role-based access for admins, managers and staff
+              </li>
+            </ul>
+            <div className="login-glass mt-9 w-full max-w-[340px] rounded-2xl p-5 text-white">
+              <div className="mb-4 flex items-center justify-between">
+                <span className="text-[13px] font-semibold tracking-wide">Workload overview</span>
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-300">
+                  <span className="login-pulse h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                  Today
+                </span>
+              </div>
+              <ul className="space-y-3.5">
+                {SAMPLE_LOADS.map(([name, percent], index) => (
+                  <li key={name}>
+                    <div className="mb-1.5 flex items-center justify-between text-xs">
+                      <span className="text-white/85">{name}</span>
+                      <span className="font-semibold text-white">{percent}%</span>
+                    </div>
+                    <div className="login-track h-1.5 w-full overflow-hidden rounded-full">
+                      <div
+                        className="login-bar h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300"
+                        style={{ width: `${percent}%`, animationDelay: `${0.6 + index * 0.15}s` }}
+                      />
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer info */}
+        <p className="text-center text-xs text-white/60 absolute bottom-5 inset-x-0 z-20 px-4">
+          Taskotel — Hotel Operations, Simplified &copy; {new Date().getFullYear()} • All rights reserved
+        </p>
       </main>
 
-      {/* Footer info */}
-      <p className="text-center text-xs text-gray-600 mt-3">
-        Taskotel — Hotel Operations, Simplified &copy; {new Date().getFullYear()} • All rights reserved
-      </p>
     </div>
   );
 }

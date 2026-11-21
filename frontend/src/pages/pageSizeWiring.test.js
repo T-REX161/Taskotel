@@ -41,7 +41,7 @@ describe('rows-per-page toggle on every paginated page', () => {
   it('Workload: keeps its 5-row default; the toggle sits beside "Page X of Y" in the card header and opens downwards', () => {
     const s = read('WorkloadPage.jsx');
     assert.ok(s.includes('const ITEMS_PER_PAGE = 5;') && s.includes('const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE);'));
-    assert.ok(s.includes('sortedWorkload.slice(startIndex, startIndex + pageSize)'));
+    assert.ok(s.includes('filteredWorkload.slice(startIndex, startIndex + pageSize)'));
     assert.ok(/const handlePageSizeChange = \(size\) => \{\s*setPageSize\(size\);\s*setCurrentPage\(1\);/.test(s));
     assert.ok(s.indexOf('<PageSizeToggle value={pageSize} onChange={handlePageSizeChange} placement="bottom" />') < s.indexOf('Page {currentPage} of {totalPages}'));
   });

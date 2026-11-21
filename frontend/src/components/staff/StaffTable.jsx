@@ -134,14 +134,14 @@ export default function StaffTable({
       <div className="overflow-x-auto min-h-[300px]">
         <table className="w-full text-left border-collapse table-fixed min-w-[700px] lg:min-w-0">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50/50 text-xs font-semibold uppercase tracking-wider text-gray-500 whitespace-nowrap">
-              <th className="w-[28%] py-3.5 px-4 text-left">Name</th>
-              <th className="w-[16%] py-3.5 px-3 text-left">Department</th>
-              <th className="w-[14%] py-3.5 px-3 text-left">Availability</th>
-              <th className="w-[11%] py-3.5 px-2 text-center">Active Tasks</th>
-              <th className="w-[11%] py-3.5 px-3 text-left">Workload</th>
-              <th className="w-[12%] py-3.5 px-3 text-left">Status</th>
-              <th className="w-[8%] py-3.5 px-4 text-right">Actions</th>
+            <tr className="border-b border-gray-200 bg-gray-50 text-sm font-semibold text-gray-800 whitespace-nowrap">
+              <th className="w-[29%] py-3.5 px-5 text-left border-r border-gray-100">Name</th>
+              <th className="w-[15%] py-3.5 px-4 text-left border-r border-gray-100">Department</th>
+              <th className="w-[14%] py-3.5 px-4 text-left border-r border-gray-100">Availability</th>
+              <th className="w-[12%] py-3.5 px-4 text-center border-r border-gray-100">Active Tasks</th>
+              <th className="w-[11%] py-3.5 px-4 text-left border-r border-gray-100">Workload</th>
+              <th className="w-[11%] py-3.5 px-4 text-left border-r border-gray-100">Status</th>
+              <th className="w-[8%] py-3.5 px-3 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 text-sm">
@@ -158,10 +158,10 @@ export default function StaffTable({
                 return (
                   <tr
                     key={staff.id}
-                    className="hover:bg-gray-50/50 transition-colors group"
+                    className="hover:bg-gray-50/60 transition-colors group"
                   >
                     {/* 1. Name: Circular Avatar, Bold Name, Email underneath (truncated gracefully) */}
-                    <td className="py-4 px-4 align-middle">
+                    <td className="py-4 px-5 align-middle">
                       <div className="flex items-center gap-3 min-w-0">
                         <UserAvatar
                           imageUrl={staff.profileImageUrl || staff.avatarUrl || staff.profileImage}
@@ -188,52 +188,52 @@ export default function StaffTable({
                     </td>
 
                     {/* 2. Department: readable text label on one line */}
-                    <td className="py-4 px-3 align-middle text-gray-700 whitespace-nowrap truncate">
+                    <td className="py-4 px-4 align-middle text-gray-700 whitespace-nowrap truncate">
                       {formatDepartment(staff.department)}
                     </td>
 
                     {/* 3. Availability: soft green Available, soft amber Unavailable */}
-                    <td className="py-4 px-3 align-middle whitespace-nowrap">
+                    <td className="py-4 px-4 align-middle whitespace-nowrap">
                       {available ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-100 text-emerald-800">
                           Available
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-100 text-amber-800">
                           Unavailable
                         </span>
                       )}
                     </td>
 
                     {/* 4. Active Tasks: numeric count, center-aligned */}
-                    <td className="py-4 px-2 align-middle text-center whitespace-nowrap font-medium text-gray-700 tabular-nums">
+                    <td className="py-4 px-4 align-middle text-center whitespace-nowrap font-medium text-gray-700 tabular-nums">
                       {activeTasksCount}
                     </td>
 
                     {/* 5. Workload: easy to scan in 'min' units */}
-                    <td className="py-4 px-3 align-middle whitespace-nowrap font-medium text-gray-700 tabular-nums">
+                    <td className="py-4 px-4 align-middle whitespace-nowrap font-medium text-gray-700 tabular-nums">
                       {workloadMins} min
                     </td>
 
                     {/* 6. Status: soft green Active, soft gray Inactive */}
-                    <td className="py-4 px-3 align-middle whitespace-nowrap">
+                    <td className="py-4 px-4 align-middle whitespace-nowrap">
                       {active ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-100 text-emerald-800">
                           Active
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-gray-100 text-gray-700">
                           Inactive
                         </span>
                       )}
                     </td>
 
                     {/* 7. Actions: Bordered, rounded square containing a vertical three-dot icon */}
-                    <td className="py-4 px-4 align-middle text-right whitespace-nowrap">
+                    <td className="py-4 px-3 align-middle text-center whitespace-nowrap">
                       <button
                         type="button"
                         onClick={(e) => handleButtonClick(e, staff)}
-                        className={`w-8 h-8 rounded-lg border transition-colors cursor-pointer inline-flex items-center justify-center ${
+                        className={`w-9 h-9 rounded-lg border transition-colors cursor-pointer inline-flex items-center justify-center ${
                           isMenuOpen
                             ? 'border-gray-400 bg-gray-100 text-gray-800'
                             : 'border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700'

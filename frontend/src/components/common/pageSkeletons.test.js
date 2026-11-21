@@ -56,18 +56,18 @@ describe('each skeleton follows its loaded page: same containers, columns and wi
     assert.equal(count(html, /class="bg-white rounded-xl p-5 sm:p-6 shadow-sm border border-gray-100 flex items-center space-x-4"/g), 5);
     assert.ok(cards.includes('className="bg-white rounded-xl p-5 sm:p-6 shadow-sm border border-gray-100 flex items-center space-x-4"'));
     assert.ok(filters.includes('className="flex flex-col md:flex-row items-center gap-3 w-full"'));
-    for (const width of ['md:w-44', 'md:w-48']) assert.ok(filters.includes(`"w-full ${width}"`) && html.includes(width));
+    for (const width of ['md:w-44', 'md:w-48']) assert.ok(filters.includes(`"relative w-full ${width}"`) && html.includes(width));
     assert.ok(read('pages/TasksPage.jsx').includes('className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full"'));
     const ths = headings(html);
     assert.equal(ths.length, 8);
     for (const { cls, label } of ths) assert.ok(table.includes(`<th className="${cls}">${label}</th>`), `column "${label}" matches TasksTable`);
-    assert.equal(count(html, /<tr class="h-\[65px\]">/g), 6, 'rows at the loaded row height');
+    assert.equal(count(html, /<tr class="h-\[78px\]">/g), 6, 'rows at the loaded row height');
   });
 
   it('Staff: the 4-field filter row and the 7-column table', () => {
     const html = render(StaffPageSkeleton);
     const filters = read('components/staff/StaffFilters.jsx');
-    for (const width of ['md:w-48', 'md:w-40', 'md:w-36']) assert.ok(filters.includes(`"w-full ${width}"`) && html.includes(width), width);
+    for (const width of ['md:w-48', 'md:w-44', 'md:w-40']) assert.ok(filters.includes(`"relative w-full ${width}"`) && html.includes(width), width);
     const table = read('components/staff/StaffTable.jsx');
     assert.ok(table.includes('className="w-full text-left border-collapse table-fixed min-w-[700px] lg:min-w-0"') && html.includes('class="w-full text-left border-collapse table-fixed min-w-[700px] lg:min-w-0"'));
     const ths = headings(html);

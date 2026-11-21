@@ -61,18 +61,27 @@ export function TableSkeleton({ cardClassName, scrollClassName = 'overflow-x-aut
 // ── shared pieces ─────────────────────────────────────────────────────────────────────────────────────────────
 
 const PAGINATION_FOOTER = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50/50';
-const LIST_HEAD_ROW = 'border-b border-gray-200 bg-gray-50/50 text-xs font-semibold uppercase tracking-wider text-gray-500 whitespace-nowrap';
+// The Staff and Tasks tables use the Users page's header: sentence-case labels on a solid grey band
+const STAFF_HEAD_ROW = 'border-b border-gray-200 bg-gray-50 text-sm font-semibold text-gray-800 whitespace-nowrap';
 const text = (...widths) => widths.map((w) => `h-3.5 rounded ${w}`);
+// Small rounded-square badges, like the Users page's
+const squareBadge = (...widths) => widths.map((w) => `h-6 rounded-md ${w}`);
 const badge = (...widths) => widths.map((w) => `h-5 rounded-full ${w}`);
 const person = (avatar = 'h-9 w-9') => (r) => h('div', { className: 'flex items-center gap-3 min-w-0' },
   h(Skeleton, { className: `${avatar} rounded-full shrink-0` }),
   h('div', { className: 'min-w-0 flex-1 space-y-1.5' }, h(Skeleton, { className: cx('h-3.5 rounded', ['w-3/4', 'w-2/3', 'w-4/5'][r % 3]) }), h(Skeleton, { tone: 'soft', className: 'h-3 w-1/2 rounded' })),
 );
 
+// A task's first cell: a rounded-square department tile, then the title and description lines
+const personTile = () => (r) => h('div', { className: 'flex items-center gap-3 min-w-0' },
+  h(Skeleton, { className: 'h-10 w-10 rounded-xl shrink-0' }),
+  h('div', { className: 'min-w-0 flex-1 space-y-1.5' }, h(Skeleton, { className: cx('h-3.5 rounded', ['w-3/4', 'w-2/3', 'w-4/5'][r % 3]) }), h(Skeleton, { tone: 'soft', className: 'h-3 w-1/2 rounded' })),
+);
+
 // ── Tasks ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function TasksPageSkeleton({ label = 'Loading tasks and assignments...' } = {}) {
-  const td = 'py-4 px-3 align-middle';
+  const td = 'py-5 px-3 align-middle';
   return h(LoadingRegion, { label, className: 'space-y-6' },
     h(StatCardsSkeleton, {
       count: 5,
@@ -82,22 +91,22 @@ export function TasksPageSkeleton({ label = 'Loading tasks and assignments...' }
       label: ['h-3 w-20', 'h-4 sm:h-5'],
       value: ['h-5 w-10', 'h-7 sm:h-8'],
     }),
-    h(FilterBarSkeleton, { className: 'flex flex-col md:flex-row items-center gap-3 w-full', fields: ['md:flex-1 md:min-w-0', 'md:w-44', 'md:w-44', 'md:w-48'] }),
+    h(FilterBarSkeleton, { className: 'flex flex-col md:flex-row items-center gap-3 w-full', fieldClassName: 'h-11 rounded-xl', fields: ['md:flex-1 md:min-w-0', 'md:w-44', 'md:w-44', 'md:w-48'] }),
     h(TableSkeleton, {
       cardClassName: 'bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full',
-      tableClassName: 'w-full text-left border-collapse table-fixed min-w-[800px]',
-      headRowClassName: LIST_HEAD_ROW,
-      rowClassName: 'h-[65px]',
+      tableClassName: 'w-full text-left border-collapse table-fixed min-w-[960px]',
+      headRowClassName: STAFF_HEAD_ROW,
+      rowClassName: 'h-[78px]',
       footerClassName: PAGINATION_FOOTER,
       columns: [
-        { label: 'Task', th: 'w-[23%] py-3.5 px-4 text-left', td: 'py-4 px-4 align-middle', bar: text('w-3/4', 'w-2/3', 'w-4/5') },
-        { label: 'Department', th: 'w-[12%] py-3.5 px-3 text-left', td, bar: text('w-3/4', 'w-2/3') },
-        { label: 'Priority', th: 'w-[9%] py-3.5 px-3 text-left', td, bar: badge('w-14') },
-        { label: 'Status', th: 'w-[11%] py-3.5 px-3 text-left', td, bar: badge('w-20', 'w-16') },
-        { label: 'Assigned To', th: 'w-[13%] py-3.5 px-3 text-left', td, bar: text('w-3/4', 'w-1/2') },
-        { label: 'Duration', th: 'w-[8%] py-3.5 px-3 text-left', td, bar: text('w-12') },
-        { label: 'Due Date', th: 'w-[16%] min-w-[125px] py-3.5 px-3 text-center', td: `${td} text-center`, bar: text('w-20 mx-auto') },
-        { label: 'Actions', th: 'w-[8%] min-w-[68px] py-3.5 px-3 sm:px-4 text-right', td: 'py-4 px-3 sm:px-4 align-middle', bar: ['h-8 w-8 rounded-lg ml-auto'] },
+        { label: 'Task', th: 'w-[26%] py-3.5 px-5 text-left border-r border-gray-100', td: 'py-5 px-5 align-middle', cell: personTile() },
+        { label: 'Department', th: 'w-[12%] py-3.5 px-3 text-left border-r border-gray-100', td, bar: text('w-3/4', 'w-2/3') },
+        { label: 'Priority', th: 'w-[10%] py-3.5 px-3 text-left border-r border-gray-100', td, bar: squareBadge('w-14') },
+        { label: 'Status', th: 'w-[11%] py-3.5 px-3 text-left border-r border-gray-100', td, bar: squareBadge('w-20', 'w-16') },
+        { label: 'Assigned To', th: 'w-[13%] py-3.5 px-3 text-left border-r border-gray-100', td, bar: text('w-3/4', 'w-1/2') },
+        { label: 'Duration', th: 'w-[9%] py-3.5 px-3 text-left border-r border-gray-100', td, bar: text('w-12') },
+        { label: 'Due Date', th: 'w-[12%] min-w-[125px] py-3.5 px-3 text-center border-r border-gray-100', td: `${td} text-center`, bar: text('w-20 mx-auto') },
+        { label: 'Actions', th: 'w-[7%] min-w-[68px] py-3.5 px-3 text-center', td: 'py-5 px-3 align-middle', bar: ['h-9 w-9 rounded-lg mx-auto'] },
       ],
     }),
   );
@@ -106,23 +115,25 @@ export function TasksPageSkeleton({ label = 'Loading tasks and assignments...' }
 // ── Staff ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 export function StaffPageSkeleton({ label = 'Loading staff directory and workload...' } = {}) {
-  const td = 'py-4 px-3 align-middle';
+  const td = 'py-4 px-4 align-middle';
+  // Staff badges are the Users page's small rounded squares
+  const squareBadge = (w) => [`h-6 rounded-md ${w}`];
   return h(LoadingRegion, { label, className: 'space-y-6' },
-    h(FilterBarSkeleton, { className: 'flex flex-col md:flex-row items-center gap-3 w-full', fields: ['md:flex-1 md:min-w-0', 'md:w-48', 'md:w-40', 'md:w-36'] }),
+    h(FilterBarSkeleton, { className: 'flex flex-col md:flex-row items-center gap-3 w-full', fieldClassName: 'h-11 rounded-xl', fields: ['md:flex-1 md:min-w-0', 'md:w-48', 'md:w-44', 'md:w-40'] }),
     h(TableSkeleton, {
       cardClassName: 'bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full',
       tableClassName: 'w-full text-left border-collapse table-fixed min-w-[700px] lg:min-w-0',
-      headRowClassName: LIST_HEAD_ROW,
+      headRowClassName: STAFF_HEAD_ROW,
       rowClassName: 'h-[73px]',
       footerClassName: PAGINATION_FOOTER,
       columns: [
-        { label: 'Name', th: 'w-[28%] py-3.5 px-4 text-left', td: 'py-4 px-4 align-middle', cell: person() },
-        { label: 'Department', th: 'w-[16%] py-3.5 px-3 text-left', td, bar: text('w-3/4', 'w-2/3') },
-        { label: 'Availability', th: 'w-[14%] py-3.5 px-3 text-left', td, bar: badge('w-20') },
-        { label: 'Active Tasks', th: 'w-[11%] py-3.5 px-2 text-center', td: 'py-4 px-2 align-middle', bar: text('w-6 mx-auto') },
-        { label: 'Workload', th: 'w-[11%] py-3.5 px-3 text-left', td, bar: text('w-16') },
-        { label: 'Status', th: 'w-[12%] py-3.5 px-3 text-left', td, bar: badge('w-16') },
-        { label: 'Actions', th: 'w-[8%] py-3.5 px-4 text-right', td: 'py-4 px-4 align-middle', bar: ['h-8 w-8 rounded-lg ml-auto'] },
+        { label: 'Name', th: 'w-[29%] py-3.5 px-5 text-left border-r border-gray-100', td: 'py-4 px-5 align-middle', cell: person() },
+        { label: 'Department', th: 'w-[15%] py-3.5 px-4 text-left border-r border-gray-100', td, bar: text('w-3/4', 'w-2/3') },
+        { label: 'Availability', th: 'w-[14%] py-3.5 px-4 text-left border-r border-gray-100', td, bar: squareBadge('w-20') },
+        { label: 'Active Tasks', th: 'w-[12%] py-3.5 px-4 text-center border-r border-gray-100', td: 'py-4 px-4 align-middle', bar: text('w-6 mx-auto') },
+        { label: 'Workload', th: 'w-[11%] py-3.5 px-4 text-left border-r border-gray-100', td, bar: text('w-16') },
+        { label: 'Status', th: 'w-[11%] py-3.5 px-4 text-left border-r border-gray-100', td, bar: squareBadge('w-16') },
+        { label: 'Actions', th: 'w-[8%] py-3.5 px-3 text-center', td: 'py-4 px-3 align-middle', bar: ['h-9 w-9 rounded-lg mx-auto'] },
       ],
     }),
   );

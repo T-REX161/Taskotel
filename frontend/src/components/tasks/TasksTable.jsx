@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { TasksIcon, DotsVerticalIcon, EyeIcon } from '../icons/Icons';
+import DepartmentIcon from '../common/DepartmentIcon';
+import { getDepartmentStyle } from '../../utils/departmentStyles';
 import { staffStatusAction } from '../../utils/taskStatus';
 import { formatAssignees } from '../../utils/assignmentUtils';
 import { menuMotion, usePresence } from '../../theme/presence';
@@ -117,17 +119,17 @@ export default function TasksTable({
   return (
     <div className="relative">
       <div className="overflow-x-auto min-h-[300px]">
-        <table className="w-full text-left border-collapse table-fixed min-w-[800px]">
+        <table className="w-full text-left border-collapse table-fixed min-w-[960px]">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50/50 text-xs font-semibold uppercase tracking-wider text-gray-500 whitespace-nowrap">
-              <th className="w-[23%] py-3.5 px-4 text-left">Task</th>
-              <th className="w-[12%] py-3.5 px-3 text-left">Department</th>
-              <th className="w-[9%] py-3.5 px-3 text-left">Priority</th>
-              <th className="w-[11%] py-3.5 px-3 text-left">Status</th>
-              <th className="w-[13%] py-3.5 px-3 text-left">Assigned To</th>
-              <th className="w-[8%] py-3.5 px-3 text-left">Duration</th>
-              <th className="w-[16%] min-w-[125px] py-3.5 px-3 text-center">Due Date</th>
-              <th className="w-[8%] min-w-[68px] py-3.5 px-3 sm:px-4 text-right">Actions</th>
+            <tr className="border-b border-gray-200 bg-gray-50 text-sm font-semibold text-gray-800 whitespace-nowrap">
+              <th className="w-[26%] py-3.5 px-5 text-left border-r border-gray-100">Task</th>
+              <th className="w-[12%] py-3.5 px-3 text-left border-r border-gray-100">Department</th>
+              <th className="w-[10%] py-3.5 px-3 text-left border-r border-gray-100">Priority</th>
+              <th className="w-[11%] py-3.5 px-3 text-left border-r border-gray-100">Status</th>
+              <th className="w-[13%] py-3.5 px-3 text-left border-r border-gray-100">Assigned To</th>
+              <th className="w-[9%] py-3.5 px-3 text-left border-r border-gray-100">Duration</th>
+              <th className="w-[12%] min-w-[125px] py-3.5 px-3 text-center border-r border-gray-100">Due Date</th>
+              <th className="w-[7%] min-w-[68px] py-3.5 px-3 text-center">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 text-sm">
@@ -139,15 +141,24 @@ export default function TasksTable({
                 return (
                   <tr
                     key={task.id}
-                    className="hover:bg-gray-50/50 transition-colors group"
+                    className="hover:bg-gray-50/60 transition-colors group"
                   >
                     {/* 1. Task: Bold title with description beneath */}
-                    <td className="py-4 px-4 align-middle">
-                      <div className="flex flex-col min-w-0 overflow-hidden">
+                    <td className="py-5 px-5 align-middle">
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* The task's department, as its coloured icon tile (same colours as the Departments and Assignments pages) */}
+                        <span
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${getDepartmentStyle(task.department).classes}`}
+                          title={formatDepartment(task.department)}
+                          data-testid="task-department-icon"
+                        >
+                          <DepartmentIcon department={task.department} className="w-5 h-5" />
+                        </span>
+                      <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
                         <button
                           type="button"
                           onClick={() => onView && onView(task)}
-                          className="font-bold text-gray-900 text-sm hover:text-emerald-700 transition-colors text-left truncate block w-full cursor-pointer"
+                          className="font-semibold text-gray-900 text-sm leading-snug hover:text-emerald-700 transition-colors text-left line-clamp-2 break-words block w-full cursor-pointer"
                           title={task.title}
                         >
                           {task.title}
@@ -161,17 +172,18 @@ export default function TasksTable({
                           </span>
                         ) : null}
                       </div>
+                      </div>
                     </td>
 
                     {/* 2. Department */}
-                    <td className="py-4 px-3 align-middle text-gray-700 whitespace-nowrap truncate text-sm">
+                    <td className="py-5 px-3 align-middle text-gray-700 whitespace-nowrap truncate text-sm">
                       {formatDepartment(task.department)}
                     </td>
 
                     {/* 3. Priority badge */}
-                    <td className="py-4 px-3 align-middle whitespace-nowrap">
+                    <td className="py-5 px-3 align-middle whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${getPriorityColor(
+                        className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${getPriorityColor(
                           task.priority
                         )}`}
                       >
@@ -180,9 +192,9 @@ export default function TasksTable({
                     </td>
 
                     {/* 4. Status badge */}
-                    <td className="py-4 px-3 align-middle whitespace-nowrap">
+                    <td className="py-5 px-3 align-middle whitespace-nowrap">
                       <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(
+                        className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap ${getStatusColor(
                           task.status
                         )}`}
                       >
@@ -191,7 +203,7 @@ export default function TasksTable({
                     </td>
 
                     {/* 5. Assigned To */}
-                    <td className="py-4 px-3 align-middle whitespace-nowrap text-sm">
+                    <td className="py-5 px-3 align-middle whitespace-nowrap text-sm">
                       {assignees.label ? (
                         <span
                           className="font-medium text-gray-900 truncate block"
@@ -205,12 +217,12 @@ export default function TasksTable({
                     </td>
 
                     {/* 6. Duration */}
-                    <td className="py-4 px-3 align-middle whitespace-nowrap text-sm font-medium text-gray-700 tabular-nums">
+                    <td className="py-5 px-3 align-middle whitespace-nowrap text-sm font-medium text-gray-700 tabular-nums">
                       {formatDuration(task.estimatedDuration)}
                     </td>
 
                     {/* 7. Due Date */}
-                    <td className="py-4 px-3 align-middle text-center whitespace-nowrap">
+                    <td className="py-5 px-3 align-middle text-center whitespace-nowrap">
                       {(() => {
                         const dateText = formatDate(task.dueDate);
                         const timeText = formatTime(task.deadlineTime);
@@ -256,11 +268,11 @@ export default function TasksTable({
                     </td>
 
                     {/* 8. Actions: Bordered, rounded-square 3-dot menu */}
-                    <td className="py-4 px-3 sm:px-4 align-middle text-right whitespace-nowrap">
+                    <td className="py-5 px-3 align-middle text-center whitespace-nowrap">
                       <button
                         type="button"
                         onClick={(e) => handleButtonClick(e, task)}
-                        className={`w-8 h-8 rounded-lg border transition-colors cursor-pointer inline-flex items-center justify-center ${
+                        className={`w-9 h-9 rounded-lg border transition-colors cursor-pointer inline-flex items-center justify-center ${
                           isMenuOpen
                             ? 'border-gray-400 bg-gray-100 text-gray-800'
                             : 'border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50 text-gray-500 hover:text-gray-700'

@@ -161,7 +161,7 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       const section = pageSource.slice(start, pageSource.indexOf('</section>', start));
       assert.ok(pageSource.includes('min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department"'), 'Same container style as the summary');
       assert.ok(section.includes('grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))]'), 'Auto-fill grid, so rows are added as departments grow');
-      assert.ok(section.includes('{departmentWorkloads.map((dept) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
+      assert.ok(section.includes('{departmentWorkloads.map((dept, deptIndex) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
       assert.ok(section.includes('min-w-0 bg-white rounded-xl p-4 shadow-2xs border border-gray-100'), 'Each department is a card');
       for (const field of ['{dept.name}', '{dept.totalMinutes} mins', 'dept.percentage', 'dept.activeTaskCount', 'dept.staffCount', 'getDepartmentShareBarColor(dept.percentage)']) {
         assert.ok(section.includes(field), 'Card shows ' + field);
@@ -308,7 +308,7 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
         'WorkloadPage must configure ITEMS_PER_PAGE = 5'
       );
       assert.ok(
-        pageSource.includes('Math.ceil(sortedWorkload.length / pageSize)') && pageSource.includes('useState(ITEMS_PER_PAGE)'),
+        pageSource.includes('Math.ceil(filteredWorkload.length / pageSize)') && pageSource.includes('useState(ITEMS_PER_PAGE)'),
         'WorkloadPage must compute totalPages from the chosen page size, which starts at ITEMS_PER_PAGE (5)'
       );
       assert.ok(
@@ -472,11 +472,12 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       assert.strictEqual(sumDeptMinutes, 300);
     });
 
-    it('keeps a short note that the department total comes from the active staff workloads', () => {
+    it('keeps the note that the department total comes from the active staff workloads, as a tooltip rather than a line of text', () => {
       assert.ok(
-        pageSource.includes('Calculated from active staff workloads.') && !pageSource.includes('mathematical consistency') && pageSource.includes('{summary.totalWorkload} mins'),
-        'Shows the short note and the unchanged total'
+        pageSource.includes('title="Calculated from active staff workloads"') && !pageSource.includes('mathematical consistency') && pageSource.includes('{summary.totalWorkload} mins'),
+        'The note is a tooltip on the label, and the total is unchanged'
       );
+      assert.ok(!pageSource.includes('Calculated from active staff workloads.'), 'No separate line of small print under the total');
     });
 
     it('shows the total in the section header, top-right, and no longer in a bar under the cards', () => {
@@ -484,8 +485,8 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       const total = section.indexOf('{summary.totalWorkload} mins');
       assert.ok(total > section.indexOf('Workload by Department</h2>') && total < section.indexOf('departmentWorkloads.map('), 'Total sits in the header, above the cards');
       assert.ok(section.includes('justify-between') && section.includes('sm:ml-auto sm:text-right'), 'Heading left, total right; stacks on small screens');
-      assert.ok(/Total Department Load<\/span>\s*<span className="font-bold[^"]*">\{summary\.totalWorkload\} mins/.test(section) && section.includes('gap-x-2.5'), 'Label then bold value on one line, ~10px apart');
-      assert.strictEqual(section.split('Total Department Load').length, 2, 'Only one total: the bottom bar is gone');
+      assert.ok(/Total load<\/span>\s*<span className="font-bold[^"]*">\{summary\.totalWorkload\} mins/.test(section) && section.includes('gap-x-2.5'), 'Label then bold value on one line, ~10px apart');
+      assert.strictEqual(section.split('>Total load<').length, 2, 'Only one total: the bottom bar is gone');
       assert.ok(!section.includes('Total Department Workload Callout') && !/\b422\b/.test(pageSource), 'No old bar and no hardcoded total');
     });
   });
@@ -553,8 +554,8 @@ describe('Workload Thresholds card: header row plus four status tiles, percentag
   const text = card.replace(/<[^>]+>/g, '|').replace(/\s+/g, ' ');
 
   it('has the heading and the supporting text on one header row', () => {
-    assert.ok(card.includes('<h2 className="text-sm font-semibold text-gray-900">Workload Thresholds</h2>'));
-    assert.ok(card.includes('Based on a 480-minute shift · Can exceed 100%'));
+    assert.ok(card.includes('>Workload Thresholds</h2>'));
+    assert.ok(card.includes('title="Based on a 480-minute shift. Can exceed 100%."'), 'The basis for the percentages is a tooltip on the heading, not a line of text');
   });
 
   it('shows four tiles with the required names and ranges, in order', () => {
@@ -600,7 +601,7 @@ describe('Workload by Department: the bar colour follows the percentage of total
   });
 
   it('keeps the label, the bar width and the counts exactly as they were', () => {
-    assert.ok(section.includes('{dept.percentage}% of total load'));
+    assert.ok(section.includes('<AnimatedNumber value={dept.percentage}') && section.includes('/>%') && !section.includes('of total load'), 'Just the percentage: the card sits under "Workload by Department", so "of total load" is implied');
     assert.ok(section.includes('Math.min(dept.percentage, 100)'));
     assert.ok(section.includes('text-2xs text-gray-500') && section.includes("dept.activeTaskCount === 1 ? 'task' : 'tasks'"));
     assert.ok(!section.includes('of capacity') && !section.includes('No available capacity'));
