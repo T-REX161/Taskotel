@@ -69,3 +69,24 @@ test('the dashboard feeds the summary alerts to the insights card, and the suppo
   assert.match(panel, /recommendationsTurnedOff\(needs\.data\)/);
   assert.match(panel, /turned off in System Settings/);
 });
+
+test('the insight shows the limit the server sent, so a changed threshold shows up after the next refresh (nothing is hardcoded to 85)', () => {
+  const at = (threshold) => buildInsights({ ...base, capacityAlerts: [alert('FD', 'Front Desk', 6, 10, threshold)] }).items.find((i) => i.kind === 'capacity');
+  assert.match(at(60).detail, /6 of 10 available staff in work \(60%, limit 60%\)/);
+  assert.match(at(50).detail, /limit 50%/);
+  // The same department stops being listed once the server no longer reports it (threshold raised above its percentage)
+  assert.equal(buildInsights({ ...base, capacityAlerts: [] }).items.find((i) => i.kind === 'capacity'), undefined);
+  assert.ok(!/\b85\b/.test(read('utils', 'dashboardView.js').split('\n').filter((l) => /capacity/i.test(l)).join('\n')), 'no hardcoded 85 in the capacity insight');
+});
+
+test('only a department fully in work is urgent (red); one at the threshold below 100% is a warning (amber)', () => {
+  const tone = (inWork, total) => buildInsights({ ...base, capacityAlerts: [alert('FD', 'Front Desk', inWork, total, 50)] }).items.find((i) => i.kind === 'capacity').tone;
+  assert.equal(tone(9, 10), 'amber');
+  assert.equal(tone(10, 10), 'red');
+});
+
+test('the dashboard refreshes the summary on a timer, so alerts follow a changed threshold without a reload', () => {
+  const page = read('pages', 'Dashboard.jsx');
+  assert.match(page, /startPolling/);
+  assert.match(page, /getDashboardSummary\(\)/);
+});

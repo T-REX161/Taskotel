@@ -68,7 +68,7 @@ test('the page handles an empty list, missing due dates and missing durations wi
 
 test('the Staff My Workload page shows only personal data and requests nothing department-wide', () => {
   const page = src('pages/MyWorkloadPage.jsx');
-  for (const forbidden of ['Workload by Department', 'Total Department Load', 'Staff Workload Distribution', 'Workload Thresholds']) {
+  for (const forbidden of ['Workload by Department', 'Total Department Load', 'Staff Workload Distribution', 'Workload Thresholds', 'Department Risk Levels', 'department-risk-threshold']) {
     assert.ok(!page.toLowerCase().includes(forbidden.toLowerCase()), `not shown to Staff: ${forbidden}`);
   }
   assert.ok(!/getStaffWorkload|getWorkloadDepartments|getStaff\b|getAssignments|getRecommendations/.test(page), 'no organisation-wide data sources');

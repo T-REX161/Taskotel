@@ -20,6 +20,14 @@ export const SYSTEM_SETTINGS_MESSAGES = {
 
 const MAX_MESSAGE_LENGTH = 200;
 
+/**
+ * What the threshold box keeps of whatever is typed, pasted or dropped into it: ASCII digits only, at most three. Letters, spaces, signs,
+ * decimal points, exponents and non-ASCII digits never get into the box. (parseThreshold below still checks the range, and the server checks again.)
+ */
+export function keepDigits(text) {
+  return String(text ?? '').replace(/\D/g, '').slice(0, 3);
+}
+
 /** A threshold typed by the user: digits only, a whole number from 1 to 100. Decimals, blanks, signs, exponents and text are refused. */
 export function parseThreshold(text) {
   const value = typeof text === 'number' ? String(text) : text;

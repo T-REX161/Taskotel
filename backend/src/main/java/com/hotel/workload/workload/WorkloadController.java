@@ -13,10 +13,26 @@ public class WorkloadController {
 
     private final WorkloadService workloadService;
     private final com.hotel.workload.staff.DepartmentService departmentService;
+    private final com.hotel.workload.settings.SystemSettingsService systemSettings;
 
-    public WorkloadController(WorkloadService workloadService, com.hotel.workload.staff.DepartmentService departmentService) {
+    public WorkloadController(WorkloadService workloadService, com.hotel.workload.staff.DepartmentService departmentService,
+                              com.hotel.workload.settings.SystemSettingsService systemSettings) {
         this.workloadService = workloadService;
         this.departmentService = departmentService;
+        this.systemSettings = systemSettings;
+    }
+
+    /**
+     * GET /api/workload/department-risk-threshold
+     * The saved Capacity Threshold, read-only, for the accounts that see the "Workload by Department" cards: an Admin and a valid Manager.
+     * A department whose displayed share of the total load is at or above this percentage is AT RISK. Staff are refused (they have their own
+     * page without department cards and need no department-level information): at the URL level in SecurityConfig and again in the service,
+     * from the signed-in account in the database. Same source as the Admin's System Settings page (the one GLOBAL row, or the defaults).
+     * Changing it stays Admin only (PUT /api/system-settings).
+     */
+    @GetMapping("/department-risk-threshold")
+    public ResponseEntity<com.hotel.workload.settings.DepartmentRiskThresholdDto> getDepartmentRiskThreshold() {
+        return ResponseEntity.ok(systemSettings.departmentRiskThreshold());
     }
 
     /**

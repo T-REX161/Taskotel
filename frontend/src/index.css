@@ -434,47 +434,23 @@ html:not(.dark) .hover\:bg-slate-100:hover {
   background-color: rgba(15, 23, 42, 0.09);
 }
 
-/* Progress bars (Workload page): each one fills from empty to its value with a fast start and a soft landing, then a light sheen
-   sweeps across it once. Only the start of the fill is given: the end is the bar's own width, so it always lands on its real
-   percentage. --tk-delay (set per bar) staggers a row of bars. Later data refreshes change the width through the bar's normal
-   transition and do not replay this. Reduced motion: the bar is simply full, with no sheen. */
+/* Progress bars: each one fills once from empty to its value, calmly and without any extra effect (no stagger, no sheen); the number beside it counts up in step (AnimatedNumber, same 700 ms). Only the
+   start of the fill is given: the end is the bar's own width, so it always lands on its real percentage. Later data refreshes change
+   the width through the bar's normal transition and do not replay this. Reduced motion: the bar is simply full. */
 @keyframes tk-bar-grow {
   from {
     width: 0;
   }
 }
 
-@keyframes tk-bar-sheen {
-  from {
-    transform: translateX(-130%);
-  }
-  to {
-    transform: translateX(130%);
-  }
-}
-
 .tk-bar-grow {
-  position: relative;
   overflow: hidden;
-  animation: tk-bar-grow 1100ms cubic-bezier(0.22, 1, 0.36, 1) var(--tk-delay, 0ms) both;
-}
-
-.tk-bar-grow::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.55) 50%, transparent 80%);
-  transform: translateX(-130%);
-  animation: tk-bar-sheen 800ms ease-out calc(var(--tk-delay, 0ms) + 950ms) both;
-  pointer-events: none;
+  animation: tk-bar-grow 700ms cubic-bezier(0.25, 0.8, 0.25, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .tk-bar-grow {
     animation: none;
-  }
-  .tk-bar-grow::after {
-    display: none;
   }
 }
 

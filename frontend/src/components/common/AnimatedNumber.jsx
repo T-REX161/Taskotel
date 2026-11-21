@@ -10,9 +10,9 @@ const easeOut = (p) => 1 - (1 - p) ** 4;
  * the value changes later. With reduced motion it simply shows the value. The animated digits are hidden from assistive
  * technology, which reads the final value only, so a screen reader never hears the count.
  *
- * Props: value (number), duration (ms, default 1100: the same as the bars), delay (ms, only before the first count).
+ * Props: value (number), duration (ms, default 700: the same as the bars), delay (ms, only before the first count).
  */
-export default function AnimatedNumber({ value, duration = 1100, delay = 0 }) {
+export default function AnimatedNumber({ value, duration = 700, delay = 0 }) {
   const target = Number(value);
   const animate = Number.isFinite(target) && !reducedMotion();
   const [shown, setShown] = useState(animate ? 0 : target);
