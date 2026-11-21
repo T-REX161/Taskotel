@@ -40,12 +40,13 @@ export default function Sidebar({ isOpen, onClose, activeNav = 'Dashboard', onNa
                 if (onNavClick) onNavClick(item);
                 if (onClose) onClose();
               }}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left cursor-pointer group ${
+              className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left cursor-pointer group ${
                 isActive
-                  ? 'bg-emerald-50 text-emerald-700 font-semibold'
+                  ? 'bg-emerald-50 text-emerald-700 font-semibold dark:bg-emerald-500/10 dark:text-emerald-300'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
               }`}
             >
+              {isActive && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full bg-emerald-500" aria-hidden="true" />}
               <Icon
                 className={`w-5 h-5 shrink-0 transition-colors ${
                   isActive ? 'text-emerald-600' : 'text-gray-400 group-hover:text-gray-600'

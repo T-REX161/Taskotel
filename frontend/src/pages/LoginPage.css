@@ -1,28 +1,269 @@
-/* Page and frame backgrounds, traced from the login reference: pale mint page, and a deep emerald
-   frame that darkens toward the bottom-left corner and lightens where it meets the photo */
+/* Page behind the login card: soft mint with a faint green wash top-left and a lighter one bottom-right. No pattern, so the
+   card is the only thing that draws the eye. */
 .login-page {
   background:
-    radial-gradient(45% 60% at 50% 45%, #e6fbf2 0%, transparent 100%),
-    #e0f8ee;
+    radial-gradient(60% 55% at 6% 0%, rgba(16, 185, 129, 0.08) 0%, transparent 65%),
+    radial-gradient(45% 50% at 28% 108%, rgba(52, 211, 153, 0.22) 0%, transparent 70%),
+    linear-gradient(180deg, #F1FAF6 0%, #E4F4EC 100%);
 }
 
 html.dark .login-page {
   background:
-    radial-gradient(45% 60% at 50% 45%, rgb(16 185 129 / 0.08) 0%, transparent 100%),
+    radial-gradient(45% 60% at 50% 45%, rgb(91 127 168 / 0.10) 0%, transparent 100%),
     rgb(var(--tk-surface-page));
 }
 
-.login-frame {
-  background:
-    radial-gradient(55% 65% at 0% 100%, #053a27 0%, transparent 100%),
-    linear-gradient(90deg, rgba(26, 122, 90, 0) 38%, #1a7a5a 52%),
-    linear-gradient(180deg, #0d6b4d 0%, #0b6447 55%, #084f37 100%);
+/* The form half: white with a very light warm fade toward the bottom, so it is not a flat sheet (light theme only) */
+/* Slow drifting colour behind the form: one deep green, one mint, heavily blurred */
+.login-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(70px);
+  will-change: transform;
 }
 
-/* Fades the photo's left edge into the frame so there is no seam above and below the card */
+.login-orb--one {
+  top: -140px;
+  left: -120px;
+  width: 420px;
+  height: 420px;
+  background: rgba(16, 185, 129, 0.14);
+  animation: login-drift-a 24s ease-in-out infinite alternate;
+}
+
+.login-orb--two {
+  bottom: -170px;
+  left: 6%;
+  width: 460px;
+  height: 460px;
+  background: rgba(94, 234, 212, 0.12);
+  animation: login-drift-b 28s ease-in-out infinite alternate;
+}
+
+@keyframes login-drift-a {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to { transform: translate3d(90px, 70px, 0) scale(1.15); }
+}
+
+@keyframes login-drift-b {
+  from { transform: translate3d(0, 0, 0) scale(1.05); }
+  to { transform: translate3d(-100px, -60px, 0) scale(0.92); }
+}
+
+/* The full-screen scene: the photo is desaturated and washed with deep green (darker on the left behind the card, and toward the bottom) */
 .login-photo {
-  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 14%);
-  mask-image: linear-gradient(to right, transparent 0%, #000 14%);
+  filter: grayscale(0.2) saturate(1.1) contrast(1.05);
+}
+
+.login-bg-tint {
+  background:
+    linear-gradient(105deg, rgba(4, 18, 15, 0.62) 0%, rgba(8, 28, 23, 0.46) 48%, rgba(8, 28, 23, 0.40) 100%),
+    linear-gradient(180deg, rgba(8, 28, 23, 0) 55%, rgba(4, 18, 15, 0.70) 100%);
+}
+
+/* Photo panel motion: a very slow zoom and drift of the photo, a light sheen that passes over it now and then,
+   and soft mint specks that rise. All of it is decorative and is switched off for reduced motion (end of this file). */
+.login-kenburns {
+  animation: login-kenburns 32s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes login-kenburns {
+  from { transform: scale(1.04) translate3d(0, 0, 0); }
+  to { transform: scale(1.14) translate3d(-1.5%, -1.5%, 0); }
+}
+
+.login-sheen {
+  background: linear-gradient(115deg, transparent 38%, rgba(255, 255, 255, 0.08) 50%, transparent 62%);
+  background-size: 260% 100%;
+  animation: login-sheen 11s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes login-sheen {
+  from { background-position: 130% 0; }
+  to { background-position: -30% 0; }
+}
+
+.login-particle {
+  position: absolute;
+  bottom: -16px;
+  border-radius: 9999px;
+  background: #A7F3D0;
+  box-shadow: 0 0 10px 2px rgba(52, 211, 153, 0.55);
+  opacity: 0;
+  animation: login-particle-rise linear infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes login-particle-rise {
+  0% { transform: translate3d(0, 0, 0) scale(0.6); opacity: 0; }
+  12% { opacity: 0.85; }
+  85% { opacity: 0.45; }
+  100% { transform: translate3d(14px, -105vh, 0) scale(1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-kenburns,
+  .login-sheen,
+  .login-particle,
+  .login-orb {
+    animation: none;
+  }
+  .login-particle {
+    display: none;
+  }
+}
+
+/* ---- Glass (in the spirit of Apple's liquid glass) ----
+   Very transparent, strongly blurred and saturated so the photo shows through, a bright specular edge on the top-left
+   and bottom-right, and a soft inner glow. Plain CSS (not white-alpha utilities, which the dark theme remaps). */
+.login-card {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.07) 42%, rgba(255, 255, 255, 0.05) 60%, rgba(255, 255, 255, 0.14) 100%);
+  -webkit-backdrop-filter: blur(26px) saturate(180%) brightness(1.06);
+  backdrop-filter: blur(26px) saturate(180%) brightness(1.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 34px rgba(255, 255, 255, 0.07),
+    0 34px 70px -24px rgba(0, 0, 0, 0.65),
+    0 8px 24px -8px rgba(0, 0, 0, 0.35);
+}
+
+/* The bright edge: a 1px gradient ring, strongest at the top-left and bottom-right corners */
+.login-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.12) 32%, rgba(255, 255, 255, 0.06) 62%, rgba(255, 255, 255, 0.5) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  pointer-events: none;
+}
+
+/* The logo sits on a small glass tile (white version of the mark), and "otel" has a soft mint shimmer */
+.login-logo-tile {
+  background: linear-gradient(145deg, rgba(4, 30, 24, 0.62) 0%, rgba(4, 30, 24, 0.30) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  -webkit-backdrop-filter: blur(14px) saturate(170%);
+  backdrop-filter: blur(14px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 10px 24px -8px rgba(0, 0, 0, 0.5),
+    0 0 26px rgba(52, 211, 153, 0.22);
+}
+
+.login-wordmark > span {
+  background-image: linear-gradient(100deg, #D1FAE5 0%, #6EE7B7 55%, #A7F3D0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.login-input {
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.login-input:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+}
+.login-input:focus {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(110, 231, 183, 0.9);
+}
+
+/* Browser autofill would paint a pale box with dark text; keep the glass look instead */
+.login-input:-webkit-autofill,
+.login-input:-webkit-autofill:hover,
+.login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #FFFFFF;
+  caret-color: #FFFFFF;
+  -webkit-box-shadow: 0 0 0 1000px rgba(255, 255, 255, 0.14) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
+.login-cta {
+  background: linear-gradient(180deg, #FFFFFF 0%, #E3F3EB 100%);
+  color: #064E3B;
+  box-shadow: 0 10px 24px -8px rgba(0, 0, 0, 0.55), inset 0 1px 0 #FFFFFF;
+}
+.login-cta:hover:not(:disabled) {
+  background: linear-gradient(180deg, #FFFFFF 0%, #F0FAF5 100%);
+}
+.login-cta:active:not(:disabled) {
+  background: #CFE9DC;
+}
+
+.login-track {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Form blocks fade up one after another when the page loads (fill-mode backwards: nothing is left applied afterwards) */
+.login-stagger > * {
+  animation: login-rise 700ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.login-stagger > :nth-child(2) { animation-delay: 80ms; }
+.login-stagger > :nth-child(3) { animation-delay: 160ms; }
+.login-stagger > :nth-child(4) { animation-delay: 240ms; }
+
+@keyframes login-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Decorative preview card on the photo (large, tall screens only, so it never collides with the headline) */
+.login-glass {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.06));
+  -webkit-backdrop-filter: blur(20px) saturate(170%);
+  backdrop-filter: blur(20px) saturate(170%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 24px 48px -16px rgba(0, 0, 0, 0.5);
+  display: none;
+  animation: login-float 8s ease-in-out infinite alternate;
+}
+
+@media (min-width: 1024px) and (min-height: 720px) {
+  .login-glass {
+    display: block;
+  }
+}
+
+@keyframes login-float {
+  from { transform: translateY(0); }
+  to { transform: translateY(-8px); }
+}
+
+.login-bar {
+  transform-origin: left center;
+  animation: login-bar-grow 1.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+@keyframes login-bar-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+.login-pulse {
+  animation: login-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes login-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(110, 231, 183, 0.55); }
+  50% { opacity: 0.6; box-shadow: 0 0 0 5px rgba(110, 231, 183, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-stagger > *,
+  .login-glass,
+  .login-bar,
+  .login-pulse {
+    animation: none;
+  }
 }
 
 /*

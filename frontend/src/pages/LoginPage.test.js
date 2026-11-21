@@ -84,8 +84,8 @@ describe('LoginPage result indicators', () => {
     it('shows a small white checkmark centered in a 20px green circle', () => {
       assert.ok(successBanner, 'Success banner must exist');
       assert.ok(
-        successBanner.includes('<span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-emerald-500 flex items-center justify-center" aria-hidden="true">'),
-        'Icon must be a 20px emerald circle that centers its content'
+        successBanner.includes('<span className="login-result-icon w-5 h-5 shrink-0 rounded-full bg-green-500 flex items-center justify-center" aria-hidden="true">'),
+        'Icon must be a 20px green circle that centers its content'
       );
       assert.ok(
         successBanner.includes('<svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">'),
@@ -99,7 +99,7 @@ describe('LoginPage result indicators', () => {
       assert.ok(successBanner.includes('Signed in successfully! Redirecting to dashboard...'), 'Message must be unchanged');
       assert.ok(successBanner.includes('role="status"'), 'Success must be announced as a status');
       assert.ok(
-        successBanner.includes('className="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm flex items-center gap-2.5 animate-fade-in"'),
+        successBanner.includes('className="p-2 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm flex items-center gap-2.5 animate-fade-in"'),
         'Alert container styling must be unchanged (icon vertically centered via items-center)'
       );
     });
@@ -190,27 +190,29 @@ describe('LoginPage result indicators', () => {
   });
 
   describe('split-screen layout', () => {
-    it('shows the login card beside a local hotel reception photo that covers its half', () => {
+    it('puts the form on one full-screen scene: the local hotel photo, tinted navy, behind everything', () => {
       assert.ok(pageSource.includes('src="/images/login-background.jpg"'), 'Photo is a local asset');
       assert.ok(fs.existsSync(path.join(__dirname, '..', '..', 'public', 'images', 'login-background.jpg')), 'Photo file exists in public/images');
-      assert.ok(/<img\s+src="\/images\/login-background\.jpg"\s+alt=""\s+className="login-photo h-full w-full object-cover /.test(pageSource), 'Decorative photo fills its section without stretching');
-      assert.ok(/\.login-photo \{[^}]*mask-image: linear-gradient\(to right, transparent 0%, #000 14%\);/.test(css), 'Photo fades into the green frame so there is no seam');
-      assert.ok(pageSource.includes('className="absolute inset-y-0 right-0 hidden md:block md:w-[50%]" aria-hidden="true"'), 'Photo is hidden on small screens and from assistive tech');
-      assert.ok(pageSource.includes('md:w-[54%] lg:w-[46.2%]'), 'Card matches the reference (about 46% of the container), a little wider on tablet');
-      assert.ok(pageSource.includes('max-w-[1024px]') && pageSource.includes('md:min-h-[519px]'), 'Container keeps the reference proportions: 1024 x 519');
-      assert.ok(pageSource.includes('rounded-[20px] overflow-hidden'), 'Rounded container clips the photo to its corners');
+      assert.ok(/<img\s+src="\/images\/login-background\.jpg"\s+alt=""\s+className="login-photo login-kenburns absolute inset-0 h-full w-full object-cover /.test(pageSource), 'Decorative photo fills its panel without stretching');
+      assert.ok(/\.login-photo \{[^}]*filter: grayscale\(/.test(css) && css.includes('.login-bg-tint {') && css.includes('rgba(8, 28, 23'), 'Photo is desaturated and washed with the brand navy');
+      assert.ok(pageSource.includes('className="login-scene absolute inset-0" aria-hidden="true"'), 'The scene is decorative: hidden from assistive tech');
+      assert.ok(pageSource.includes('login-card relative w-full max-w-[440px] shrink-0 rounded-[28px]') && /\.login-card \{[^}]*backdrop-filter: blur\(26px\) saturate\(180%\)/.test(css) && css.includes('.login-card::before'), 'The form is a liquid-glass card: transparent, blurred and saturated, with a bright edge');
+      assert.ok(pageSource.includes('login-pitch hidden max-w-[520px] flex-1 flex-col text-white md:flex" aria-hidden="true"'), 'The pitch text sits on the scene, hidden on small screens and from assistive tech');
+      assert.ok(pageSource.includes('className="login-frame relative flex-1 w-full min-h-screen overflow-hidden"'), 'The scene fills the whole screen');
+      assert.ok(pageSource.includes('login-orbs') && pageSource.includes('PARTICLES.map'), 'Decorative background layers exist');
+      assert.ok(/prefers-reduced-motion: reduce\) \{\s*\.login-kenburns,\s*\.login-sheen,\s*\.login-particle,\s*\.login-orb \{\s*animation: none;/.test(css), 'The background animation stops for reduced motion');
     });
 
-    it('keeps accessible labels for the placeholder-styled fields and the footer below the container', () => {
-      assert.ok(pageSource.includes('<label htmlFor="username" className="sr-only">'), 'Username keeps a label');
-      assert.ok(pageSource.includes('<label htmlFor="password" className="sr-only">'), 'Password keeps a label');
-      assert.ok(/<\/main>\s*\{\/\* Footer info \*\/\}\s*<p className="text-center text-xs/.test(pageSource), 'Footer sits below the container');
+    it('keeps accessible labels for the placeholder-styled fields and the footer at the bottom of the screen', () => {
+      assert.ok(pageSource.includes('<label htmlFor="username" className="mb-1.5 block'), 'Username has a visible label above the field');
+      assert.ok(pageSource.includes('<label htmlFor="password" className="block'), 'Password has a visible label, with Forgot password on the same row');
+      assert.ok(/\{\/\* Footer info \*\/\}\s*<p className="text-center text-xs text-white\/60 absolute bottom-5[^"]*">[\s\S]*?<\/p>\s*<\/main>/.test(pageSource), 'Footer sits at the bottom of the scene, over the photo');
       assert.ok(pageSource.includes("fetch('/api/auth/login'") && pageSource.includes('JSON.stringify({ username, password })'), 'Login request unchanged');
     });
 
     it('one field takes a username or an email, sent through the same login request', () => {
-      assert.ok(/<label htmlFor="username" className="sr-only">\s*Username or Email\s*<\/label>/.test(pageSource), 'Label says username or email');
-      assert.ok(pageSource.includes('placeholder="Username or Email"') && pageSource.includes('autoComplete="username"'));
+      assert.ok(/<label htmlFor="username" className="[^"]*">\s*Username or Email\s*<\/label>/.test(pageSource), 'Label says username or email');
+      assert.ok(pageSource.includes('placeholder="Enter your username or email"') && pageSource.includes('autoComplete="username"'));
       assert.strictEqual((pageSource.match(/<input/g) || []).length, 2, 'Only the identifier and password inputs');
       assert.ok(!/type="email"/.test(pageSource), 'No separate email field');
     });
@@ -229,7 +231,9 @@ describe('LoginPage result indicators', () => {
     it('scales and fades each circle in from its center without bouncing, spinning or looping', () => {
       assert.ok(rule('.login-result-icon').includes('animation: login-result-circle-in'), 'Circle uses the entrance keyframes');
       assert.ok(/@keyframes login-result-circle-in \{\s*from \{\s*opacity: 0;\s*transform: scale\(0\.6\);\s*\}\s*to \{\s*opacity: 1;\s*transform: scale\(1\);/.test(css), 'Entrance is scale 0.6 to 1 with fade');
-      assert.strictEqual(/scale\(1\.[1-9]/.test(css) || /rotate/.test(css) || /infinite/.test(css), false, 'No bounce, spin or loop');
+      // Only the result icons' own CSS: the decorative background (slow zoom, drifting colour, rising specks) loops on purpose
+      const resultCss = css.slice(css.indexOf('Login result indicators'));
+      assert.strictEqual(/scale\(1\.[1-9]/.test(resultCss) || /rotate/.test(resultCss) || /infinite/.test(resultCss), false, 'No bounce, spin or loop');
     });
 
     it('draws the strokes with stroke-dashoffset and ends fully drawn', () => {

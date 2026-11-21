@@ -32,6 +32,8 @@ import DepartmentBadge from '../components/workload/DepartmentBadge';
 import UtilizationMeter from '../components/workload/UtilizationMeter';
 import CrossDepartmentSupportPanel from '../components/workload/CrossDepartmentSupportPanel';
 import PageSizeToggle from '../components/common/PageSizeToggle';
+import AnimatedNumber from '../components/common/AnimatedNumber';
+import DepartmentOptions from '../components/common/DepartmentOptions';
 import UserAvatar from '../components/common/UserAvatar';
 import LoadError from '../components/common/LoadError';
 import { WorkloadPageSkeleton } from '../components/common/PageSkeletons';
@@ -80,6 +82,7 @@ export default function WorkloadPage() {
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(ITEMS_PER_PAGE); // rows per page, chosen with the toggle
+  const [departmentFilter, setDepartmentFilter] = useState(''); // '' = every department; filters the staff table only
   const isFetchingRef = useRef(false);
   const isMountedRef = useRef(true);
   const lastFetchRef = useRef(0);
@@ -205,7 +208,13 @@ export default function WorkloadPage() {
     return sortWorkloadAlphabetically(visibleWorkload);
   }, [visibleWorkload]);
 
-  const totalPages = Math.max(1, Math.ceil(sortedWorkload.length / pageSize));
+  // The staff table can be narrowed to one department (the summary and department cards above keep showing everyone)
+  const filteredWorkload = useMemo(() => {
+    if (!departmentFilter) return sortedWorkload;
+    return sortedWorkload.filter((row) => String(row.department || '').toUpperCase() === departmentFilter.toUpperCase());
+  }, [sortedWorkload, departmentFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredWorkload.length / pageSize));
 
   // If the staff dataset changes and the current page becomes invalid, return to a valid page
   useEffect(() => {
@@ -217,8 +226,8 @@ export default function WorkloadPage() {
   // Paginated staff slice (pageSize rows per page)
   const paginatedWorkload = useMemo(() => {
     const startIndex = (currentPage - 1) * pageSize;
-    return sortedWorkload.slice(startIndex, startIndex + pageSize);
-  }, [sortedWorkload, currentPage, pageSize]);
+    return filteredWorkload.slice(startIndex, startIndex + pageSize);
+  }, [filteredWorkload, currentPage, pageSize]);
 
   // A new page size starts again at page 1
   const handlePageSizeChange = (size) => {
@@ -370,13 +379,12 @@ export default function WorkloadPage() {
                 {card.icon}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-2xs sm:text-xs font-semibold text-gray-500 uppercase tracking-wider truncate">
+                <p className="text-xs sm:text-sm font-medium text-gray-500 truncate">
                   {card.title}
                 </p>
-                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5 truncate">
+                <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mt-0.5 truncate" title={card.subtitle}>
                   {card.value}
                 </h3>
-                <p className="text-2xs text-gray-400 mt-0.5 truncate">{card.subtitle}</p>
               </div>
             </div>
           ))}
@@ -386,8 +394,7 @@ export default function WorkloadPage() {
       {/* 2. Workload Status Thresholds: a header row, then four evenly spaced status tiles (display only; the statuses come from the backend) */}
       <section className="bg-white rounded-xl border border-gray-100 shadow-2xs px-4 py-3 space-y-2.5" aria-label="Workload thresholds">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <h2 className="text-sm font-semibold text-gray-900">Workload Thresholds</h2>
-          <p className="text-xs text-gray-500">Based on a 480-minute shift · Can exceed 100%</p>
+          <h2 className="text-sm font-semibold text-gray-900" title="Based on a 480-minute shift. Can exceed 100%.">Workload Thresholds</h2>
         </div>
         <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           <li className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-100 dark:border-blue-100 dark:bg-blue-50 px-3 py-2">
@@ -427,23 +434,19 @@ export default function WorkloadPage() {
         <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
           <div className="min-w-0">
             <h2 className="text-sm sm:text-base font-bold text-gray-900">Workload by Department</h2>
-            <p className="text-2xs sm:text-xs text-gray-500 mt-0.5">
-              Operational load across hotel functional units
-            </p>
           </div>
           <div className="min-w-0 sm:ml-auto sm:text-right">
             <p className="flex flex-wrap items-baseline gap-x-2.5 sm:justify-end text-xs sm:text-sm">
-              <span className="font-medium text-gray-500">Total Department Load</span>
+              <span className="font-medium text-gray-500" title="Calculated from active staff workloads">Total load</span>
               <span className="font-bold text-gray-900 whitespace-nowrap">{summary.totalWorkload} mins</span>
             </p>
-            <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5">Calculated from active staff workloads.</p>
           </div>
         </div>
 
         {/* One card per department, generated from the data. auto-fill keeps every card the same width and
             wraps to new rows as departments are added, so no department count is hardcoded. */}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
-          {departmentWorkloads.map((dept) => {
+          {departmentWorkloads.map((dept, deptIndex) => {
             // Colour by the percentage of the total load shown on the card, in the legend's blue / green / orange / red
             const barColor = getDepartmentShareBarColor(dept.percentage);
             return (
@@ -459,14 +462,14 @@ export default function WorkloadPage() {
                 {/* Proportional Progress Bar */}
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${barColor}`}
-                    style={{ width: `${Math.min(dept.percentage, 100)}%` }}
+                    className={`tk-bar-grow h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${barColor}`}
+                    style={{ width: `${Math.min(dept.percentage, 100)}%`, '--tk-delay': `${deptIndex * 70}ms` }}
                   />
                 </div>
 
                 <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 text-2xs text-gray-500">
                   <span>
-                    {dept.percentage}% of total load
+                    <AnimatedNumber value={dept.percentage} delay={deptIndex * 70} />%
                   </span>
                   <span>
                     {dept.activeTaskCount} {dept.activeTaskCount === 1 ? 'task' : 'tasks'}
@@ -487,15 +490,28 @@ export default function WorkloadPage() {
         <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
           <div>
             <h2 className="text-sm sm:text-base font-bold text-gray-900">Staff Workload Distribution</h2>
-            <p className="text-xs text-gray-500 mt-0.5">
-              Active load, task count, and shift utilization
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+            {departments.length > 1 && (
+              <div className="relative">
+                <select
+                  value={departmentFilter}
+                  onChange={(event) => { setDepartmentFilter(event.target.value); setCurrentPage(1); }}
+                  aria-label="Filter staff by department"
+                  className="h-9 pl-3 pr-9 appearance-none bg-white border border-gray-200 rounded-lg text-sm text-gray-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
+                >
+                  <option value="">All Departments</option>
+                  <DepartmentOptions departments={departments} />
+                </select>
+                <svg className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </div>
+            )}
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-600">
-              {sortedWorkload.length} Staff
+              {filteredWorkload.length} Staff
             </span>
-            {sortedWorkload.length > 0 && (
+            {filteredWorkload.length > 0 && (
               <div className="flex items-center gap-1.5 pl-2.5 border-l border-gray-200">
                 <PageSizeToggle value={pageSize} onChange={handlePageSizeChange} placement="bottom" />
                 <span className="text-xs text-gray-500 font-medium whitespace-nowrap">
@@ -553,9 +569,11 @@ export default function WorkloadPage() {
                   <td colSpan={6} className="px-4 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <WorkloadIcon className="w-8 h-8 text-gray-300" />
-                      <p className="font-medium text-gray-700 text-sm">No staff workload records available</p>
+                      <p className="font-medium text-gray-700 text-sm">
+                        {departmentFilter ? 'No staff in this department' : 'No staff workload records available'}
+                      </p>
                       <p className="text-xs text-gray-400">
-                        Workload metrics will appear as tasks are assigned to staff.
+                        {departmentFilter ? 'Choose another department, or All Departments.' : 'Workload metrics will appear as tasks are assigned to staff.'}
                       </p>
                     </div>
                   </td>
@@ -672,9 +690,11 @@ export default function WorkloadPage() {
           {paginatedWorkload.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <WorkloadIcon className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="font-medium text-gray-700 text-sm">No staff workload records available</p>
+              <p className="font-medium text-gray-700 text-sm">
+                {departmentFilter ? 'No staff in this department' : 'No staff workload records available'}
+              </p>
               <p className="text-xs text-gray-400 mt-1">
-                Workload metrics will appear as tasks are assigned to staff.
+                {departmentFilter ? 'Choose another department, or All Departments.' : 'Workload metrics will appear as tasks are assigned to staff.'}
               </p>
             </div>
           ) : (

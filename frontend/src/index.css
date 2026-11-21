@@ -178,6 +178,306 @@ html {
   to { opacity: 1; transform: none; }
 }
 
+/*
+ * Glass theme (dark mode), in the spirit of Apple's glass: a true dark base with soft colour behind frosted panels.
+ *
+ * Dark mode already routes every colour through variables (src/theme/themePalette.cjs), so text, borders and chips are
+ * handled there. This block only changes the SURFACES. Glass needs something to see through, so the page is a near-black
+ * base with three soft blurred colour glows; header, sidebar and cards are translucent, strongly blurred and saturated, with a
+ * bright specular top edge, so the glows show through them. No photo. Plain CSS on purpose (white-alpha utilities are
+ * remapped in dark mode). Panels that sit over content (menus, dialogs: shadow-lg and up) are more opaque, to stay readable.
+ * Light mode is untouched.
+ */
+html.dark {
+  background-color: #07090B;
+}
+
+html.dark body {
+  background-color: transparent;
+}
+
+/* The backdrop: near-black with soft colour (emerald, blue, teal and a trace of violet). Fixed, behind everything. */
+html.dark body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(44% 40% at 16% 70%, rgba(16, 185, 129, 0.26) 0%, transparent 70%),
+    radial-gradient(38% 34% at 88% 24%, rgba(56, 92, 214, 0.36) 0%, transparent 70%),
+    radial-gradient(46% 40% at 68% 98%, rgba(20, 184, 166, 0.28) 0%, transparent 70%),
+    radial-gradient(30% 28% at 28% 72%, rgba(124, 58, 237, 0.14) 0%, transparent 70%),
+    #07090B;
+}
+
+/* The layout wrappers stop painting the page colour so the backdrop shows */
+html.dark .bg-surface-page {
+  background-color: transparent;
+}
+
+/* Anything plain white (rows, small controls inside panels): barely-there tint, no blur (keeps long tables fast) */
+html.dark .bg-white {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Panels: header, sidebar and cards (rounded-xl and up): the glass itself */
+html.dark .bg-surface-chrome,
+html.dark .bg-white.rounded-xl,
+html.dark .bg-white.rounded-2xl,
+html.dark .bg-white.rounded-3xl {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.03) 55%, rgba(255, 255, 255, 0.07) 100%),
+    rgba(0, 0, 0, 0.16);
+  -webkit-backdrop-filter: blur(28px) saturate(190%) brightness(1.05);
+  backdrop-filter: blur(28px) saturate(190%) brightness(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 28px rgba(255, 255, 255, 0.025),
+    0 22px 48px -26px rgba(0, 0, 0, 0.75);
+}
+
+/* Cards get a fine light edge instead of the grey border line */
+html.dark .bg-white.rounded-xl,
+html.dark .bg-white.rounded-2xl,
+html.dark .bg-white.rounded-3xl {
+  border-color: rgba(255, 255, 255, 0.13);
+}
+
+/* Menus and dialogs sit over content, so they are more opaque */
+html.dark .bg-white.shadow-lg,
+html.dark .bg-white.shadow-xl,
+html.dark .bg-white.shadow-2xl {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 100%),
+    rgba(14, 16, 20, 0.84);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+}
+
+/* The top bar: dark glass over the page. Mostly transparent with a strong blur and a bright top edge, so content scrolling
+   underneath shows through it, blurred and tinted. */
+html.dark header.bg-surface-chrome {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(6, 8, 10, 0.5);
+  -webkit-backdrop-filter: blur(24px) saturate(190%);
+  backdrop-filter: blur(24px) saturate(190%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.30), inset 0 -1px 0 rgba(255, 255, 255, 0.10), 0 12px 32px -20px rgba(0, 0, 0, 0.8);
+}
+
+/* Sidebar: the logout bar at the bottom blends into the glass instead of adding a second tint */
+html.dark aside div.bg-surface-chrome {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* Form controls that happen to be rounded-xl are not panels: no blur layer (it would paint over their search icon), just a soft fill */
+html.dark :is(input, select, textarea).bg-white:is(.rounded-xl, .rounded-2xl, .rounded-3xl) {
+  background: rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* Greys become translucent light steps (table headers, hover rows, chips), so the glass colour shows through them too */
+html.dark .bg-gray-50,
+html.dark .bg-slate-50 {
+  background-color: rgba(255, 255, 255, 0.045);
+}
+
+html.dark .bg-gray-100,
+html.dark .bg-slate-100,
+html.dark .hover\:bg-gray-50:hover,
+html.dark .hover\:bg-slate-50:hover {
+  background-color: rgba(255, 255, 255, 0.075);
+}
+
+html.dark .bg-gray-200,
+html.dark .bg-slate-200,
+html.dark .hover\:bg-gray-100:hover,
+html.dark .hover\:bg-slate-100:hover {
+  background-color: rgba(255, 255, 255, 0.11);
+}
+
+/* The lines between things: fine, light, translucent-looking */
+html.dark {
+  --tk-border-gray-50: 44 47 52;
+  --tk-border-gray-100: 54 58 64;
+  --tk-border-gray-200: 66 70 77;
+  --tk-border-gray-300: 88 92 100;
+  --tk-border-slate-50: 44 47 52;
+  --tk-border-slate-100: 54 58 64;
+  --tk-border-slate-200: 66 70 77;
+  --tk-border-slate-300: 88 92 100;
+}
+
+/* Form fields: glass too */
+html.dark body input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+html.dark body textarea,
+html.dark body select {
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+/* Placeholders and form text need to stay readable on the glass */
+html.dark body input::placeholder,
+html.dark body textarea::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/*
+ * Glass theme (light mode): the same idea, light. A pale base with vivid pastel colour behind frosted white panels that are
+ * translucent, strongly blurred and saturated, with a bright specular edge, an inner glow and a soft shadow. Text and layout are untouched (the light palette stays as it was).
+ * Panels that sit over content (menus, dialogs) are nearly opaque, to stay readable.
+ */
+html:not(.dark) {
+  background-color: #EEF3F5;
+}
+
+html:not(.dark) body {
+  background-color: transparent;
+}
+
+/* The backdrop: a pale base with soft emerald, sky, teal and lilac glows. Fixed, behind everything. */
+html:not(.dark) body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(44% 40% at 10% 6%, rgba(16, 185, 129, 0.46) 0%, transparent 72%),
+    radial-gradient(40% 36% at 90% 20%, rgba(96, 140, 255, 0.44) 0%, transparent 72%),
+    radial-gradient(48% 42% at 66% 100%, rgba(45, 212, 191, 0.40) 0%, transparent 72%),
+    radial-gradient(34% 30% at 24% 74%, rgba(167, 139, 250, 0.32) 0%, transparent 72%),
+    radial-gradient(30% 26% at 56% 44%, rgba(251, 146, 160, 0.16) 0%, transparent 72%),
+    #EEF3F5;
+}
+
+/* The layout wrappers (and the dashboard's pale green page tint) stop painting so the backdrop shows */
+html:not(.dark) .bg-surface-page,
+html:not(.dark) main[data-page='Dashboard'] {
+  background-color: transparent;
+}
+
+/* Plain white things (rows, controls inside panels): translucent white, no blur */
+html:not(.dark) .bg-white {
+  background-color: rgba(255, 255, 255, 0.40);
+}
+
+/* Panels: header, sidebar and cards (rounded-xl and up): the glass itself */
+html:not(.dark) .bg-surface-chrome,
+html:not(.dark) .bg-white.rounded-xl,
+html:not(.dark) .bg-white.rounded-2xl,
+html:not(.dark) .bg-white.rounded-3xl {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.26) 55%, rgba(255, 255, 255, 0.42) 100%);
+  -webkit-backdrop-filter: blur(30px) saturate(210%) brightness(1.04);
+  backdrop-filter: blur(30px) saturate(210%) brightness(1.04);
+  box-shadow:
+    0 0 0 1px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 0 26px rgba(255, 255, 255, 0.40),
+    0 20px 44px -22px rgba(15, 23, 42, 0.34);
+}
+
+/* Cards: a bright edge instead of the grey border line */
+html:not(.dark) .bg-white.rounded-xl,
+html:not(.dark) .bg-white.rounded-2xl,
+html:not(.dark) .bg-white.rounded-3xl {
+  border-color: rgba(255, 255, 255, 0.85);
+}
+
+/* Menus and dialogs sit over content: nearly opaque */
+html:not(.dark) .bg-white.shadow-lg,
+html:not(.dark) .bg-white.shadow-xl,
+html:not(.dark) .bg-white.shadow-2xl {
+  background: rgba(255, 255, 255, 0.93);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  backdrop-filter: blur(28px) saturate(170%);
+}
+
+/* Sidebar: the bottom (logout) bar blends into the glass instead of adding a second tint */
+html:not(.dark) aside div.bg-surface-chrome {
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* Form controls that happen to be rounded-xl are not panels: no blur layer (it would paint over their search icon), just a soft fill */
+html:not(.dark) :is(input, select, textarea).bg-white:is(.rounded-xl, .rounded-2xl, .rounded-3xl) {
+  background: rgba(255, 255, 255, 0.78);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* Greys become faint translucent tints (table headers, hover rows, chips) so the glass shows through them */
+html:not(.dark) .bg-gray-50,
+html:not(.dark) .bg-slate-50 {
+  background-color: rgba(15, 23, 42, 0.03);
+}
+
+html:not(.dark) .bg-gray-100,
+html:not(.dark) .bg-slate-100,
+html:not(.dark) .hover\:bg-gray-50:hover,
+html:not(.dark) .hover\:bg-slate-50:hover {
+  background-color: rgba(15, 23, 42, 0.055);
+}
+
+html:not(.dark) .bg-gray-200,
+html:not(.dark) .bg-slate-200,
+html:not(.dark) .hover\:bg-gray-100:hover,
+html:not(.dark) .hover\:bg-slate-100:hover {
+  background-color: rgba(15, 23, 42, 0.09);
+}
+
+/* Progress bars (Workload page): each one fills from empty to its value with a fast start and a soft landing, then a light sheen
+   sweeps across it once. Only the start of the fill is given: the end is the bar's own width, so it always lands on its real
+   percentage. --tk-delay (set per bar) staggers a row of bars. Later data refreshes change the width through the bar's normal
+   transition and do not replay this. Reduced motion: the bar is simply full, with no sheen. */
+@keyframes tk-bar-grow {
+  from {
+    width: 0;
+  }
+}
+
+@keyframes tk-bar-sheen {
+  from {
+    transform: translateX(-130%);
+  }
+  to {
+    transform: translateX(130%);
+  }
+}
+
+.tk-bar-grow {
+  position: relative;
+  overflow: hidden;
+  animation: tk-bar-grow 1100ms cubic-bezier(0.22, 1, 0.36, 1) var(--tk-delay, 0ms) both;
+}
+
+.tk-bar-grow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255, 255, 255, 0.55) 50%, transparent 80%);
+  transform: translateX(-130%);
+  animation: tk-bar-sheen 800ms ease-out calc(var(--tk-delay, 0ms) + 950ms) both;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-bar-grow {
+    animation: none;
+  }
+  .tk-bar-grow::after {
+    display: none;
+  }
+}
+
 /* Dashboard clock: subtle digit roll (hours/minutes) and AM/PM fade; no motion when the user prefers reduced motion */
 @keyframes clockRollIn {
   from { opacity: 0; transform: translateY(45%); }

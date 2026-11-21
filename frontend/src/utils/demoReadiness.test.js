@@ -30,7 +30,7 @@ test('workload %: the Dashboard and the Workload page give the same number for t
 test('workload %: the dashboard views no longer use their own 360-minute scale', () => {
   const list = read('components', 'dashboard', 'StaffWorkloadList.jsx');
   const table = read('components', 'dashboard', 'StaffWorkloadTable.jsx');
-  assert.ok(list.includes('aria-valuemax={SHIFT_MINUTES}') && list.includes('{loadPercent(row.totalEstimatedDuration)}%'));
+  assert.ok(list.includes('aria-valuemax={SHIFT_MINUTES}') && list.includes('<AnimatedNumber value={loadPercent(row.totalEstimatedDuration)}'));
   assert.ok(table.includes('width: `${durationPercent(data.workload.totalEstimatedDuration)}%`'));
   for (const source of [list, table, read('utils', 'dashboardView.js')]) {
     assert.doesNotMatch(source, /\/ 360\)|aria-valuemax=\{360\}/);

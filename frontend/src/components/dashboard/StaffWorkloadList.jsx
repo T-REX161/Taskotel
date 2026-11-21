@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { durationPercent, loadPercent, sortByLoad, workloadTone } from '../../utils/dashboardView';
 import { SHIFT_MINUTES } from '../../utils/workloadUtils';
 import UserAvatar from '../common/UserAvatar';
+import AnimatedNumber from '../common/AnimatedNumber';
 
 const initialsOf = (name) => {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -44,7 +45,7 @@ export default function StaffWorkloadList({ staff }) {
   return (
     <>
     <ul className="divide-y divide-gray-100" aria-label="Staff workload">
-      {rows.map((row) => {
+      {rows.map((row, rowIndex) => {
         const tone = workloadTone(row.workloadStatus);
         const department = `${row.departmentName || row.department || 'Unassigned'}${row.supportDepartmentName ? ` → ${row.supportDepartmentName}` : ''}`;
         return (
@@ -79,9 +80,9 @@ export default function StaffWorkloadList({ staff }) {
                 aria-valuemax={SHIFT_MINUTES}
                 aria-valuenow={Math.min(SHIFT_MINUTES, row.totalEstimatedDuration || 0)}
               >
-                <div className={`h-full rounded-full transition-[width] duration-slow ease-standard ${tone.bar}`} style={{ width: `${durationPercent(row.totalEstimatedDuration)}%` }} />
+                <div className={`tk-bar-grow h-full rounded-full transition-[width] duration-slow ease-standard ${tone.bar}`} style={{ width: `${durationPercent(row.totalEstimatedDuration)}%`, '--tk-delay': `${rowIndex * 70}ms` }} />
               </div>
-              <span className="w-11 shrink-0 text-right text-sm tabular-nums text-gray-600">{loadPercent(row.totalEstimatedDuration)}%</span>
+              <span className="w-11 shrink-0 text-right text-sm tabular-nums text-gray-600"><AnimatedNumber value={loadPercent(row.totalEstimatedDuration)} delay={rowIndex * 70} />%</span>
               <span className={`w-[4.5rem] shrink-0 inline-flex justify-center px-2 py-0.5 rounded-md text-[10px] font-semibold tracking-wide ring-1 ring-inset ${tone.badge}`}>
                 {tone.label}
               </span>

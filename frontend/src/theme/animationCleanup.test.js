@@ -61,13 +61,13 @@ test('spinners still animate while an operation is in progress', () => {
 test('no misleading hover motion on things that cannot be clicked; real controls keep their feedback', () => {
   assert.deepEqual(filesWith(/hover:scale-105/), [], 'auth logos no longer grow on hover');
   for (const file of ['pages/LoginPage.jsx', 'pages/ForgotPasswordPage.jsx', 'pages/SetCredentialsPage.jsx', 'pages/EmailVerificationPage.jsx']) {
-    assert.match(read(file), /<TaskotelLogo className="[^"]*" \/>/);
+    assert.match(read(file), /<TaskotelLogo className="[^"]*"( theme="dark")? \/>/);
     assert.doesNotMatch(read(file).match(/<TaskotelLogo className="([^"]*)"/)[1], /hover|transition|transform/, file);
   }
   assert.ok(read('pages/AssignmentsPage.jsx').includes('className="bg-white rounded-xl p-5 shadow-sm border border-gray-200/70 flex items-center gap-4"'), 'summary cards do not lift');
   assert.ok(read('pages/DepartmentsPage.jsx').includes('min-w-0 bg-white rounded-2xl border border-gray-200/80 shadow-sm ${isInactive'), 'department cards do not lift');
   // genuine buttons keep their hover feedback
-  assert.ok(read('pages/LoginPage.jsx').includes('hover:shadow-lg hover:shadow-emerald-900/25'));
+  assert.ok(read('pages/LoginPage.jsx').includes('hover:shadow-lg hover:shadow-emerald-600/35'));
   assert.ok(read('pages/ProfilePage.jsx').includes('group-hover:brightness-90 group-hover:shadow-md'), 'the clickable profile picture keeps its hover');
 });
 

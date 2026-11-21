@@ -2,12 +2,12 @@ import React from 'react';
 import { StaffIcon, TasksIcon, AssignmentsIcon, WorkloadIcon, ClipboardIcon, ClockIcon } from '../icons/Icons';
 
 const TONES = {
-  green: { chip: 'bg-emerald-50 text-emerald-600 ring-emerald-100', value: 'text-gray-900' },
-  red: { chip: 'bg-red-50 text-red-500 ring-red-100', value: 'text-gray-900' },
-  amber: { chip: 'bg-amber-50 text-amber-600 ring-amber-100', value: 'text-gray-900' },
-  slate: { chip: 'bg-gray-100 text-gray-500 ring-gray-200', value: 'text-gray-900' },
-  pending: { chip: 'bg-amber-50 text-amber-600 ring-amber-100', value: 'text-amber-600' },
-  blue: { chip: 'bg-blue-50 text-blue-600 ring-blue-100', value: 'text-blue-600' },
+  green: { chip: 'bg-emerald-50 text-emerald-600 ring-emerald-100 dark:bg-emerald-400/20 dark:text-emerald-300 dark:ring-emerald-300/40', value: 'text-gray-900' },
+  red: { chip: 'bg-red-50 text-red-500 ring-red-100 dark:bg-red-400/20 dark:text-red-300 dark:ring-red-300/40', value: 'text-gray-900' },
+  amber: { chip: 'bg-amber-50 text-amber-600 ring-amber-100 dark:bg-amber-400/20 dark:text-amber-300 dark:ring-amber-300/40', value: 'text-gray-900' },
+  slate: { chip: 'bg-gray-100 text-gray-500 ring-gray-200 dark:bg-gray-400/25 dark:text-gray-200 dark:ring-gray-300', value: 'text-gray-900' },
+  pending: { chip: 'bg-amber-50 text-amber-600 ring-amber-100 dark:bg-amber-400/20 dark:text-amber-300 dark:ring-amber-300/40', value: 'text-amber-600' },
+  blue: { chip: 'bg-blue-50 text-blue-600 ring-blue-100 dark:bg-blue-400/20 dark:text-blue-300 dark:ring-blue-300/40', value: 'text-blue-600' },
 };
 
 /**

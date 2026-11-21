@@ -52,15 +52,20 @@ describe('Taskotel branding', () => {
       'src/pages/SetCredentialsPage.jsx',
       'src/pages/EmailVerificationPage.jsx',
     ]) {
-      assert.ok(read(file).includes(wordmark), `${file} must show the Taskotel wordmark`);
+      // The login screen's wordmark sits on the dark glass card, so its "otel" is a light mint
+      const expected = file.endsWith('LoginPage.jsx') ? 'Task<span className="text-emerald-300">otel</span>' : wordmark;
+      assert.ok(read(file).includes(expected), `${file} must show the Taskotel wordmark`);
     }
   });
 
   it('header and mobile sidebar share the same brand block proportions', () => {
+    // "Task" is dark in light mode and white in dark mode; "otel" is one fixed green; the mark never changes with the theme
     const appWordmark = 'Task<span className="text-[#0f9874]">otel</span>';
-    const wordmarkText = 'text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px]';
+    const wordmarkText = 'text-[20px] font-bold tracking-tight text-[#04302a] leading-[22px] dark:text-neutral-100';
     for (const file of ['src/components/layout/Header.jsx', 'src/components/layout/Sidebar.jsx']) {
       const source = read(file);
+      assert.ok(!/text-\[#0f9874\][^>]*dark:/.test(source), `${file}: "otel" keeps one colour in both themes`);
+      assert.ok(!source.includes("theme={isDark ?"), `${file}: the mark is the same in both themes`);
       assert.ok(source.includes(appWordmark), `${file}: two-tone Taskotel wordmark`);
       assert.ok(source.includes('<TaskotelLogo className="w-10 h-10 shrink-0'), `${file}: 40px Taskotel mark`);
       assert.ok(source.includes(wordmarkText), `${file}: 20px bold wordmark`);
@@ -80,7 +85,7 @@ describe('Taskotel branding', () => {
       assert.ok(read(file).includes(authLogo), `${file}: 64px Taskotel mark`);
     }
     // The split-screen login places the mark beside the wordmark instead of above it
-    assert.ok(read('src/pages/LoginPage.jsx').includes('<TaskotelLogo className="w-[72px] h-[72px] shrink-0" />'), 'Login: 72px Taskotel mark');
+    assert.ok(read('src/pages/LoginPage.jsx').includes('<TaskotelLogo className="w-12 h-12 shrink-0" theme="dark" />'), 'Login: 48px white Taskotel mark on a glass tile');
     const offenders = [...sourceFiles(srcDir), path.join(frontendDir, 'index.html')]
       .filter((file) => /HotelLogoIcon|vite\.svg|EquiFlowLogo|equiflow-logo\.svg/.test(fs.readFileSync(file, 'utf8')))
       .map((file) => path.relative(frontendDir, file));
