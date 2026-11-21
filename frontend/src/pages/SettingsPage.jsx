@@ -7,7 +7,7 @@ import { canAccess } from '../utils/accessPolicy';
 import Spinner from '../components/common/Spinner';
 import Skeleton from '../components/common/Skeleton';
 import {
-  SYSTEM_SETTINGS_MESSAGES, THRESHOLD_MAX, THRESHOLD_MIN, buildRequest, isDirty, loadSystemSettings, parseThreshold, saveSystemSettings,
+  SYSTEM_SETTINGS_MESSAGES, THRESHOLD_MAX, THRESHOLD_MIN, buildRequest, isDirty, keepDigits, loadSystemSettings, parseThreshold, saveSystemSettings,
   systemSettingsErrorMessage, toForm,
 } from '../utils/systemSettings';
 
@@ -160,24 +160,32 @@ export function SystemSettingsPage() {
               <SettingCard
                 icon={<GaugeIcon className="h-5 w-5" />}
                 title="Capacity Threshold"
-                description={`Percentage of a department's available staff who have active work (unavailable staff are not counted either way), at which the capacity alert applies (${THRESHOLD_MIN} to ${THRESHOLD_MAX})`}
+                description={`The department workload percentage at which a department becomes AT RISK (red). Enter ${THRESHOLD_MIN} to ${THRESHOLD_MAX}.`}
                 error={!thresholdCheck.valid ? thresholdCheck.message : null}
               >
-                <div className={`flex items-center rounded-lg border bg-white transition-colors focus-within:ring-2 ${thresholdCheck.valid ? 'border-gray-300 hover:border-gray-400 focus-within:border-emerald-500 focus-within:ring-emerald-200' : 'border-red-400 focus-within:ring-red-200'} ${saving ? 'opacity-60 bg-gray-50' : ''}`}>
+                <div className={`relative flex items-center overflow-hidden rounded-lg border bg-white transition-colors focus-within:ring-2 ${thresholdCheck.valid ? 'border-gray-300 hover:border-gray-400 focus-within:border-emerald-500 focus-within:ring-emerald-200' : 'border-red-400 focus-within:ring-red-200'} ${saving ? 'opacity-60 bg-gray-50' : ''}`}>
+                  {/* The box fills left to right with the typed percentage, like the department bars (empty while the value is not valid) */}
+                  <span
+                    aria-hidden="true"
+                    data-testid="threshold-fill"
+                    className="pointer-events-none absolute inset-y-0 left-0 bg-red-500/25 transition-[width] duration-moderate ease-standard dark:bg-red-500/35"
+                    style={{ width: `${thresholdCheck.valid ? thresholdCheck.value : 0}%` }}
+                  />
                   <input
                     type="text"
                     inputMode="numeric"
                     autoComplete="off"
+                    spellCheck={false}
                     maxLength={3}
                     aria-label="Capacity Threshold (percent)"
                     aria-invalid={!thresholdCheck.valid}
                     aria-describedby={thresholdCheck.valid ? undefined : 'capacity-threshold-error'}
                     value={form.capacityThresholdPercent}
                     disabled={saving}
-                    onChange={(event) => change({ capacityThresholdPercent: event.target.value })}
-                    className="w-14 bg-transparent py-2 pl-3 pr-1 text-right text-sm font-semibold tabular-nums text-gray-900 focus:outline-none disabled:cursor-not-allowed"
+                    onChange={(event) => change({ capacityThresholdPercent: keepDigits(event.target.value) })}
+                    className="relative w-14 !bg-transparent py-2 pl-3 pr-1 text-right text-sm font-semibold tabular-nums text-gray-900 focus:outline-none disabled:cursor-not-allowed"
                   />
-                  <span className="pr-3 text-sm font-medium text-gray-500" aria-hidden="true">%</span>
+                  <span className="relative pr-3 text-sm font-medium text-gray-500" aria-hidden="true">%</span>
                 </div>
               </SettingCard>
 

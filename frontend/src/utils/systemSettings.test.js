@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SYSTEM_SETTINGS_MESSAGES, buildRequest, fromServer, isDirty, loadSystemSettings, parseThreshold, saveSystemSettings, systemSettingsErrorMessage, toForm,
+  SYSTEM_SETTINGS_MESSAGES, buildRequest, fromServer, isDirty, keepDigits, loadSystemSettings, parseThreshold, saveSystemSettings, systemSettingsErrorMessage, toForm,
 } from './systemSettings.js';
 import { getSystemSettings, updateSystemSettings } from '../services/api.js';
 
@@ -232,5 +232,33 @@ describe('the API calls', () => {
     answer(500, {});
     await assert.rejects(saveSystemSettings({ autoBalancingEnabled: true, capacityAlertEnabled: true, crossDepartmentAssistanceEnabled: true, capacityThresholdPercent: '50' }, { send: updateSystemSettings }),
       (e) => systemSettingsErrorMessage(e, SYSTEM_SETTINGS_MESSAGES.saveFailed) === SYSTEM_SETTINGS_MESSAGES.saveFailed);
+  });
+});
+
+describe('only digits can get into the threshold box', () => {
+  it('letters, spaces, signs, decimal points and exponents are dropped as they are typed or pasted', () => {
+    assert.equal(keepDigits('hhh'), '');
+    assert.equal(keepDigits('8a5'), '85');
+    assert.equal(keepDigits('85.5'), '855');
+    assert.equal(keepDigits('-50'), '50');
+    assert.equal(keepDigits('+85'), '85');
+    assert.equal(keepDigits('1e2'), '12');
+    assert.equal(keepDigits(' 8 5 '), '85');
+    assert.equal(keepDigits('٨٥'), '', 'non-ASCII digits are not accepted');
+  });
+
+  it('at most three digits are kept, and plain numbers pass through unchanged', () => {
+    assert.equal(keepDigits('1234'), '123');
+    assert.equal(keepDigits('100'), '100');
+    assert.equal(keepDigits('7'), '7');
+    assert.equal(keepDigits(85), '85');
+    for (const none of [null, undefined, '']) assert.equal(keepDigits(none), '');
+  });
+
+  it('a box that has been emptied is still refused by the range check (and Save stays off), and the digits kept are checked 1 to 100', () => {
+    assert.equal(parseThreshold(keepDigits('abc')).valid, false);
+    assert.equal(parseThreshold(keepDigits('0')).valid, false);
+    assert.equal(parseThreshold(keepDigits('999')).valid, false);
+    assert.equal(parseThreshold(keepDigits('85')).valid, true);
   });
 });

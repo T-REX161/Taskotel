@@ -36,7 +36,7 @@ describe('System Settings page wiring (source checks)', () => {
     assert.ok(page.includes('onChange={() => change({ autoBalancingEnabled: !form.autoBalancingEnabled })}'));
     assert.ok(page.includes('onChange={() => change({ capacityAlertEnabled: !form.capacityAlertEnabled })}'));
     assert.ok(page.includes('onChange={() => change({ crossDepartmentAssistanceEnabled: !form.crossDepartmentAssistanceEnabled })}'));
-    assert.ok(page.includes('onChange={(event) => change({ capacityThresholdPercent: event.target.value })}'));
+    assert.ok(page.includes('onChange={(event) => change({ capacityThresholdPercent: keepDigits(event.target.value) })}'), 'only digits get into the box');
   });
 
   it('the threshold input is a labelled text box that shows an inline error for an invalid value and marks itself invalid', () => {
@@ -80,6 +80,16 @@ describe('System Settings page wiring (source checks)', () => {
   it('the success, error and status messages are announced (role status and alert)', () => {
     assert.ok(page.includes("{status.phase === 'saved' && (") && page.includes('role="status" aria-live="polite"'));
     assert.ok(page.includes("{status.phase === 'error' && (") && page.includes('role="alert"'));
+  });
+});
+
+describe('the threshold box fills with the percentage', () => {
+  const page = fs.readFileSync(new URL('./SettingsPage.jsx', import.meta.url), 'utf8');
+  it('has a fill whose width is the typed percentage, empty while the value is not valid, and sits behind the text', () => {
+    assert.ok(page.includes('data-testid="threshold-fill"'));
+    assert.ok(page.includes('width: `${thresholdCheck.valid ? thresholdCheck.value : 0}%`'));
+    assert.ok(page.includes('pointer-events-none absolute inset-y-0 left-0'), 'it never blocks typing');
+    assert.ok(page.includes('relative flex items-center overflow-hidden'), 'it is clipped to the rounded box');
   });
 });
 

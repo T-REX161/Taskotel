@@ -81,14 +81,111 @@ export function getWorkloadProgressBarColor(status) {
  * @param {number|string|null|undefined} percentage
  * @returns {string}
  */
-export function getDepartmentShareBarColor(percentage) {
-  const value = Number(percentage);
-  if (percentage === null || percentage === undefined || percentage === '' || !Number.isFinite(value)) return 'bg-gray-400';
-  const share = Math.max(0, value);
-  if (share <= 25) return 'bg-blue-600 dark:bg-blue-500';
-  if (share <= 50) return 'bg-emerald-600 dark:bg-emerald-500';
-  if (share <= 75) return 'bg-orange-600 dark:bg-orange-500';
+export function getDepartmentShareBarColor(percentage, atRiskThreshold) {
+  const status = getDepartmentShareStatus(percentage, atRiskThreshold);
+  if (status === null) return 'bg-gray-400';
+  if (status === 'LOW') return 'bg-blue-600 dark:bg-blue-500';
+  if (status === 'NORMAL') return 'bg-emerald-600 dark:bg-emerald-500';
+  if (status === 'HIGH') return 'bg-orange-600 dark:bg-orange-500';
   return 'bg-red-600 dark:bg-red-500';
+}
+
+/**
+ * The saved Capacity Threshold as a usable number: a whole number from 1 to 100, otherwise null (not loaded, switched off, or unreadable),
+ * in which case nothing is overridden and the existing colours apply.
+ */
+export function normalizeRiskThreshold(value) {
+  return Number.isInteger(value) && value >= 1 && value <= 100 ? value : null;
+}
+
+/** A department is AT RISK once its displayed share of the total load is AT OR ABOVE the Capacity Threshold (>=, so exactly equal counts). */
+export function isDepartmentAtRisk(percentage, atRiskThreshold) {
+  const threshold = normalizeRiskThreshold(atRiskThreshold);
+  const value = Number(percentage);
+  if (threshold === null || percentage === null || percentage === undefined || percentage === '' || !Number.isFinite(value)) return false;
+  return value >= threshold;
+}
+
+/**
+ * The status of a department card, the one source for its bar colour, its label and the Workload Thresholds legend.
+ *
+ * With a usable Capacity Threshold T, AT_RISK begins at T (inclusive): every share from T up is AT_RISK, and below T the existing bands
+ * apply (0-25 LOW, above 25-50 NORMAL, above 50 HIGH, which now runs up to just under T, so a band that T cuts off simply disappears).
+ * Without one (not loaded, switched off, unreadable) the original fixed bands apply unchanged (above 75 is AT_RISK).
+ * null when the percentage is not a number.
+ */
+export function getDepartmentShareStatus(percentage, atRiskThreshold) {
+  const value = Number(percentage);
+  if (percentage === null || percentage === undefined || percentage === '' || !Number.isFinite(value)) return null;
+  const threshold = normalizeRiskThreshold(atRiskThreshold);
+  const share = Math.max(0, value);
+  if (threshold !== null) {
+    if (share >= threshold) return 'AT_RISK';
+    if (share <= 25) return 'LOW';
+    if (share <= 50) return 'NORMAL';
+    return 'HIGH';
+  }
+  if (share <= 25) return 'LOW';
+  if (share <= 50) return 'NORMAL';
+  if (share <= 75) return 'HIGH';
+  return 'AT_RISK';
+}
+
+/**
+ * What the department-risk threshold endpoint answered, as the page's state: { status: 'ready', value } when the Capacity Threshold applies
+ * (alert switched on, a whole number 1-100), { status: 'off' } when the Max Task Capacity Alert is switched off (the default bands apply),
+ * and null when the answer cannot be read, which the page treats as "unavailable" (never as the defaults).
+ */
+export function parseRiskThresholdAnswer(answer) {
+  if (!answer || typeof answer !== 'object' || typeof answer.enabled !== 'boolean') return null;
+  if (answer.enabled === false) return { status: 'off' };
+  const value = normalizeRiskThreshold(answer.capacityThresholdPercent);
+  return value === null ? null : { status: 'ready', value };
+}
+
+/**
+ * The explanation of the department risk levels (the heading's tooltip), from the page's threshold state. It describes the department
+ * cards only: individual staff statuses use their own, fixed ranges and are not affected by the Capacity Threshold.
+ */
+export function describeDepartmentRisk(state) {
+  const base = "Each department card shows its share of the hotel's total workload.";
+  if (state?.status === 'ready') return `${base} A department is AT RISK from ${state.value}% (the Capacity Threshold in System Settings).`;
+  if (state?.status === 'off') return `${base} The Max Task Capacity Alert is off, so the default ranges apply.`;
+  if (state?.status === 'unavailable') return `${base} The Capacity Threshold could not be loaded, so the risk levels are unavailable.`;
+  return base;
+}
+
+/**
+ * The Workload Thresholds legend for the department cards, derived from the same rule as {@link getDepartmentShareStatus} so the legend,
+ * the bar colours and the status labels cannot disagree. Displayed percentages are whole numbers, so every range is in whole percents.
+ * Returns the categories that can actually occur, in order, each as { status, label, from, to, text } (from/to inclusive, whole percents;
+ * to is 100 for the last). A category the threshold makes impossible is left out (HIGH at 40%, NORMAL and HIGH at 10%).
+ * Without a usable threshold: the original four fixed ranges.
+ *
+ * @param {number|null|undefined} atRiskThreshold
+ * @returns {Array<{ status: 'LOW'|'NORMAL'|'HIGH'|'AT_RISK', label: string, from: number, to: number|null, text: string }>}
+ */
+export function getDepartmentLegendRanges(atRiskThreshold) {
+  const threshold = normalizeRiskThreshold(atRiskThreshold);
+  if (threshold === null) {
+    return [
+      { status: 'LOW', label: 'LOW', from: 0, to: 25, text: '0–25%' },
+      { status: 'NORMAL', label: 'NORMAL', from: 26, to: 50, text: 'Above 25%–50%' },
+      { status: 'HIGH', label: 'HIGH', from: 51, to: 75, text: 'Above 50%–75%' },
+      { status: 'AT_RISK', label: 'AT RISK', from: 76, to: null, text: 'Above 75%' },
+    ];
+  }
+  // Whole-percent ranges, from and to both included ("0–25%", "26–50%"), a single value when a range is one percent wide
+  const range = (status, label, from, to) => ({ status, label, from, to, text: from === to ? `${from}%` : `${from}–${to}%` });
+  const ranges = [];
+  // LOW: 0 up to 25, or up to just below T when T cuts it (T is at least 1, so 0% is always below it)
+  ranges.push(range('LOW', 'LOW', 0, Math.min(25, threshold - 1)));
+  // NORMAL: 26 up to 50, or up to just below T
+  if (threshold >= 27) ranges.push(range('NORMAL', 'NORMAL', 26, Math.min(50, threshold - 1)));
+  // HIGH: 51 up to just below T (when T is above the old 75 line it keeps running up to T)
+  if (threshold >= 52) ranges.push(range('HIGH', 'HIGH', 51, threshold - 1));
+  ranges.push(range('AT_RISK', 'AT RISK', threshold, 100));
+  return ranges;
 }
 
 /**

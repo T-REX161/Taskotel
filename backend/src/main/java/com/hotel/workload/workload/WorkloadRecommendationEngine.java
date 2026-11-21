@@ -425,7 +425,7 @@ public final class WorkloadRecommendationEngine {
         limitations.add("Skills are not recorded in Taskotel, so a person's suitability for the receiving department's work is not assessed. A manager must judge it.");
         limitations.add("Only active STAFF accounts that can sign in (email verified, credentials set up) are suggested. Managers, admins and staff still waiting for email verification or credentials setup are never suggested, although they still count as free staff of their own department.");
         limitations.add("Shifts and working hours are not recorded. \"Available\" means the person is active, marked Available and has no active task right now.");
-        limitations.add("Taskotel currently lets staff take tasks only from their own department, so these suggestions cannot be put into effect yet. Nothing here moves staff or tasks.");
+        limitations.add("Suggestions are never applied automatically: nothing moves staff or tasks until an Administrator confirms a support plan, which lends the person to the receiving department until the task is completed or the support is ended.");
         if (tasksWithoutDepartment > 0) {
             limitations.add(plural(tasksWithoutDepartment, "active task") + " with no department " + (tasksWithoutDepartment == 1 ? "is" : "are") + " not counted.");
         }

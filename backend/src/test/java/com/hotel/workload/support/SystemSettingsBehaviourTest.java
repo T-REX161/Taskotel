@@ -21,7 +21,10 @@ import com.hotel.workload.task.Priority;
 import com.hotel.workload.task.Task;
 import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
+import com.hotel.workload.workload.WorkloadController;
+import com.hotel.workload.workload.WorkloadDto;
 import com.hotel.workload.workload.WorkloadRecommendationService;
+import com.hotel.workload.workload.WorkloadService;
 import com.hotel.workload.workload.WorkloadRecommendationsDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +58,8 @@ public class SystemSettingsBehaviourTest {
     @Autowired private SupportAssignmentService support;
     @Autowired private WorkloadRecommendationService recommendations;
     @Autowired private DashboardService dashboard;
+    @Autowired private WorkloadService workloadService;
+    @Autowired private WorkloadController workloadController;
     @Autowired private AssignmentService assignmentService;
     @Autowired private SystemSettingsRepository settingsRepository;
     @Autowired private UserRepository users;
@@ -368,6 +373,93 @@ public class SystemSettingsBehaviourTest {
         assertEquals(20, alert.percentInWork());
     }
 
+    @Test
+    @DisplayName("85% threshold: 4, 8 of 10 do not warn; 9 and 10 of 10 do")
+    void spec_exampleAtEightyFivePercent() {
+        settings(true, true, true, 85);
+        assertTrue(alertsFor(departmentWith("S4", 10, 4, 0)).isEmpty(), "40%");
+        assertTrue(alertsFor(departmentWith("S8", 10, 8, 0)).isEmpty(), "80%");
+        assertEquals(90, alertsFor(departmentWith("S9", 10, 9, 0)).get(0).percentInWork());
+        assertEquals(100, alertsFor(departmentWith("S10", 10, 10, 0)).get(0).percentInWork());
+    }
+
+    @Test
+    @DisplayName("Boundaries 1, 50 and 100: warns when the percentage equals the threshold, not when it is one below")
+    void spec_thresholdBoundaries() {
+        Department oneOfHundred = departmentWith("B1", 100, 1, 0);
+        Department half = departmentWith("B50", 2, 1, 0);
+        Department full = departmentWith("B100", 3, 3, 0);
+        Department almostFull = departmentWith("B99", 3, 2, 0);
+
+        settings(true, true, true, 1);
+        assertEquals(1, alertsFor(oneOfHundred).size(), "exactly 1%");
+        assertEquals(1, alertsFor(half).size());
+        settings(true, true, true, 50);
+        assertEquals(1, alertsFor(half).size(), "exactly 50%");
+        assertTrue(alertsFor(oneOfHundred).isEmpty(), "1% is below 50%");
+        settings(true, true, true, 100);
+        assertEquals(1, alertsFor(full).size(), "exactly 100%");
+        assertTrue(alertsFor(almostFull).isEmpty(), "66% is below 100%");
+        assertTrue(alertsFor(half).isEmpty());
+    }
+
+    @Test
+    @DisplayName("One person with several active assignments counts once, not once per assignment")
+    void multipleAssignmentsForOnePersonCountOnce() {
+        Department department = fx.department("MA");
+        Staff busy = fx.eligible("Many Jobs", department);
+        for (int i = 0; i < 3; i++) fx.assign(fx.waiting("Job " + i, department, Priority.MEDIUM, 30), busy);
+        fx.eligible("Free 1", department);
+        fx.eligible("Free 2", department);
+        fx.eligible("Free 3", department);
+        settings(true, true, true, 25);
+        AdminDashboardSummaryDto.CapacityAlert alert = alertsFor(department).get(0);
+        assertEquals(1, alert.staffInWork());
+        assertEquals(4, alert.operationalStaff());
+        assertEquals(25, alert.percentInWork());
+        settings(true, true, true, 26);
+        assertTrue(alertsFor(department).isEmpty(), "three assignments must not look like 75%");
+    }
+
+    @Test
+    @DisplayName("Only PENDING, ASSIGNED and IN_PROGRESS tasks are active work; COMPLETED and CANCELLED are not")
+    void onlyActiveStatusesCount() {
+        Department department = fx.department("ST");
+        Staff done = fx.eligible("Done", department);
+        Staff cancelled = fx.eligible("Cancelled", department);
+        Staff inProgress = fx.eligible("In progress", department);
+        fx.eligible("Idle", department);
+        Task completedTask = fx.waiting("Completed", department, Priority.MEDIUM, 30);
+        fx.assign(completedTask, done);
+        completedTask.setStatus(TaskStatus.COMPLETED);
+        taskRepository.saveAndFlush(completedTask);
+        Task cancelledTask = fx.waiting("Cancelled", department, Priority.MEDIUM, 30);
+        fx.assign(cancelledTask, cancelled);
+        cancelledTask.setStatus(TaskStatus.CANCELLED);
+        taskRepository.saveAndFlush(cancelledTask);
+        Task activeTask = fx.waiting("Active", department, Priority.MEDIUM, 30);
+        fx.assign(activeTask, inProgress);
+        activeTask.setStatus(TaskStatus.IN_PROGRESS);
+        taskRepository.saveAndFlush(activeTask);
+
+        settings(true, true, true, 25);
+        AdminDashboardSummaryDto.CapacityAlert alert = alertsFor(department).get(0);
+        assertEquals(1, alert.staffInWork());
+        assertEquals(4, alert.operationalStaff());
+        settings(true, true, true, 26);
+        assertTrue(alertsFor(department).isEmpty());
+    }
+
+    @Test
+    @DisplayName("A department with no staff at all, and one whose staff are all unavailable, never warn")
+    void emptyAndAllUnavailableDepartmentsNeverWarn() {
+        Department empty = fx.department("EM");
+        Department away = departmentWith("AW", 0, 0, 3);
+        settings(true, true, true, 1);
+        assertTrue(alertsFor(empty).isEmpty());
+        assertTrue(alertsFor(away).isEmpty());
+    }
+
     // ── HTTP helpers ─────────────────────────────────────────────────────────────────────────────────────────
 
     @Autowired private org.springframework.web.context.WebApplicationContext context;
@@ -416,6 +508,108 @@ public class SystemSettingsBehaviourTest {
 
         settings(true, false, true, 100);
         assertTrue(alertsFromHttp("s4d_manager", "MANAGER").isEmpty(), "alert OFF: none for the Manager either");
+    }
+
+    // ── Department-risk threshold (colours the Workload by Department bars) ──────────────────────────────────
+
+    private com.fasterxml.jackson.databind.JsonNode riskThreshold(String username, String role) throws Exception {
+        var response = mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/workload/department-risk-threshold").with(as(username, role)))
+                .andReturn().getResponse();
+        assertEquals(200, response.getStatus(), role);
+        return new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.getContentAsString());
+    }
+
+    @Test
+    @DisplayName("The department-risk threshold endpoint returns the saved value to Admin and Manager, follows every change, and exposes nothing else")
+    void riskThresholdEndpointFollowsTheSavedValue() throws Exception {
+        Department mine = departmentWith("RT", 1, 0, 0);
+        ScopeFixtures scope = new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder);
+        scope.manager("s4d_rt_manager", mine);
+        for (int threshold : new int[]{10, 1, 50, 85, 100}) {
+            settings(true, true, true, threshold);
+            for (String[] who : new String[][]{{"s4d_admin", "ADMIN"}, {"s4d_rt_manager", "MANAGER"}}) {
+                var body = riskThreshold(who[0], who[1]);
+                assertEquals(threshold, body.get("capacityThresholdPercent").asInt(), who[1] + " sees the saved threshold");
+                assertTrue(body.get("enabled").asBoolean());
+                assertEquals(2, body.size(), "only the switch and the percentage, nothing else from System Settings");
+            }
+        }
+        settings(true, false, true, 10);
+        assertFalse(riskThreshold("s4d_admin", "ADMIN").get("enabled").asBoolean(), "switched off is reported, so nothing is overridden");
+    }
+
+    @Test
+    @DisplayName("With nothing saved the endpoint reports the default 85; Staff, an invalid Manager and anonymous callers are refused; the settings API stays Admin only")
+    void riskThresholdDefaultAnonymousAndSettingsStayLocked() throws Exception {
+        settingsRepository.deleteAll();
+        settingsRepository.flush();
+        assertEquals(85, riskThreshold("s4d_admin", "ADMIN").get("capacityThresholdPercent").asInt());
+        assertEquals(401, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/workload/department-risk-threshold").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous()))
+                .andReturn().getResponse().getStatus());
+        // Staff have their own page without department cards: they get no department-level information, and no threshold
+        assertEquals(403, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/workload/department-risk-threshold").with(as("s4d_staff", "STAFF")))
+                .andReturn().getResponse().getStatus(), "Staff are refused at the URL");
+        // A Manager account with no valid department is refused by the scope check as well (403, not an empty answer)
+        new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).account("s4d_invalid_manager", Role.MANAGER, true);
+        assertEquals(403, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/workload/department-risk-threshold").with(as("s4d_invalid_manager", "MANAGER")))
+                .andReturn().getResponse().getStatus(), "an invalid Manager is refused");
+        for (String role : new String[]{"MANAGER", "STAFF"}) {
+            assertEquals(403, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/system-settings").with(as("someone", role)))
+                    .andReturn().getResponse().getStatus(), role + " still cannot read System Settings");
+            assertEquals(403, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/system-settings").with(as("someone", role))
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{\"autoBalancingEnabled\":true,\"capacityAlertEnabled\":true,\"crossDepartmentAssistanceEnabled\":true,\"capacityThresholdPercent\":10}"))
+                    .andReturn().getResponse().getStatus(), role + " still cannot change System Settings");
+        }
+    }
+
+    @Test
+    @DisplayName("Defence in depth: calling the controller directly as a real Staff member is refused too, with nothing returned")
+    void riskThresholdControllerRefusesStaffWithoutTheUrlRule() {
+        Department department = fx.department("RS");
+        Staff member = fx.eligible("Plain Staff", department);
+        SupportTestFixture.signInAs(member.getUser().getUsername(), "STAFF");
+        var refused = org.junit.jupiter.api.Assertions.assertThrows(org.springframework.web.server.ResponseStatusException.class,
+                () -> workloadController.getDepartmentRiskThreshold());
+        assertEquals(403, refused.getStatusCode().value());
+        SupportTestFixture.signInAs("s4d_admin", "ADMIN");
+        assertEquals(200, workloadController.getDepartmentRiskThreshold().getStatusCode().value(), "the Admin is served");
+    }
+
+    // ── AT RISK (share of total workload) is NOT the same as needing support (uncovered tasks vs eligible donors) ─────
+
+    @Test
+    @DisplayName("A department can be AT RISK by workload share without needing support, and the Capacity Threshold never changes who needs support")
+    void atRiskDoesNotMeanNeedsSupport() {
+        var s = fx.overloaded(2, 3);                                  // receiving: 2 waiting tasks, nobody free -> needs support; donor: 3 free
+        Department heavy = fx.department("H");                        // heavy: two free people and one big assigned task -> a large share of the minutes
+        Staff busyOne = fx.eligible("Heavy Busy", heavy);
+        fx.eligible("Heavy Free 1", heavy);
+        fx.eligible("Heavy Free 2", heavy);
+        fx.assign(fx.waiting("Big job", heavy, Priority.MEDIUM, 400), busyOne);
+
+        SupportTestFixture.signInAs("s4d_admin", "ADMIN");
+        List<WorkloadDto> rows = workloadService.calculateWorkload();
+        int total = rows.stream().mapToInt(WorkloadDto::getTotalEstimatedDuration).sum();
+        int heavyMinutes = rows.stream().filter(r -> heavy.getCode().equalsIgnoreCase(r.getSupportDepartment() != null ? r.getSupportDepartment() : r.getDepartment()))
+                .mapToInt(WorkloadDto::getTotalEstimatedDuration).sum();
+        long heavyShare = Math.round(100.0 * heavyMinutes / total);
+        assertTrue(heavyShare >= 25, "the heavy department holds a large share of the load (" + heavyShare + "%), so it is AT RISK for any threshold at or below that");
+
+        java.util.Set<String> needing = null;
+        for (int threshold : new int[]{1, 25, 50, 85, 100}) {
+            settings(true, true, true, threshold);
+            WorkloadRecommendationsDto result = recommendations.getRecommendations();
+            java.util.Set<String> codes = new java.util.TreeSet<>();
+            result.recommendations().forEach(r -> codes.add(r.departmentCode()));
+            result.unsupported().forEach(u -> codes.add(u.departmentCode()));
+            assertTrue(codes.contains(s.receiving.getCode()), "uncovered tasks make the receiver need support at threshold " + threshold);
+            assertFalse(codes.contains(heavy.getCode()), "a department with enough free staff does not need support at threshold " + threshold + ", AT RISK or not");
+            if (needing == null) needing = codes;
+            assertEquals(needing, codes, "the Capacity Threshold does not change who needs support (threshold " + threshold + ")");
+            var receiver = result.recommendations().stream().filter(r -> r.departmentCode().equals(s.receiving.getCode())).findFirst().orElseThrow();
+            assertEquals(2, receiver.pressure().uncoveredTasks());
+        }
     }
 
     // ── Cross-Department Assistance through the real HTTP endpoints ──────────────────────────────────────────

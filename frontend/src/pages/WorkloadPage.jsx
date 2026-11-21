@@ -6,7 +6,7 @@ import {
   TasksIcon,
   EyeIcon,
 } from '../components/icons/Icons';
-import { getWorkload, getWorkloadDepartments, getStaff, getUserRole } from '../services/api';
+import { getWorkload, getWorkloadDepartments, getDepartmentRiskThreshold, getStaff, getUserRole } from '../services/api';
 import { canListStaff } from '../utils/accessPolicy';
 import { decideWorkloadRefresh, selectedStaffAfterRefresh } from '../utils/workloadRefresh';
 import { formatTime } from '../utils/dateTimeFormat';
@@ -18,6 +18,10 @@ import {
   getWorkloadStatusBadge,
   getWorkloadProgressBarColor,
   getDepartmentShareBarColor,
+  getDepartmentShareStatus,
+  getDepartmentLegendRanges,
+  parseRiskThresholdAnswer,
+  describeDepartmentRisk,
   calculateWorkloadPercentage,
   deriveWorkloadStatus,
   sortWorkloadAlphabetically,
@@ -30,6 +34,7 @@ import {
 import StaffDetailsModal from '../components/staff/StaffDetailsModal';
 import DepartmentBadge from '../components/workload/DepartmentBadge';
 import UtilizationMeter from '../components/workload/UtilizationMeter';
+import DepartmentLegendTiles from '../components/workload/DepartmentLegendTiles';
 import CrossDepartmentSupportPanel from '../components/workload/CrossDepartmentSupportPanel';
 import PageSizeToggle from '../components/common/PageSizeToggle';
 import AnimatedNumber from '../components/common/AnimatedNumber';
@@ -61,6 +66,11 @@ export default function WorkloadPage() {
   const [workload, setWorkload] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [allStaff, setAllStaff] = useState([]);
+  // The saved Capacity Threshold as the department cards need it: { status: 'loading' } until the first answer, { status: 'ready', value } (a whole
+  // number 1-100), { status: 'off' } when the Max Task Capacity Alert is off (the default bands apply), { status: 'unavailable' } when it cannot be
+  // read (no risk claim is made then). A later failed refresh keeps the last known answer.
+  const [riskState, setRiskState] = useState({ status: 'loading' });
+  const riskThreshold = riskState.status === 'ready' ? riskState.value : null;
   const [isLoading, setIsLoading] = useState(true);
   // Cross-Department Assistance (Admin and Manager only): read as the page opens, alongside the workload, so the loading skeleton
   // reserves room for the support panel only when it will be shown. The panel reuses this same answer when it mounts (no second
@@ -105,12 +115,19 @@ export default function WorkloadPage() {
       const staffPromise = canListStaff(getUserRole()) ? getStaff() : Promise.resolve(null);
 
       // Each answer is settled on its own, so a partial failure is decided part by part (see utils/workloadRefresh.js)
-      const [workloadResult, departmentsResult, staffResult] = await Promise.all([
+      // The threshold never fails the page: if it cannot be read, the last known answer stays; with none yet, the risk levels are shown as unavailable (grey bars, no labels)
+      const thresholdPromise = (['ADMIN', 'MANAGER'].includes(getUserRole()) ? getDepartmentRiskThreshold() : Promise.reject(new Error('not for this role')))
+        .then((answer) => parseRiskThresholdAnswer(answer))
+        .catch(() => null);
+      const [workloadResult, departmentsResult, staffResult, thresholdResult] = await Promise.all([
         settle(workloadPromise),
         settle(departmentsPromise, 'Failed to load departments for workload distribution:'),
         settle(staffPromise, 'Failed to load staff list for workload view modal:'),
+        thresholdPromise,
       ]);
       if (!isMountedRef.current) return;
+      // A readable answer replaces the state; an unreadable one keeps what was known, or marks the risk levels unavailable (never the defaults)
+      setRiskState((prev) => thresholdResult || (prev.status === 'ready' || prev.status === 'off' ? prev : { status: 'unavailable' }));
 
       // What stays on screen after this refresh. For a Manager nothing from an older refresh is kept beside newer rows, a refusal (403)
       // clears the page, and data that could not be refreshed is marked stale for at most two minutes; for anyone else nothing changed.
@@ -391,41 +408,52 @@ export default function WorkloadPage() {
         </div>
       </section>
 
-      {/* 2. Workload Status Thresholds: a header row, then four evenly spaced status tiles (display only; the statuses come from the backend) */}
-      <section className="bg-white rounded-xl border border-gray-100 shadow-2xs px-4 py-3 space-y-2.5" aria-label="Workload thresholds">
+      {/* 2. Department Risk Levels: the legend of the department cards below, built from the saved Capacity Threshold (getDepartmentLegendRanges), or an unavailable notice when it cannot be loaded; display only. Staff statuses are not part of it */}
+      <section className="bg-white rounded-xl border border-gray-100 shadow-2xs px-4 py-3 space-y-2.5" aria-label="Department risk levels">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-          <h2 className="text-sm font-semibold text-gray-900" title="Based on a 480-minute shift. Can exceed 100%.">Workload Thresholds</h2>
+          <h2 className="text-sm font-semibold text-gray-900" title={describeDepartmentRisk(riskState)}>Department Risk Levels</h2>
+          {riskState.status === 'off' && (
+            <span className="text-xs text-gray-500" data-testid="department-legend-default-note">Default ranges: Max Task Capacity Alert is off</span>
+          )}
         </div>
-        <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-          <li className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-100 dark:border-blue-100 dark:bg-blue-50 px-3 py-2">
-            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-blue-700">
-              <span className="w-3 h-3 rounded-full bg-blue-600 dark:bg-blue-500" aria-hidden="true" />
-              LOW
-            </span>
-            <span className="text-sm font-medium text-gray-900">0–25%</span>
-          </li>
-          <li className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-100 dark:border-emerald-100 dark:bg-emerald-50 px-3 py-2">
-            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-emerald-700">
-              <span className="w-3 h-3 rounded-full bg-emerald-600 dark:bg-emerald-500" aria-hidden="true" />
-              NORMAL
-            </span>
-            <span className="text-sm font-medium text-gray-900">Above 25%–50%</span>
-          </li>
-          <li className="flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-100 dark:border-orange-100 dark:bg-orange-50 px-3 py-2">
-            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-orange-700">
-              <span className="w-3 h-3 rounded-full bg-orange-600 dark:bg-orange-500" aria-hidden="true" />
-              HIGH
-            </span>
-            <span className="text-sm font-medium text-gray-900">Above 50%–75%</span>
-          </li>
-          <li className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-100 dark:border-red-100 dark:bg-red-50 px-3 py-2">
-            <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-red-700">
-              <span className="w-3 h-3 rounded-full bg-red-600 dark:bg-red-500" aria-hidden="true" />
-              AT RISK
-            </span>
-            <span className="text-sm font-medium text-gray-900">Above 75%</span>
-          </li>
-        </ul>
+        {riskState.status === 'ready' ? (
+          <DepartmentLegendTiles ranges={getDepartmentLegendRanges(riskState.value)} />
+        ) : riskState.status === 'unavailable' ? (
+          <p role="status" className="rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-500" data-testid="department-legend-unavailable">
+            Risk levels are unavailable: the Capacity Threshold could not be loaded. It is retried automatically.
+          </p>
+        ) : (
+          <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <li className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-100 dark:border-blue-100 dark:bg-blue-50 px-3 py-2">
+              <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-blue-700">
+                <span className="w-3 h-3 rounded-full bg-blue-600 dark:bg-blue-500" aria-hidden="true" />
+                LOW
+              </span>
+              <span className="text-sm font-medium text-gray-900">0–25%</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-100 dark:border-emerald-100 dark:bg-emerald-50 px-3 py-2">
+              <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-emerald-700">
+                <span className="w-3 h-3 rounded-full bg-emerald-600 dark:bg-emerald-500" aria-hidden="true" />
+                NORMAL
+              </span>
+              <span className="text-sm font-medium text-gray-900">Above 25%–50%</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 rounded-lg border border-orange-200 bg-orange-100 dark:border-orange-100 dark:bg-orange-50 px-3 py-2">
+              <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-orange-700">
+                <span className="w-3 h-3 rounded-full bg-orange-600 dark:bg-orange-500" aria-hidden="true" />
+                HIGH
+              </span>
+              <span className="text-sm font-medium text-gray-900">Above 50%–75%</span>
+            </li>
+            <li className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-100 dark:border-red-100 dark:bg-red-50 px-3 py-2">
+              <span className="inline-flex items-center gap-2 text-xs font-semibold tracking-wide text-red-700">
+                <span className="w-3 h-3 rounded-full bg-red-600 dark:bg-red-500" aria-hidden="true" />
+                AT RISK
+              </span>
+              <span className="text-sm font-medium text-gray-900">Above 75%</span>
+            </li>
+          </ul>
+        )}
       </section>
 
       {/* 3. Workload by Department: full width container with one card per department */}
@@ -446,9 +474,13 @@ export default function WorkloadPage() {
         {/* One card per department, generated from the data. auto-fill keeps every card the same width and
             wraps to new rows as departments are added, so no department count is hardcoded. */}
         <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4">
-          {departmentWorkloads.map((dept, deptIndex) => {
-            // Colour by the percentage of the total load shown on the card, in the legend's blue / green / orange / red
-            const barColor = getDepartmentShareBarColor(dept.percentage);
+          {departmentWorkloads.map((dept) => {
+            // Colour and status label come from one rule: AT RISK once the card's percentage reaches the Capacity Threshold (>=),
+            // otherwise the existing blue / green / orange / red classification of the percentage shown on the card
+            // While the threshold is unavailable no risk claim is made: a neutral bar and no status label (the percentage itself is unaffected)
+            const riskKnown = riskState.status !== 'unavailable';
+            const barColor = riskKnown ? getDepartmentShareBarColor(dept.percentage, riskThreshold) : 'bg-gray-400';
+            const status = riskKnown ? getDepartmentShareStatus(dept.percentage, riskThreshold) : null;
             return (
               <div
                 key={dept.code}
@@ -463,13 +495,16 @@ export default function WorkloadPage() {
                 <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
                     className={`tk-bar-grow h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${barColor}`}
-                    style={{ width: `${Math.min(dept.percentage, 100)}%`, '--tk-delay': `${deptIndex * 70}ms` }}
+                    style={{ width: `${Math.min(dept.percentage, 100)}%` }}
                   />
                 </div>
 
                 <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-0.5 text-2xs text-gray-500">
                   <span>
-                    <AnimatedNumber value={dept.percentage} delay={deptIndex * 70} />%
+                    <AnimatedNumber value={dept.percentage} />%
+                    {status && (
+                      <span className="ml-2 text-xs font-medium tracking-wide" data-testid="department-status">{status.replace('_', ' ')}</span>
+                    )}
                   </span>
                   <span>
                     {dept.activeTaskCount} {dept.activeTaskCount === 1 ? 'task' : 'tasks'}

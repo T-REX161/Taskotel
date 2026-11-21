@@ -56,6 +56,18 @@ public class SystemSettingsService {
         return repository.findBySettingsKey(SystemSettings.GLOBAL_KEY).map(SystemSettingsDto::of).orElseGet(SystemSettingsDto::defaults);
     }
 
+    /**
+     * The Capacity Threshold for the "Workload by Department" cards, for an Admin or a valid Manager only: the caller's scope is resolved from
+     * the database here (no sign-in 401, an invalid Manager 403) and Staff are refused (403), so no department-level information reaches them
+     * however this is reached. Only the alert switch and the percentage are returned. Writes nothing.
+     */
+    public DepartmentRiskThresholdDto departmentRiskThreshold() {
+        com.hotel.workload.security.DepartmentScope scope = scopeResolver.resolve();
+        if (!scope.isAll() && !scope.isDepartment()) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not allowed");
+        SystemSettingsDto settings = current();
+        return new DepartmentRiskThresholdDto(settings.capacityAlertEnabled(), settings.capacityThresholdPercent());
+    }
+
     /** Saves all four settings and returns them as stored. */
     public SystemSettingsDto update(UpdateSystemSettingsRequest request) {
         scopeResolver.requireAdmin();
