@@ -355,4 +355,51 @@ public class AssignmentServiceImpl implements AssignmentService {
 
         return AssignmentDto.fromEntity(assignment);
     }
+
+    @Override
+    @Transactional
+    public void unassign(UUID assignmentId) {
+        DepartmentScope scope = requireAssignmentManagementScope();
+
+        // Same lock order as reassign: the task first, then the staff member. A Manager reaches only a task of a department they manage;
+        // anything else is the same 404 as an assignment that does not exist.
+        Optional<UUID> taskId = assignmentRepository.findTaskIdById(assignmentId);
+        if (taskId.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found");
+        }
+        Task task;
+        if (scope.isDepartment()) {
+            task = taskRepository.lockByIdAndDepartmentIn(taskId.get(), scope.managedDepartments())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
+        } else {
+            taskRepository.lockByIds(Set.of(taskId.get()));
+            task = taskRepository.findById(taskId.get())
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
+        }
+        Assignment assignment = assignmentRepository.findById(assignmentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Assignment not found"));
+
+        if (task.getStatus() == TaskStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot remove staff from a completed task");
+        }
+        if (task.getStatus() == TaskStatus.CANCELLED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot remove staff from a cancelled task");
+        }
+
+        Staff holder = assignment.getStaff();
+        if (workloadAlerts != null && holder != null) {
+            workloadAlerts.track(List.of(holder.getId())); // before anything changes
+        }
+        assignmentRepository.delete(assignment);
+        assignmentRepository.flush();
+
+        // Nobody left on the task: it is waiting for someone again
+        if (!assignmentRepository.existsByTaskId(task.getId())) {
+            task.setStatus(TaskStatus.PENDING);
+            taskRepository.save(task);
+        }
+        // Support of this task (staff lent from another department) ends unless the supported person still holds it
+        supportLifecycle.onTaskReassigned(task.getId(), null);
+        if (taskEmails != null && holder != null) taskEmails.taskReassigned(task, holder, null);
+    }
 }

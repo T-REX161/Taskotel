@@ -11,4 +11,10 @@ public interface AssignmentService {
     List<AssignmentDto> createAssignments(CreateAssignmentRequest request);
     List<AssignmentDto> getAllAssignments();
     AssignmentDto reassignTask(UUID assignmentId, UpdateAssignmentRequest request);
+
+    /**
+     * Removes one staff member from a task (deletes that assignment). When nobody is left on the task it goes back to PENDING.
+     * Completed and cancelled tasks cannot be changed.
+     */
+    void unassign(UUID assignmentId);
 }
