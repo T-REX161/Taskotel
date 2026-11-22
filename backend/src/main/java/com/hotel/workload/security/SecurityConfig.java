@@ -130,7 +130,7 @@ public class SecurityConfig {
         allowGet(authz, new String[]{"/api/tasks", "/api/assignments"}, ADMIN, MANAGER, STAFF);
         authz.requestMatchers(HttpMethod.POST, "/api/tasks", "/api/assignments").hasAnyRole(ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.PUT, "/api/tasks/*", "/api/assignments/*").hasAnyRole(ADMIN, MANAGER);
-        authz.requestMatchers(HttpMethod.DELETE, "/api/tasks/*").hasAnyRole(ADMIN, MANAGER);
+        authz.requestMatchers(HttpMethod.DELETE, "/api/tasks/*", "/api/assignments/*").hasAnyRole(ADMIN, MANAGER);
         // A Staff member's own task status (the service also checks that the task is assigned to them)
         authz.requestMatchers(HttpMethod.PATCH, "/api/tasks/*/status").hasRole(STAFF);
 
