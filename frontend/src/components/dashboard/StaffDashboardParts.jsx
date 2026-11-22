@@ -1,9 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { CalendarIcon, ClipboardIcon, ClockIcon, TasksIcon } from '../icons/Icons';
-import { formatDueDate, formatPriority, formatStatus, getPriorityColor, getStatusColor, isTaskOverdue } from '../tasks/taskFormatters';
+import { formatDueDate, formatPriority, formatStatus, formatOverdueBy, getStatusColor, isTaskOverdue } from '../tasks/taskFormatters';
 import { latestActiveTasks, personalWorkload } from '../../utils/myWorkload';
-import { CARD, GREEN_CHIP, StatCard } from '../staff/StaffPortalParts';
+import { CARD, FlagIcon, GREEN_CHIP, PRIORITY_BAR, PRIORITY_FLAG, StatCard, TASK_BADGE as BADGE, TASK_ROW } from '../staff/StaffPortalParts';
 
 /**
  * The Staff dashboard (Staff only; Admin and Manager keep their own dashboard): a personal task home page. Four figures and a short preview of the
@@ -12,15 +12,17 @@ import { CARD, GREEN_CHIP, StatCard } from '../staff/StaffPortalParts';
  */
 export default function StaffDashboardView({ data, tasks }) {
   const me = personalWorkload(data);
-  const count = (key) => Number(data?.[key]) || 0;
+  // The summary endpoint's figures don't count ASSIGNED tasks, so the cards could read 0 / 0 / 0 next to an active task. Prefer the person's own task list.
+  const own = Array.isArray(tasks?.data) ? tasks.data : null;
+  const count = (key, statuses) => (own ? own.filter((t) => statuses.includes(t.status)).length : Number(data?.[key]) || 0);
 
   return (
     <div className="space-y-5">
       <section aria-label="My task summary" className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard title="My Active Tasks" Icon={TasksIcon} chip={GREEN_CHIP}>{me ? me.activeTasks : 0}</StatCard>
-        <StatCard title="Pending" Icon={ClipboardIcon} chip="bg-amber-50 text-amber-600 ring-amber-100">{count('pendingTasks')}</StatCard>
-        <StatCard title="In Progress" Icon={ClockIcon} chip="bg-indigo-50 text-indigo-600 ring-indigo-100">{count('inProgressTasks')}</StatCard>
-        <StatCard title="Completed" Icon={TasksIcon} chip={GREEN_CHIP}>{count('completedTasks')}</StatCard>
+        <StatCard title="Pending" Icon={ClipboardIcon} chip="bg-amber-50 text-amber-600 ring-amber-100">{count('pendingTasks', ['PENDING', 'ASSIGNED'])}</StatCard>
+        <StatCard title="In Progress" Icon={ClockIcon} chip="bg-indigo-50 text-indigo-600 ring-indigo-100">{count('inProgressTasks', ['IN_PROGRESS'])}</StatCard>
+        <StatCard title="Completed" Icon={TasksIcon} chip={GREEN_CHIP}>{count('completedTasks', ['COMPLETED'])}</StatCard>
       </section>
 
       <MyTasksSection tasks={tasks} />
@@ -34,10 +36,13 @@ function MyTasksSection({ tasks }) {
   const preview = latestActiveTasks(tasks?.data, 3);
 
   return (
-    <section aria-label="My tasks" className={CARD}>
-      <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100">
-        <h2 className="text-base font-bold text-gray-900">My Tasks</h2>
-        {preview.length > 0 && <Link to="/tasks" className="text-sm font-medium text-emerald-700 hover:text-emerald-800 hover:underline">View All Tasks</Link>}
+    <section aria-label="My tasks" className={`${CARD} overflow-hidden`}>
+      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold tracking-tight text-gray-900">My Tasks</h2>
+          <p className="mt-0.5 text-xs text-gray-500">Your assigned work at a glance</p>
+        </div>
+        {preview.length > 0 && <Link to="/tasks" className="group shrink-0 inline-flex items-center gap-1 rounded-md text-sm font-medium text-emerald-700 hover:text-emerald-800 transition-colors duration-base focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">View All Tasks<span aria-hidden="true" className="text-xs transition-transform duration-base group-hover:translate-x-0.5 group-hover:-translate-y-0.5">&#8599;</span></Link>}
       </div>
 
       {loading ? (
@@ -59,20 +64,27 @@ function MyTasksSection({ tasks }) {
         <ul className="divide-y divide-gray-100">
           {preview.map((task) => {
             const overdue = isTaskOverdue(task);
+            const overdueBy = formatOverdueBy(task);
             return (
-              <li key={task.id} className="px-5 py-3.5 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-2 sm:items-center">
+              <li key={task.id} className={TASK_ROW}>
+                <span aria-hidden="true" className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full opacity-80 ${PRIORITY_BAR[task.priority] || 'bg-gray-300'}`} />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate" title={task.title}>{task.title}</p>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${getPriorityColor(task.priority)}`}>{formatPriority(task.priority)}</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${getStatusColor(task.status)}`}>{formatStatus(task.status)}</span>
-                    {overdue && <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-50 text-red-700 ring-1 ring-inset ring-red-100">Overdue</span>}
+                  <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate" title={task.title}>{task.title}</p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs leading-4 text-gray-500">
+                    <span className="inline-flex items-center gap-1.5">
+                      <FlagIcon className={`w-3.5 h-3.5 ${PRIORITY_FLAG[task.priority] || 'text-gray-400'}`} />
+                      {formatPriority(task.priority)} priority
+                    </span>
+                    <span className={`inline-flex items-center gap-1.5 ${overdue ? 'text-red-600' : ''}`}>
+                      <CalendarIcon className="w-3.5 h-3.5" aria-hidden="true" />
+                      {task.dueDate ? formatDueDate(task.dueDate, task.deadlineTime) : 'No due date'}
+                    </span>
                   </div>
                 </div>
-                <span className={`inline-flex items-center gap-1.5 text-xs ${overdue ? 'font-semibold text-red-700' : 'text-gray-500'}`}>
-                  <CalendarIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                  {task.dueDate ? formatDueDate(task.dueDate, task.deadlineTime) : 'No due date'}
-                </span>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  {overdue && <span className={`${BADGE} bg-red-50 text-red-700 ring-1 ring-inset ring-red-100`}>Overdue{overdueBy ? ` by ${overdueBy}` : ''}</span>}
+                  <span className={`${BADGE} ${getStatusColor(task.status)}`}>{formatStatus(task.status)}</span>
+                </div>
               </li>
             );
           })}

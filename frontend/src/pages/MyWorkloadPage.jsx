@@ -5,10 +5,11 @@ import { keepIfSame, singleFlight, startPolling } from '../utils/polling';
 import { activeTasksOf, isSupportTask, personalWorkload, taskBreakdown } from '../utils/myWorkload';
 import { getWorkloadProgressBarColor, getWorkloadStatusBadge } from '../utils/workloadUtils';
 import { dashboardLoadErrorMessage } from '../utils/dashboardView';
-import { formatDueDate, formatDuration, formatPriority, formatStatus, getPriorityColor, getStatusColor, isTaskOverdue } from '../components/tasks/taskFormatters';
+import { formatDueDate, formatDuration, formatOverdueBy, formatPriority, formatStatus, getStatusColor, isTaskOverdue } from '../components/tasks/taskFormatters';
 import { getAvailabilityColor } from '../components/staff/staffFormatters';
 import { CalendarIcon, ClipboardIcon, ClockIcon, TasksIcon, UserIcon, WorkloadIcon } from '../components/icons/Icons';
-import { CARD, GREEN_CHIP, NEUTRAL_CHIP, STATUS_TONE, StatCard, availabilityText } from '../components/staff/StaffPortalParts';
+import { CARD, FlagIcon, GREEN_CHIP, NEUTRAL_CHIP, PRIORITY_BAR, PRIORITY_FLAG, STATUS_TONE, StatCard, TASK_BADGE, TASK_ROW, availabilityText } from '../components/staff/StaffPortalParts';
+import AnimatedNumber from '../components/common/AnimatedNumber';
 import Spinner from '../components/common/Spinner';
 import LoadError from '../components/common/LoadError';
 
@@ -146,7 +147,7 @@ export default function MyWorkloadPage() {
 
           <div className="my-auto pt-5">
           <div className="flex items-baseline gap-3">
-            <span className="text-4xl font-bold leading-none tabular-nums text-gray-900">{personal.percent}%</span>
+            <span className="text-4xl font-bold leading-none tabular-nums text-gray-900"><AnimatedNumber value={personal.percent} />%</span>
             {tone && <span className="text-sm font-medium text-gray-500">{tone.text}</span>}
           </div>
 
@@ -159,7 +160,7 @@ export default function MyWorkloadPage() {
             aria-label={`Shift utilization ${personal.percent}%`}
           >
             <div
-              className={`h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${getWorkloadProgressBarColor(personal.status)}`}
+              className={`tk-bar-grow h-full rounded-full transition-[width,background-color] duration-slow ease-standard ${getWorkloadProgressBarColor(personal.status)}`}
               style={{ width: `${fill}%` }}
             />
           </div>
@@ -187,10 +188,10 @@ export default function MyWorkloadPage() {
                     <span className={`w-2.5 h-2.5 rounded-full ${row.dot}`} aria-hidden="true" />
                     {row.label}
                   </span>
-                  <span className="font-bold text-gray-900 tabular-nums">{counts[row.key]}</span>
+                  <span className="font-bold text-gray-900 tabular-nums"><AnimatedNumber value={counts[row.key]} /></span>
                 </div>
                 <div className="mt-1.5 h-1.5 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
-                  <div className={`h-full rounded-full ${row.dot}`} style={{ width: counts.total ? `${(counts[row.key] / counts.total) * 100}%` : '0%' }} />
+                  <div className={`tk-bar-grow h-full rounded-full ${row.dot}`} style={{ width: counts.total ? `${(counts[row.key] / counts.total) * 100}%` : '0%' }} />
                 </div>
               </li>
             ))}
@@ -199,10 +200,13 @@ export default function MyWorkloadPage() {
       </div>
 
       {/* Assigned tasks */}
-      <section aria-label="My assigned tasks" className={CARD}>
-        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100">
-          <h2 className="text-base font-bold text-gray-900">My Assigned Tasks</h2>
-          {active.length > 0 && <Link to="/tasks" className="text-sm font-medium text-emerald-700 hover:text-emerald-800 hover:underline">View all my tasks</Link>}
+      <section aria-label="My assigned tasks" className={`${CARD} overflow-hidden`}>
+        <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-100">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold tracking-tight text-gray-900">My Assigned Tasks</h2>
+            <p className="mt-0.5 text-xs text-gray-500">Open work with its estimate and due date</p>
+          </div>
+          {active.length > 0 && <Link to="/tasks" className="group shrink-0 inline-flex items-center gap-1 rounded-md text-sm font-medium text-emerald-700 hover:text-emerald-800 transition-colors duration-base focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2">View all my tasks<span aria-hidden="true" className="text-xs transition-transform duration-base group-hover:translate-x-0.5 group-hover:-translate-y-0.5">&#8599;</span></Link>}
         </div>
         {active.length === 0 ? (
           <div data-testid="no-active-tasks" className="flex flex-col items-center text-center px-5 py-10">
@@ -219,28 +223,34 @@ export default function MyWorkloadPage() {
           <ul className="divide-y divide-gray-100">
             {active.map((task) => {
               const overdue = isTaskOverdue(task);
+              const overdueBy = formatOverdueBy(task);
               return (
-                <li key={task.id} className="px-5 py-3.5 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-2 sm:items-center">
+                <li key={task.id} className={TASK_ROW}>
+                  <span aria-hidden="true" className={`absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full opacity-80 ${PRIORITY_BAR[task.priority] || 'bg-gray-300'}`} />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate" title={task.title}>{task.title}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${getPriorityColor(task.priority)}`}>{formatPriority(task.priority)}</span>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${getStatusColor(task.status)}`}>{formatStatus(task.status)}</span>
-                      {task.departmentName && <span className="text-xs text-gray-500">{task.departmentName}</span>}
-                      {isSupportTask(task, personal) && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100">Support</span>
-                      )}
+                    <p className="text-base font-semibold leading-snug text-gray-900 break-words sm:truncate" title={task.title}>{task.title}</p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs leading-4 text-gray-500">
+                      <span className="inline-flex items-center gap-1.5">
+                        <FlagIcon className={`w-3.5 h-3.5 ${PRIORITY_FLAG[task.priority] || 'text-gray-400'}`} />
+                        {formatPriority(task.priority)} priority
+                      </span>
+                      {task.departmentName && <span>{task.departmentName}</span>}
+                      <span className="inline-flex items-center gap-1.5 tabular-nums">
+                        <ClockIcon className="w-3.5 h-3.5" aria-hidden="true" />
+                        {formatDuration(task.estimatedDuration, 'No estimate')}
+                      </span>
+                      <span className={`inline-flex items-center gap-1.5 ${overdue ? 'text-red-600' : ''}`}>
+                        <CalendarIcon className="w-3.5 h-3.5" aria-hidden="true" />
+                        {task.dueDate ? formatDueDate(task.dueDate, task.deadlineTime) : 'No due date'}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex sm:flex-col sm:items-end gap-x-5 gap-y-1 text-xs text-gray-500">
-                    <span className="inline-flex items-center gap-1.5 tabular-nums">
-                      <ClockIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span className="font-semibold text-gray-800">{formatDuration(task.estimatedDuration, 'No estimate')}</span>
-                    </span>
-                    <span className={`inline-flex items-center gap-1.5 ${overdue ? 'font-semibold text-red-700' : ''}`}>
-                      <CalendarIcon className="w-3.5 h-3.5" aria-hidden="true" />
-                      {task.dueDate ? formatDueDate(task.dueDate, task.deadlineTime) : 'No due date'}{overdue ? ' · Overdue' : ''}
-                    </span>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    {overdue && <span className={`${TASK_BADGE} bg-red-50 text-red-700 ring-1 ring-inset ring-red-100`}>Overdue{overdueBy ? ` by ${overdueBy}` : ''}</span>}
+                    {isSupportTask(task, personal) && (
+                      <span className={`${TASK_BADGE} bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-100`}>Support</span>
+                    )}
+                    <span className={`${TASK_BADGE} ${getStatusColor(task.status)}`}>{formatStatus(task.status)}</span>
                   </div>
                 </li>
               );

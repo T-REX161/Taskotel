@@ -167,6 +167,23 @@ describe('Tasks table and task details with several assignees (rendered)', () =>
     for (const name of ['Rahul', 'Priya', 'Amit']) assert.ok(html.includes(`>${name}</li>`), name);
   });
 
+  it('the details view copes with a very long title, no description, every status and priority, and an assignee with or without a picture', () => {
+    const longTitle = 'Turnover '.repeat(40).trim();
+    const withPicture = groupAssignmentsByTask([{ id: '1', taskId: 't1', staffId: 'a', staffName: 'Sasuke Uchiha', staffProfileImageUrl: 'https://img.test/s.png' }]);
+    const html = renderHtml(Details, { task: { ...task, title: longTitle }, assignmentsByTaskId: withPicture, onClose() {} });
+    assert.ok(html.includes(longTitle) && html.includes('break-words'), 'the title wraps instead of overflowing');
+    assert.ok(html.includes('No description provided.'), 'subtle placeholder for a missing description');
+    assert.ok(html.includes('src="https://img.test/s.png"'), 'the profile picture is used when there is one');
+    const noPicture = groupAssignmentsByTask([{ id: '1', taskId: 't1', staffId: 'a', staffName: 'Sasuke Uchiha' }]);
+    assert.ok(renderHtml(Details, { task, assignmentsByTaskId: noPicture, onClose() {} }).includes('>SU<'), 'initials stand in for a missing picture');
+    for (const status of ['PENDING', 'ASSIGNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED']) {
+      for (const priority of ['LOW', 'MEDIUM', 'HIGH', 'URGENT']) {
+        const out = renderHtml(Details, { task: { ...task, status, priority }, assignmentsByTaskId: noPicture, onClose() {} });
+        assert.ok(out.includes('role="dialog"') && out.includes('tk-solid-dialog'), `${status}/${priority}`);
+      }
+    }
+  });
+
   it('the details view of a one-assignee or unassigned task is as before', () => {
     const one = groupAssignmentsByTask([{ id: '1', taskId: 't1', staffId: 'a', staffName: 'Rahul' }]);
     const oneHtml = renderHtml(Details, { task, assignmentsByTaskId: one, onClose() {} });

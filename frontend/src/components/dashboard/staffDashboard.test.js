@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { latestActiveTasks } from '../../utils/myWorkload.js';
+import { formatOverdueBy } from '../tasks/taskFormatters.js';
 
 const src = (file) => readFileSync(fileURLToPath(new URL(`../../${file}`, import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
 
@@ -35,7 +36,7 @@ test('the Staff dashboard has exactly four figures and none of the detailed work
 test('My Tasks previews at most 3 own tasks, flags overdue and missing due dates, and has the specified empty state', () => {
   const view = src('components/dashboard/StaffDashboardParts.jsx');
   assert.ok(view.includes('latestActiveTasks(tasks?.data, 3)'));
-  assert.ok(view.includes('isTaskOverdue(task)') && view.includes('>Overdue<') && view.includes("task.dueDate ? formatDueDate(task.dueDate, task.deadlineTime) : 'No due date'"));
+  assert.ok(view.includes('isTaskOverdue(task)') && view.includes('Overdue{overdueBy ?') && view.includes('formatOverdueBy(task)') && view.includes("task.dueDate ? formatDueDate(task.dueDate, task.deadlineTime) : 'No due date'"));
   assert.ok(view.includes('No active tasks') && view.includes('Your assigned tasks will appear here.'));
   assert.ok((view.match(/<Link to="\/tasks"/g) || []).length === 2, 'View All Tasks link (with tasks and in the empty state)');
   assert.ok(!view.includes('Quick Access') && !view.includes('/workload') && !view.includes('/profile'), 'no Quick Access section or shortcut cards');
@@ -57,4 +58,17 @@ test('latestActiveTasks: the newest active tasks first, at most the limit, nothi
   assert.deepEqual(latestActiveTasks(tasks, 0), []);
   assert.deepEqual(latestActiveTasks(null), []);
   assert.deepEqual(latestActiveTasks([{ id: 9, title: 'b', status: 'PENDING' }, { id: 8, title: 'a', status: 'PENDING' }]).map((t) => t.id), [8, 9], 'no createdAt: stable by title');
+});
+
+test('formatOverdueBy: minutes, hours or days since the due moment; null when not overdue', () => {
+  const now = new Date(2026, 10, 22, 17, 28);
+  const task = (dueDate, deadlineTime, status = 'ASSIGNED') => ({ dueDate, deadlineTime, status });
+  assert.equal(formatOverdueBy(task('2026-11-22', '14:00'), now), '3 hours');
+  assert.equal(formatOverdueBy(task('2026-11-22', '17:27'), now), '1 minute');
+  assert.equal(formatOverdueBy(task('2026-11-22', '16:28'), now), '1 hour');
+  assert.equal(formatOverdueBy(task('2026-11-21', null), now), '17 hours');
+  assert.equal(formatOverdueBy(task('2026-11-19', '17:28'), now), '3 days');
+  assert.equal(formatOverdueBy(task('2026-11-23', '09:00'), now), null);
+  assert.equal(formatOverdueBy(task('2026-11-20', '09:00', 'COMPLETED'), now), null);
+  assert.equal(formatOverdueBy({ status: 'ASSIGNED' }, now), null);
 });

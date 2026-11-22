@@ -256,6 +256,14 @@ html.dark .bg-white.shadow-2xl {
   backdrop-filter: blur(30px) saturate(180%);
 }
 
+/* Detail dialogs (Task Details) are fully solid: nothing behind them shows through */
+html.dark .bg-white.tk-solid-dialog {
+  background: #12161b;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 24px 64px -16px rgba(0, 0, 0, 0.85);
+}
+
 /* The top bar: dark glass over the page. Mostly transparent with a strong blur and a bright top edge, so content scrolling
    underneath shows through it, blurred and tinted. */
 html.dark header.bg-surface-chrome {

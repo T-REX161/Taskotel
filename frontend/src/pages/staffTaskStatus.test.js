@@ -122,7 +122,16 @@ describe('wiring in the Tasks screen (source checks: the project has no DOM test
     assert.ok(table.includes('{!canManageTasks && onStatusChange && (() => {'));
     assert.ok(table.includes('const action = staffStatusAction(task.status);') && table.includes('if (!action) return null;'));
     assert.ok(table.includes('disabled={busy}') && table.includes('{busy ? action.busyLabel : action.label}'));
-    assert.ok(table.includes('onStatusChange(task, action.status);'));
+    assert.ok(table.includes('runStatusChange(task, action.status)') && table.includes('await onStatusChange(task, status);'));
+  });
+
+  it('menu: View Details for everyone; the primary step is separated; completing asks first; the menu closes when the request settles; no history or notes', () => {
+    assert.ok(table.includes('Mark this task as completed?') && table.includes('Completed tasks cannot be reopened.'));
+    assert.ok(table.includes('completing ? setConfirmTaskId(task.id) : runStatusChange(task, action.status)'), 'Start runs at once; Complete is confirmed first');
+    assert.ok(table.includes('} finally {\n      closeMenu();'), 'closes after success or failure; the page shows the banner either way');
+    assert.ok(table.includes('role="menu"') && table.includes('role="menuitem"') && table.includes("e.key === 'Escape'") && table.includes('handleMenuKeyDown'), 'keyboard support');
+    assert.ok(!/View History|Add Note|Report an Issue/.test(table), 'history and notes are not supported by the backend, so the menu does not offer them');
+    assert.ok(/PlayIcon|CircleCheckIcon/.test(table) && !table.includes('<polyline points="20 6 9 17 4 12" />'));
   });
 
   it('Admin/Manager editing controls are still gated by canManageTasks, and Staff get none of them', () => {

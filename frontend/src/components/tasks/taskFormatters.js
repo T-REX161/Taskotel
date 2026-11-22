@@ -147,6 +147,23 @@ export function isTaskOverdue(task, now = new Date()) {
   return time[0] * 60 + time[1] < now.getHours() * 60 + now.getMinutes();
 }
 
+/**
+ * How long an overdue task has been overdue, as a short phrase ("12 minutes", "3 hours", "1 day"), or null when the task is not overdue.
+ * Measured from the due moment (due date plus deadline time; end of the due day when there is no time) to `now`, in local time, matching isTaskOverdue.
+ */
+export function formatOverdueBy(task, now = new Date()) {
+  if (!isTaskOverdue(task, now)) return null;
+  const [y, m, d] = String(task.dueDate).split('-').map((part) => parseInt(part, 10));
+  const [hh, mm] = String(task.deadlineTime || '').split(':').map((part) => parseInt(part, 10));
+  const hasTime = Number.isFinite(hh) && Number.isFinite(mm);
+  const due = hasTime ? new Date(y, m - 1, d, hh, mm) : new Date(y, m - 1, d, 23, 59, 59, 999);
+  const minutes = Math.max(1, Math.floor((now - due) / 60000));
+  const unit = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  if (minutes < 60) return unit(minutes, 'minute');
+  if (minutes < 24 * 60) return unit(Math.floor(minutes / 60), 'hour');
+  return unit(Math.floor(minutes / (24 * 60)), 'day');
+}
+
 export function formatDate(dueDateStr) {
   if (!dueDateStr) return null;
   const parts = String(dueDateStr).split('-');

@@ -293,7 +293,7 @@ describe('menus', () => {
   });
 
   it('outside click, Escape and the menu actions still use the real open state', () => {
-    assert.ok(read('components/tasks/TasksTable.jsx').includes("if (e.key === 'Escape') setActiveMenu(null);"));
+    assert.match(read('components/tasks/TasksTable.jsx'), /if \(e\.key === 'Escape'\) \{\s*activeMenu\.buttonEl\?\.focus\(\);\s*closeMenu\(\);/);
     assert.ok(read('pages/AssignmentsPage.jsx').includes('if (menuRef.current?.contains(e.target) || activeMenu.buttonEl?.contains(e.target)) return;'));
     assert.ok(read('pages/AssignmentsPage.jsx').includes('const isMenuOpen = activeMenu?.assignment?.id === assignment.id;'), 'the row highlight ends as soon as the menu closes');
   });
