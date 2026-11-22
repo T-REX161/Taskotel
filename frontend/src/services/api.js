@@ -248,6 +248,15 @@ export const reassignTask = (assignmentId, request) => {
 };
 
 /**
+ * Remove one staff member from a task (deletes that assignment). The task returns to Pending when nobody is left on it.
+ */
+export const unassignTask = (assignmentId) => {
+  return apiFetch(`/api/assignments/${assignmentId}`, {
+    method: 'DELETE',
+  });
+};
+
+/**
  * Get the list of all users.
  * Requires ADMIN role.
  */

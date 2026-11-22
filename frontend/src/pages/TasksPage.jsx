@@ -11,6 +11,7 @@ import {
   deleteTask,
   createAssignment,
   reassignTask,
+  unassignTask,
   getStaff,
   getWorkload,
 } from '../services/api';
@@ -93,6 +94,7 @@ export default function TasksPage() {
   });
   const [editFormError, setEditFormError] = useState('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [removingAssignmentId, setRemovingAssignmentId] = useState(null);
 
   const [deleteModalTask, setDeleteModalTask] = useState(null);
   const [deleteModalError, setDeleteModalError] = useState('');
@@ -307,6 +309,30 @@ export default function TasksPage() {
 
   const handleEditChange = (field, value) => {
     setEditFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // Remove one person from the task being edited. A separate request from Save: it takes effect at once, and when nobody is left the
+  // server sets the task back to Pending, so the dialog is refreshed to show that (other unsaved edits are kept).
+  const handleRemoveAssignee = async (assignment) => {
+    if (removingAssignmentId || !editModalTask) return;
+    setRemovingAssignmentId(assignment.id);
+    setEditFormError('');
+    try {
+      await unassignTask(assignment.id);
+      const freshTasks = await getTasks();
+      const fresh = Array.isArray(freshTasks) ? freshTasks.find((t) => t.id === editModalTask.id) : null;
+      if (fresh) {
+        setEditModalTask(fresh);
+        setEditFormData((prev) => ({ ...prev, status: fresh.status || prev.status }));
+      }
+      setSuccessBanner(`${assignment.staffName} was removed from "${editModalTask.title}".`);
+      await fetchTasksData(false);
+    } catch (err) {
+      setEditFormError(err.message || 'Failed to remove the staff member. Please try again.');
+      await fetchTasksData(false);
+    } finally {
+      setRemovingAssignmentId(null);
+    }
   };
 
   // Submit Edit Modal
@@ -650,6 +676,9 @@ export default function TasksPage() {
             isSubmitting={isSubmittingEdit}
             formError={editFormError}
             canChangeDepartment={canChangeTaskDepartment(userRole)}
+            assignees={editModalTask ? assignmentsByTaskId.get(editModalTask.id) || [] : []}
+            onRemoveAssignee={handleRemoveAssignee}
+            removingAssignmentId={removingAssignmentId}
           />
 
           <AssignTaskModal

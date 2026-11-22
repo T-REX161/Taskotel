@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CloseIcon } from '../icons/Icons';
 import DepartmentOptions from '../common/DepartmentOptions';
 import useDepartments from '../../hooks/useDepartments';
@@ -24,6 +24,9 @@ import Spinner from '../common/Spinner';
  *   formError      – string | ''
  *   canChangeDepartment – false for a Manager: the department is shown but cannot be changed (the server refuses a move too).
  *                        Defaults to true (Admin behaviour unchanged).
+ *   assignees      – the task's assignments ({ id, staffName }); each can be removed (the task has no assignee left → Pending)
+ *   onRemoveAssignee – (assignment) => void  — removes that person from the task right away (it is its own request, not part of Save)
+ *   removingAssignmentId – the assignment being removed, or null
  */
 function EditTaskModal({
   task,
@@ -34,9 +37,14 @@ function EditTaskModal({
   isSubmitting,
   formError,
   canChangeDepartment = true,
+  assignees = [],
+  onRemoveAssignee,
+  removingAssignmentId = null,
   closing = false,
 }) {
   const { departments } = useDepartments();
+  // Two-step removal: the first click asks, the second one removes (nothing happens on a stray click)
+  const [confirmingId, setConfirmingId] = useState(null);
 
   if (!task) return null;
 
@@ -190,6 +198,65 @@ function EditTaskModal({
                 placeholder="30"
               />
             </div>
+          </div>
+
+          {/* Assigned To */}
+          <div className="space-y-1.5" data-testid="edit-task-assignees">
+            <label className="text-sm font-medium text-gray-700">Assigned To</label>
+            {assignees.length === 0 ? (
+              <p className="text-sm text-gray-500">Unassigned. Assign staff from the Actions menu or the Assignments page.</p>
+            ) : (
+              <ul className="space-y-2">
+                {assignees.map((a) => {
+                  const removing = removingAssignmentId === a.id;
+                  const confirming = confirmingId === a.id;
+                  const finished = task.status === 'COMPLETED' || task.status === 'CANCELLED';
+                  return (
+                    <li key={a.id} className="flex items-center justify-between gap-3 px-4 py-2 border border-gray-200 rounded-xl text-sm">
+                      <span className="font-medium text-gray-800 truncate">{a.staffName}</span>
+                      {!finished && onRemoveAssignee && (
+                        confirming ? (
+                          <span className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              type="button"
+                              disabled={isSubmitting || removing}
+                              onClick={() => { setConfirmingId(null); onRemoveAssignee(a); }}
+                              className="px-3 py-1 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg cursor-pointer disabled:opacity-60"
+                            >
+                              {removing ? 'Removing...' : 'Confirm remove'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={removing}
+                              onClick={() => setConfirmingId(null)}
+                              className="px-3 py-1 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+                            >
+                              Keep
+                            </button>
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={isSubmitting || removing}
+                            onClick={() => setConfirmingId(a.id)}
+                            className="px-3 py-1 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 cursor-pointer flex-shrink-0 disabled:opacity-60"
+                            title={`Remove ${a.staffName} from this task`}
+                          >
+                            Remove
+                          </button>
+                        )
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {formError && assignees.length > 0 && (
+              <p className="text-xs text-red-600" role="alert">{formError}</p>
+            )}
+            {assignees.length > 0 && onRemoveAssignee && (
+              <p className="text-xs text-gray-500">Removing takes effect immediately. If nobody is left, the task goes back to Pending.</p>
+            )}
           </div>
 
           {/* Description */}
