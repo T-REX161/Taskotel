@@ -116,6 +116,22 @@ public class SupportConcurrencyTest {
     }
 
     @Test
+    @DisplayName("Two plans that are each within the donor's capacity limit but together would push it past: only one is confirmed")
+    void donorCapacityLimitHoldsUnderConcurrency() throws Exception {
+        var s = fx.overloaded(2, 3);       // the donor has 3 free people and 1 busy one: the reserve alone would allow lending 2
+        Staff busy = fx.eligible("Donor busy", s.donor);
+        fx.assign(fx.task("Big donor job", s.donor, com.hotel.workload.task.Priority.MEDIUM, 1000, com.hotel.workload.task.TaskStatus.PENDING), busy);
+        // 1000 min over 4 people = 52.1%; one fewer person = 69.4% (fine); two fewer = 104.2% (past the 85% limit)
+        Staff first = s.donors.get(0), second = s.donors.get(1);
+
+        List<Boolean> outcomes = race(List.of(fx.plan(s.receiving, first, s.tasks.get(0)), fx.plan(s.receiving, second, s.tasks.get(1))));
+
+        assertEquals(1, outcomes.stream().filter(b -> b).count(), "exactly one plan wins: " + outcomes);
+        long lent = supportRepository.findAll().stream().filter(x -> x.getReceivingDepartmentCode().equals(s.receiving.getCode())).count();
+        assertEquals(1, lent, "the donor is never left past its limit");
+    }
+
+    @Test
     @DisplayName("Two plans that want the same person for different tasks: one wins and nobody gets two tasks")
     void samePersonCannotBeBookedTwice() throws Exception {
         var s = fx.overloaded(2, 4);

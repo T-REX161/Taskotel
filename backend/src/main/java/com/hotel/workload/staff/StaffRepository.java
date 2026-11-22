@@ -83,6 +83,14 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     @Query("SELECT s FROM Staff s JOIN FETCH s.user WHERE s.active = true AND s.availability = :availability")
     List<Staff> findActiveWithUserByAvailability(@Param("availability") Availability availability);
 
+    /**
+     * How many people count towards each department's capacity at home, as [department code, count] rows: active STAFF accounts marked
+     * AVAILABLE with a department (managers and administrators are not operational capacity). Counts only. Whoever is on temporary support
+     * is adjusted afterwards (see DepartmentCapacityService).
+     */
+    @Query("SELECT s.department.code, COUNT(s) FROM Staff s JOIN s.user u WHERE s.department IS NOT NULL AND s.active = true AND s.availability = com.hotel.workload.staff.Availability.AVAILABLE AND u.role = com.hotel.workload.security.Role.STAFF GROUP BY s.department.code")
+    List<Object[]> countCapacityStaffByDepartmentCode();
+
     // Department-scoped operational counts (Manager dashboard): the filter is in the query, never applied afterwards in Java.
     @Query("SELECT COUNT(s) FROM Staff s WHERE s.department = :department AND s.user.role = com.hotel.workload.security.Role.STAFF")
     long countOperationalInDepartment(@Param("department") Department department);

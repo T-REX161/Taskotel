@@ -6,7 +6,7 @@ import { donorCapacityLeft, donorSummaryText, needsReserveOverride, personWorklo
 const PRIORITY_LABELS = { URGENT: 'Urgent', HIGH: 'High', MEDIUM: 'Medium', LOW: 'Low' };
 
 const taskLabel = (task) =>
-  `${task.title} · ${PRIORITY_LABELS[task.priority] || task.priority} · ${task.estimatedDuration ? `${task.estimatedDuration} min` : 'no duration'}`;
+  `${task.title} · ${PRIORITY_LABELS[task.priority] || task.priority} · ${task.estimatedDuration ? `${task.estimatedDuration} min` : 'no duration'}${task.shared ? ' · already assigned (helper joins)' : ''}`;
 
 const initialsOf = (name) => {
   const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
@@ -169,7 +169,7 @@ export default function SupportPlanBuilder({ options, plan, suggestions, notice,
           {plan.length === 0 && (
             <div className="rounded-xl border border-dashed border-gray-300 px-4 py-5 text-center">
               <p className="text-sm font-medium text-gray-800">Choose who will help</p>
-              <p className="mt-0.5 text-xs text-gray-500">Add staff from the list. Each person helps with one waiting task. Nothing is assigned until you confirm.</p>
+              <p className="mt-0.5 text-xs text-gray-500">Add staff from the list. Each person helps with one task: a waiting one, or (when the department is at its limit) one its staff already hold. Nothing is assigned until you confirm.</p>
             </div>
           )}
           <ul className="space-y-2">

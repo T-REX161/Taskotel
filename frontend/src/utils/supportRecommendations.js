@@ -1,6 +1,8 @@
 // Helpers for the Cross-Department Support panel on the Workload page.
 // The response is a recommendation only: nothing in it has been approved, assigned or moved.
 
+import { formatUtilization } from './workloadUtils.js';
+
 const SEVERITY_LABELS = { CRITICAL: 'Critical', HIGH: 'High', MODERATE: 'Moderate' };
 
 const SEVERITY_BADGES = {
@@ -45,6 +47,22 @@ export function summarizeNeeds(normalized) {
     uncovered: all.reduce((sum, d) => sum + (d.pressure?.uncoveredTasks || 0), 0),
     waiting: all.reduce((sum, d) => sum + (d.pressure?.waitingTasks || 0), 0),
   };
+}
+
+/** Why a department is on the list, in words, from the server's needReason (UNCOVERED_TASKS, HIGH_UTILIZATION or BOTH). */
+export function describeNeed(pressure) {
+  switch (pressure?.needReason) {
+    case 'HIGH_UTILIZATION': return 'At or above its capacity limit';
+    case 'BOTH': return 'Over its capacity limit and short of free staff';
+    case 'UNCOVERED_TASKS': return 'More waiting tasks than free staff';
+    default: return '';
+  }
+}
+
+/** A department's utilization as shown, "No capacity" when it has work and nobody to do it, or null when the server sent no capacity figures. */
+export function pressureUtilizationText(pressure) {
+  if (pressure?.noCapacity === true) return 'No capacity';
+  return Number.isFinite(pressure?.utilizationPercent) ? formatUtilization(pressure.utilizationPercent) : null;
 }
 
 export const getSeverityLabel =(severity) => SEVERITY_LABELS[severity] || 'Moderate';

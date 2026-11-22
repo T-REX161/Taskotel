@@ -21,10 +21,7 @@ import com.hotel.workload.task.Priority;
 import com.hotel.workload.task.Task;
 import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
-import com.hotel.workload.workload.WorkloadController;
-import com.hotel.workload.workload.WorkloadDto;
 import com.hotel.workload.workload.WorkloadRecommendationService;
-import com.hotel.workload.workload.WorkloadService;
 import com.hotel.workload.workload.WorkloadRecommendationsDto;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,6 +40,7 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -58,8 +56,6 @@ public class SystemSettingsBehaviourTest {
     @Autowired private SupportAssignmentService support;
     @Autowired private WorkloadRecommendationService recommendations;
     @Autowired private DashboardService dashboard;
-    @Autowired private WorkloadService workloadService;
-    @Autowired private WorkloadController workloadController;
     @Autowired private AssignmentService assignmentService;
     @Autowired private SystemSettingsRepository settingsRepository;
     @Autowired private UserRepository users;
@@ -170,22 +166,22 @@ public class SystemSettingsBehaviourTest {
         assertEquals(1, assignmentRepository.findAllByTaskId(task.getId()).size());
     }
 
-    // ── Capacity alert and threshold ─────────────────────────────────────────────────────────────────────────
+    // ── Capacity alert and threshold: utilization = remaining task minutes / (eligible staff x 480 min) x 100 ────────────
 
-    /** A department with four operational staff, one of them (25%) in work, plus a busy Manager and an inactive busy person who are not counted. */
-    private Department quarterBusyDepartment() {
-        Department department = fx.department("C");
-        Staff busy = fx.eligible("Busy Bea", department);
-        fx.eligible("Free Fay", department);
-        fx.eligible("Free Finn", department);
-        fx.eligible("Free Flo", department);
-        fx.assign(fx.waiting("Counts", department, Priority.MEDIUM, 30), busy);
-        Staff manager = fx.person("Busy Manager", department, Role.MANAGER, true, false, true, Availability.AVAILABLE, true);
-        fx.assign(fx.waiting("Manager job", department, Priority.MEDIUM, 30), manager);
-        Staff inactive = fx.person("Busy Inactive", department, Role.STAFF, true, false, true, Availability.AVAILABLE, false);
-        fx.assign(fx.waiting("Inactive job", department, Priority.MEDIUM, 30), inactive);
+    /**
+     * A department with {@code staff} eligible people (capacity staff x 480 minutes). Each {@code assigned} value is a task of that many
+     * minutes held by a different person; each {@code waiting} value is a task nobody holds. Remaining workload = their sum.
+     */
+    private Department departmentLoad(String label, int staff, int[] assigned, int[] waiting) {
+        Department department = fx.department(label);
+        List<Staff> people = new java.util.ArrayList<>();
+        for (int i = 0; i < staff; i++) people.add(fx.eligible("P" + label + i, department));
+        for (int i = 0; i < assigned.length; i++) fx.assign(fx.task("Held " + label + i, department, Priority.MEDIUM, assigned[i], TaskStatus.PENDING), people.get(i));
+        for (int i = 0; i < waiting.length; i++) fx.waiting("Wait " + label + i, department, Priority.MEDIUM, waiting[i]);
         return department;
     }
+
+    private static final int[] NONE = new int[0];
 
     private List<AdminDashboardSummaryDto.CapacityAlert> alertsFor(Department department) {
         AdminDashboardSummaryDto summary = (AdminDashboardSummaryDto) dashboard.getDashboardSummary(SecurityContextHolder.getContext().getAuthentication());
@@ -193,23 +189,25 @@ public class SystemSettingsBehaviourTest {
     }
 
     @Test
-    @DisplayName("Capacity alert ON: the department at or above the threshold is reported once, counting only active operational Staff")
+    @DisplayName("Capacity alert ON: a department at or above the threshold is reported once, with its minutes, capacity and utilization")
     void alertShownWhenEnabledAndThresholdReached() {
-        Department department = quarterBusyDepartment();
-        settings(true, true, true, 25);
+        Department department = departmentLoad("A", 2, new int[]{240, 240}, NONE);          // 480 min of work, 2 people = 960 min of capacity = 50%
+        settings(true, true, true, 50);
         List<AdminDashboardSummaryDto.CapacityAlert> alerts = alertsFor(department);
         assertEquals(1, alerts.size(), "one warning per department");
         AdminDashboardSummaryDto.CapacityAlert alert = alerts.get(0);
-        assertEquals(1, alert.staffInWork(), "the busy Manager and the inactive person are not counted");
-        assertEquals(4, alert.operationalStaff());
-        assertEquals(25, alert.percentInWork());
-        assertEquals(25, alert.thresholdPercent());
+        assertEquals(480, alert.remainingMinutes());
+        assertEquals(960, alert.capacityMinutes());
+        assertEquals(2, alert.eligibleStaff());
+        assertEquals(50.0, alert.utilizationPercent());
+        assertEquals(50, alert.thresholdPercent());
+        assertFalse(alert.noCapacity());
     }
 
     @Test
     @DisplayName("Capacity alert OFF: no warnings at all, whatever the load")
     void alertSuppressedWhenDisabled() {
-        Department department = quarterBusyDepartment();
+        Department department = departmentLoad("B", 1, new int[]{480}, new int[]{480});     // 200% of capacity
         settings(true, false, true, 1);
         assertTrue(alertsFor(department).isEmpty());
         AdminDashboardSummaryDto summary = (AdminDashboardSummaryDto) dashboard.getDashboardSummary(SecurityContextHolder.getContext().getAuthentication());
@@ -217,16 +215,85 @@ public class SystemSettingsBehaviourTest {
     }
 
     @Test
-    @DisplayName("The threshold is the real condition: 25% in work warns at 25 but not at 26")
-    void thresholdChangesTheWarningCondition() {
-        Department department = quarterBusyDepartment();
-        settings(true, true, true, 26);
-        assertTrue(alertsFor(department).isEmpty());
-        settings(true, true, true, 25);
-        assertEquals(1, alertsFor(department).size());
-        settings(true, true, true, 10);
-        assertEquals(1, alertsFor(department).size());
-        assertEquals(10, alertsFor(department).get(0).thresholdPercent());
+    @DisplayName("The threshold is the real condition, compared exactly: 50% warns at 50 but not at 51, and 959 of 960 minutes is not 100%")
+    void thresholdIsExactAtTheBoundary() {
+        Department half = departmentLoad("H", 1, new int[]{240}, NONE);                      // 240 / 480 = exactly 50%
+        Department nearlyFull = departmentLoad("F", 2, new int[]{480, 479}, NONE);           // 959 / 960 = 99.9%, not 100
+        Department full = departmentLoad("L", 2, new int[]{480, 480}, NONE);                 // 960 / 960 = exactly 100%
+        Department tiny = departmentLoad("X", 1, new int[]{5}, NONE);                        // 5 / 480 = 1.04%
+        for (int threshold : new int[]{1, 50}) {
+            settings(true, true, true, threshold);
+            assertEquals(1, alertsFor(half).size(), "50% reaches a threshold of " + threshold);
+        }
+        settings(true, true, true, 51);
+        assertTrue(alertsFor(half).isEmpty(), "50% does not reach 51");
+        settings(true, true, true, 100);
+        assertEquals(1, alertsFor(full).size(), "exactly 100% reaches 100");
+        assertTrue(alertsFor(nearlyFull).isEmpty(), "959 of 960 minutes is below 100%, however it rounds for display");
+        settings(true, true, true, 1);
+        assertEquals(1, alertsFor(tiny).size(), "a tiny load is at risk at a tiny threshold");
+        settings(true, true, true, 2);
+        assertTrue(alertsFor(tiny).isEmpty(), "and not at 2");
+    }
+
+    @Test
+    @DisplayName("Waiting work counts as workload: 2 people and two waiting 480-minute tasks are at 100%")
+    void waitingTasksCountAsWorkload() {
+        Department department = departmentLoad("W", 2, NONE, new int[]{480, 480});
+        settings(true, true, true, 100);
+        List<AdminDashboardSummaryDto.CapacityAlert> alerts = alertsFor(department);
+        assertEquals(1, alerts.size());
+        assertEquals(960, alerts.get(0).remainingMinutes());
+        assertEquals(100.0, alerts.get(0).utilizationPercent());
+    }
+
+    @Test
+    @DisplayName("Only PENDING, ASSIGNED and IN_PROGRESS tasks are workload; COMPLETED and CANCELLED are not")
+    void onlyActiveTasksAreWorkload() {
+        Department department = departmentLoad("T", 1, NONE, NONE);
+        fx.task("Pending", department, Priority.MEDIUM, 100, TaskStatus.PENDING);
+        fx.task("In progress", department, Priority.MEDIUM, 100, TaskStatus.IN_PROGRESS);
+        fx.task("Done", department, Priority.MEDIUM, 300, TaskStatus.COMPLETED);
+        fx.task("Cancelled", department, Priority.MEDIUM, 300, TaskStatus.CANCELLED);
+        settings(true, true, true, 1);
+        List<AdminDashboardSummaryDto.CapacityAlert> alerts = alertsFor(department);
+        assertEquals(1, alerts.size());
+        assertEquals(200, alerts.get(0).remainingMinutes(), "only the two active tasks count");
+    }
+
+    @Test
+    @DisplayName("Only active, available STAFF-role people with a department are capacity: inactive, unavailable, Manager, Admin and department-less people are not")
+    void onlyEligiblePeopleAreCapacity() {
+        Department department = departmentLoad("E", 2, NONE, new int[]{480});
+        fx.person("Inactive", department, Role.STAFF, true, false, true, Availability.AVAILABLE, false);
+        fx.person("Away", department, Role.STAFF, true, false, true, Availability.UNAVAILABLE, true);
+        fx.person("Manager", department, Role.MANAGER, true, false, true, Availability.AVAILABLE, true);
+        fx.person("Admin", department, Role.ADMIN, true, false, true, Availability.AVAILABLE, true);
+        fx.person("No department", null, Role.STAFF, true, false, true, Availability.AVAILABLE, true);
+        settings(true, true, true, 50);
+        AdminDashboardSummaryDto.CapacityAlert alert = alertsFor(department).get(0);
+        assertEquals(2, alert.eligibleStaff(), "only the two eligible people");
+        assertEquals(960, alert.capacityMinutes());
+        assertEquals(50.0, alert.utilizationPercent(), "480 min over 960, not over the capacity of the five people who do not count");
+    }
+
+    @Test
+    @DisplayName("Work with nobody eligible to do it has no capacity: always reported (no percentage); no staff and no work is not")
+    void noCapacityIsReportedAndEmptyIsNot() {
+        Department noStaff = departmentLoad("N", 0, NONE, new int[]{60});
+        Department allAway = fx.department("Z");
+        fx.person("Away", allAway, Role.STAFF, true, false, true, Availability.UNAVAILABLE, true);
+        fx.waiting("Orphan", allAway, Priority.MEDIUM, 30);
+        Department empty = fx.department("M");
+        settings(true, true, true, 100);
+        for (Department department : List.of(noStaff, allAway)) {
+            List<AdminDashboardSummaryDto.CapacityAlert> alerts = alertsFor(department);
+            assertEquals(1, alerts.size());
+            assertTrue(alerts.get(0).noCapacity());
+            assertNull(alerts.get(0).utilizationPercent(), "a percentage would be meaningless");
+            assertEquals(0, alerts.get(0).eligibleStaff());
+        }
+        assertTrue(alertsFor(empty).isEmpty(), "no staff and no work: nothing to warn about");
     }
 
     // ── Auto-Balancing (recommendations) ─────────────────────────────────────────────────────────────────────
@@ -276,190 +343,6 @@ public class SystemSettingsBehaviourTest {
         assertTrue(s.tasks.stream().allMatch(t -> assignmentRepository.findAllByTaskId(t.getId()).isEmpty()), "waiting tasks stay unassigned");
     }
 
-    // ── Capacity formula: active assigned operational Staff / active AND available operational Staff x 100 ─────────
-
-    /** {@code available} AVAILABLE people (the first {@code busyAvailable} of them in work) and {@code unavailable} UNAVAILABLE people. */
-    private Department departmentWith(String label, int available, int busyAvailable, int unavailable) {
-        Department department = fx.department(label);
-        for (int i = 0; i < available; i++) {
-            Staff member = fx.eligible("Avail " + label + i, department);
-            if (i < busyAvailable) fx.assign(fx.waiting("Job " + label + i, department, Priority.MEDIUM, 30), member);
-        }
-        for (int i = 0; i < unavailable; i++) {
-            fx.person("Away " + label + i, department, Role.STAFF, true, false, true, Availability.UNAVAILABLE, true);
-        }
-        return department;
-    }
-
-    @Test
-    @DisplayName("Unavailable staff are left out of the denominator: 1 of 2 available in work is 50% however many are away")
-    void unavailableStaffExcludedFromDenominator() {
-        Department department = departmentWith("U", 2, 1, 3);
-        settings(true, true, true, 50);
-        List<AdminDashboardSummaryDto.CapacityAlert> alerts = alertsFor(department);
-        assertEquals(1, alerts.size(), "1 of 2 available reaches 50% (it would be 20% if the 3 away were counted)");
-        assertEquals(2, alerts.get(0).operationalStaff());
-        assertEquals(1, alerts.get(0).staffInWork());
-        assertEquals(50, alerts.get(0).percentInWork());
-        settings(true, true, true, 51);
-        assertTrue(alertsFor(department).isEmpty());
-    }
-
-    @Test
-    @DisplayName("A department with nobody available has no denominator: no warning and no division by zero")
-    void nobodyAvailableNeverWarnsOrFails() {
-        Department department = departmentWith("N", 0, 0, 2);
-        settings(true, true, true, 1);
-        assertTrue(alertsFor(department).isEmpty());
-    }
-
-    @Test
-    @DisplayName("Active, available staff with assignments are counted exactly: 3 of 4 is 75%, at the threshold warns, one above does not")
-    void availableAssignedStaffCountedAtAndAroundThreshold() {
-        Department department = departmentWith("A", 4, 3, 0);
-        settings(true, true, true, 75);
-        assertEquals(75, alertsFor(department).get(0).percentInWork());
-        settings(true, true, true, 76);
-        assertTrue(alertsFor(department).isEmpty());
-        settings(true, true, true, 74);
-        assertEquals(1, alertsFor(department).size());
-    }
-
-    @Test
-    @DisplayName("Regression: an unavailable person holding an active assignment does not raise the numerator (1 of 2 stays 50%, not 2 of 3)")
-    void unavailableStaffWithActiveAssignmentDoesNotIncreaseNumerator() {
-        Department department = departmentWith("R", 2, 1, 0);
-        Staff away = fx.person("Away But Busy", department, Role.STAFF, true, false, true, Availability.UNAVAILABLE, true);
-        fx.assign(fx.waiting("Away job", department, Priority.MEDIUM, 30), away);
-        settings(true, true, true, 50);
-        AdminDashboardSummaryDto.CapacityAlert alert = alertsFor(department).get(0);
-        assertEquals(1, alert.staffInWork(), "the unavailable person's assignment is not counted");
-        assertEquals(2, alert.operationalStaff());
-        assertEquals(50, alert.percentInWork());
-        settings(true, true, true, 51);
-        assertTrue(alertsFor(department).isEmpty(), "it would warn at 51 if the unavailable person were in the numerator (67%)");
-    }
-
-    @Test
-    @DisplayName("Only active, available Staff-role people with a department count; inactive, Manager, Admin and department-less people with work are in neither number, and 100% is the ceiling")
-    void ineligiblePeopleAreInNeitherNumberAndPercentageNeverExceedsHundred() {
-        Department department = departmentWith("E", 2, 2, 0);
-        Staff inactive = fx.person("Inactive Busy", department, Role.STAFF, true, false, true, Availability.AVAILABLE, false);
-        Staff manager = fx.person("Manager Busy", department, Role.MANAGER, true, false, true, Availability.AVAILABLE, true);
-        Staff admin = fx.person("Admin Busy", department, Role.ADMIN, true, false, true, Availability.AVAILABLE, true);
-        Staff noDepartment = fx.person("No Department Busy", null, Role.STAFF, true, false, true, Availability.AVAILABLE, true);
-        Staff away = fx.person("Away Busy", department, Role.STAFF, true, false, true, Availability.UNAVAILABLE, true);
-        for (Staff ineligible : List.of(inactive, manager, admin, noDepartment, away)) {
-            fx.assign(fx.waiting("Work of " + ineligible.getName(), department, Priority.MEDIUM, 30), ineligible);
-        }
-        settings(true, true, true, 100);
-        List<AdminDashboardSummaryDto.CapacityAlert> alerts = alertsFor(department);
-        assertEquals(1, alerts.size());
-        assertEquals(2, alerts.get(0).staffInWork());
-        assertEquals(2, alerts.get(0).operationalStaff());
-        assertEquals(100, alerts.get(0).percentInWork());
-        AdminDashboardSummaryDto summary = (AdminDashboardSummaryDto) dashboard.getDashboardSummary(SecurityContextHolder.getContext().getAuthentication());
-        assertTrue(summary.getCapacityAlerts().stream().allMatch(a -> a.percentInWork() <= 100 && a.staffInWork() <= a.operationalStaff()), "never above 100%");
-    }
-
-    @Test
-    @DisplayName("Available staff without assignments count only in the denominator: 1 of 5 is 20%")
-    void freeAvailableStaffCountOnlyInDenominator() {
-        Department department = departmentWith("F", 5, 1, 0);
-        settings(true, true, true, 20);
-        AdminDashboardSummaryDto.CapacityAlert alert = alertsFor(department).get(0);
-        assertEquals(1, alert.staffInWork());
-        assertEquals(5, alert.operationalStaff());
-        assertEquals(20, alert.percentInWork());
-    }
-
-    @Test
-    @DisplayName("85% threshold: 4, 8 of 10 do not warn; 9 and 10 of 10 do")
-    void spec_exampleAtEightyFivePercent() {
-        settings(true, true, true, 85);
-        assertTrue(alertsFor(departmentWith("S4", 10, 4, 0)).isEmpty(), "40%");
-        assertTrue(alertsFor(departmentWith("S8", 10, 8, 0)).isEmpty(), "80%");
-        assertEquals(90, alertsFor(departmentWith("S9", 10, 9, 0)).get(0).percentInWork());
-        assertEquals(100, alertsFor(departmentWith("S10", 10, 10, 0)).get(0).percentInWork());
-    }
-
-    @Test
-    @DisplayName("Boundaries 1, 50 and 100: warns when the percentage equals the threshold, not when it is one below")
-    void spec_thresholdBoundaries() {
-        Department oneOfHundred = departmentWith("B1", 100, 1, 0);
-        Department half = departmentWith("B50", 2, 1, 0);
-        Department full = departmentWith("B100", 3, 3, 0);
-        Department almostFull = departmentWith("B99", 3, 2, 0);
-
-        settings(true, true, true, 1);
-        assertEquals(1, alertsFor(oneOfHundred).size(), "exactly 1%");
-        assertEquals(1, alertsFor(half).size());
-        settings(true, true, true, 50);
-        assertEquals(1, alertsFor(half).size(), "exactly 50%");
-        assertTrue(alertsFor(oneOfHundred).isEmpty(), "1% is below 50%");
-        settings(true, true, true, 100);
-        assertEquals(1, alertsFor(full).size(), "exactly 100%");
-        assertTrue(alertsFor(almostFull).isEmpty(), "66% is below 100%");
-        assertTrue(alertsFor(half).isEmpty());
-    }
-
-    @Test
-    @DisplayName("One person with several active assignments counts once, not once per assignment")
-    void multipleAssignmentsForOnePersonCountOnce() {
-        Department department = fx.department("MA");
-        Staff busy = fx.eligible("Many Jobs", department);
-        for (int i = 0; i < 3; i++) fx.assign(fx.waiting("Job " + i, department, Priority.MEDIUM, 30), busy);
-        fx.eligible("Free 1", department);
-        fx.eligible("Free 2", department);
-        fx.eligible("Free 3", department);
-        settings(true, true, true, 25);
-        AdminDashboardSummaryDto.CapacityAlert alert = alertsFor(department).get(0);
-        assertEquals(1, alert.staffInWork());
-        assertEquals(4, alert.operationalStaff());
-        assertEquals(25, alert.percentInWork());
-        settings(true, true, true, 26);
-        assertTrue(alertsFor(department).isEmpty(), "three assignments must not look like 75%");
-    }
-
-    @Test
-    @DisplayName("Only PENDING, ASSIGNED and IN_PROGRESS tasks are active work; COMPLETED and CANCELLED are not")
-    void onlyActiveStatusesCount() {
-        Department department = fx.department("ST");
-        Staff done = fx.eligible("Done", department);
-        Staff cancelled = fx.eligible("Cancelled", department);
-        Staff inProgress = fx.eligible("In progress", department);
-        fx.eligible("Idle", department);
-        Task completedTask = fx.waiting("Completed", department, Priority.MEDIUM, 30);
-        fx.assign(completedTask, done);
-        completedTask.setStatus(TaskStatus.COMPLETED);
-        taskRepository.saveAndFlush(completedTask);
-        Task cancelledTask = fx.waiting("Cancelled", department, Priority.MEDIUM, 30);
-        fx.assign(cancelledTask, cancelled);
-        cancelledTask.setStatus(TaskStatus.CANCELLED);
-        taskRepository.saveAndFlush(cancelledTask);
-        Task activeTask = fx.waiting("Active", department, Priority.MEDIUM, 30);
-        fx.assign(activeTask, inProgress);
-        activeTask.setStatus(TaskStatus.IN_PROGRESS);
-        taskRepository.saveAndFlush(activeTask);
-
-        settings(true, true, true, 25);
-        AdminDashboardSummaryDto.CapacityAlert alert = alertsFor(department).get(0);
-        assertEquals(1, alert.staffInWork());
-        assertEquals(4, alert.operationalStaff());
-        settings(true, true, true, 26);
-        assertTrue(alertsFor(department).isEmpty());
-    }
-
-    @Test
-    @DisplayName("A department with no staff at all, and one whose staff are all unavailable, never warn")
-    void emptyAndAllUnavailableDepartmentsNeverWarn() {
-        Department empty = fx.department("EM");
-        Department away = departmentWith("AW", 0, 0, 3);
-        settings(true, true, true, 1);
-        assertTrue(alertsFor(empty).isEmpty());
-        assertTrue(alertsFor(away).isEmpty());
-    }
-
     // ── HTTP helpers ─────────────────────────────────────────────────────────────────────────────────────────
 
     @Autowired private org.springframework.web.context.WebApplicationContext context;
@@ -478,8 +361,9 @@ public class SystemSettingsBehaviourTest {
                 .andReturn().getResponse().getContentAsString();
         List<AdminDashboardSummaryDto.CapacityAlert> result = new java.util.ArrayList<>();
         for (com.fasterxml.jackson.databind.JsonNode a : new com.fasterxml.jackson.databind.ObjectMapper().readTree(json).get("capacityAlerts")) {
-            result.add(new AdminDashboardSummaryDto.CapacityAlert(a.get("departmentCode").asText(), a.get("departmentName").asText(), a.get("staffInWork").asInt(),
-                    a.get("operationalStaff").asInt(), a.get("percentInWork").asInt(), a.get("thresholdPercent").asInt()));
+            result.add(new AdminDashboardSummaryDto.CapacityAlert(a.get("departmentCode").asText(), a.get("departmentName").asText(), a.get("remainingMinutes").asInt(),
+                    a.get("capacityMinutes").asLong(), a.get("eligibleStaff").asInt(), a.get("utilizationPercent").isNull() ? null : a.get("utilizationPercent").asDouble(),
+                    a.get("thresholdPercent").asInt(), a.get("noCapacity").asBoolean()));
         }
         return result;
     }
@@ -495,8 +379,8 @@ public class SystemSettingsBehaviourTest {
     @Test
     @DisplayName("Admin gets capacity alerts across departments; a Manager gets only their own department's, never another's")
     void adminSeesAllManagerSeesOwnDepartmentOnly() throws Exception {
-        Department mine = departmentWith("M", 2, 2, 0);
-        Department other = departmentWith("O", 2, 2, 0);
+        Department mine = departmentLoad("M", 2, new int[]{480, 480}, NONE);       // 100%
+        Department other = departmentLoad("O", 2, new int[]{480, 480}, NONE);      // 100%
         new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).manager("s4d_manager", mine);
         settings(true, true, true, 100);
 
@@ -505,111 +389,10 @@ public class SystemSettingsBehaviourTest {
 
         List<AdminDashboardSummaryDto.CapacityAlert> managerAlerts = alertsFromHttp("s4d_manager", "MANAGER");
         assertEquals(List.of(mine.getCode()), managerAlerts.stream().map(AdminDashboardSummaryDto.CapacityAlert::departmentCode).toList());
+        assertEquals(2, managerAlerts.get(0).eligibleStaff(), "the Manager's own Staff record is not capacity: only the two Staff-role people count");
 
         settings(true, false, true, 100);
         assertTrue(alertsFromHttp("s4d_manager", "MANAGER").isEmpty(), "alert OFF: none for the Manager either");
-    }
-
-    // ── Department-risk threshold (colours the Workload by Department bars) ──────────────────────────────────
-
-    private com.fasterxml.jackson.databind.JsonNode riskThreshold(String username, String role) throws Exception {
-        var response = mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/workload/department-risk-threshold").with(as(username, role)))
-                .andReturn().getResponse();
-        assertEquals(200, response.getStatus(), role);
-        return new com.fasterxml.jackson.databind.ObjectMapper().readTree(response.getContentAsString());
-    }
-
-    @Test
-    @DisplayName("The department-risk threshold endpoint returns the saved value to Admin and Manager, follows every change, and exposes nothing else")
-    void riskThresholdEndpointFollowsTheSavedValue() throws Exception {
-        Department mine = departmentWith("RT", 1, 0, 0);
-        ScopeFixtures scope = new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder);
-        scope.manager("s4d_rt_manager", mine);
-        for (int threshold : new int[]{10, 1, 50, 85, 100}) {
-            settings(true, true, true, threshold);
-            for (String[] who : new String[][]{{"s4d_admin", "ADMIN"}, {"s4d_rt_manager", "MANAGER"}}) {
-                var body = riskThreshold(who[0], who[1]);
-                assertEquals(threshold, body.get("capacityThresholdPercent").asInt(), who[1] + " sees the saved threshold");
-                assertTrue(body.get("enabled").asBoolean());
-                assertEquals(2, body.size(), "only the switch and the percentage, nothing else from System Settings");
-            }
-        }
-        settings(true, false, true, 10);
-        assertFalse(riskThreshold("s4d_admin", "ADMIN").get("enabled").asBoolean(), "switched off is reported, so nothing is overridden");
-    }
-
-    @Test
-    @DisplayName("With nothing saved the endpoint reports the default 85; Staff, an invalid Manager and anonymous callers are refused; the settings API stays Admin only")
-    void riskThresholdDefaultAnonymousAndSettingsStayLocked() throws Exception {
-        settingsRepository.deleteAll();
-        settingsRepository.flush();
-        assertEquals(85, riskThreshold("s4d_admin", "ADMIN").get("capacityThresholdPercent").asInt());
-        assertEquals(401, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/workload/department-risk-threshold").with(org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous()))
-                .andReturn().getResponse().getStatus());
-        // Staff have their own page without department cards: they get no department-level information, and no threshold
-        assertEquals(403, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/workload/department-risk-threshold").with(as("s4d_staff", "STAFF")))
-                .andReturn().getResponse().getStatus(), "Staff are refused at the URL");
-        // A Manager account with no valid department is refused by the scope check as well (403, not an empty answer)
-        new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).account("s4d_invalid_manager", Role.MANAGER, true);
-        assertEquals(403, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/workload/department-risk-threshold").with(as("s4d_invalid_manager", "MANAGER")))
-                .andReturn().getResponse().getStatus(), "an invalid Manager is refused");
-        for (String role : new String[]{"MANAGER", "STAFF"}) {
-            assertEquals(403, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/system-settings").with(as("someone", role)))
-                    .andReturn().getResponse().getStatus(), role + " still cannot read System Settings");
-            assertEquals(403, mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/system-settings").with(as("someone", role))
-                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                    .content("{\"autoBalancingEnabled\":true,\"capacityAlertEnabled\":true,\"crossDepartmentAssistanceEnabled\":true,\"capacityThresholdPercent\":10}"))
-                    .andReturn().getResponse().getStatus(), role + " still cannot change System Settings");
-        }
-    }
-
-    @Test
-    @DisplayName("Defence in depth: calling the controller directly as a real Staff member is refused too, with nothing returned")
-    void riskThresholdControllerRefusesStaffWithoutTheUrlRule() {
-        Department department = fx.department("RS");
-        Staff member = fx.eligible("Plain Staff", department);
-        SupportTestFixture.signInAs(member.getUser().getUsername(), "STAFF");
-        var refused = org.junit.jupiter.api.Assertions.assertThrows(org.springframework.web.server.ResponseStatusException.class,
-                () -> workloadController.getDepartmentRiskThreshold());
-        assertEquals(403, refused.getStatusCode().value());
-        SupportTestFixture.signInAs("s4d_admin", "ADMIN");
-        assertEquals(200, workloadController.getDepartmentRiskThreshold().getStatusCode().value(), "the Admin is served");
-    }
-
-    // ── AT RISK (share of total workload) is NOT the same as needing support (uncovered tasks vs eligible donors) ─────
-
-    @Test
-    @DisplayName("A department can be AT RISK by workload share without needing support, and the Capacity Threshold never changes who needs support")
-    void atRiskDoesNotMeanNeedsSupport() {
-        var s = fx.overloaded(2, 3);                                  // receiving: 2 waiting tasks, nobody free -> needs support; donor: 3 free
-        Department heavy = fx.department("H");                        // heavy: two free people and one big assigned task -> a large share of the minutes
-        Staff busyOne = fx.eligible("Heavy Busy", heavy);
-        fx.eligible("Heavy Free 1", heavy);
-        fx.eligible("Heavy Free 2", heavy);
-        fx.assign(fx.waiting("Big job", heavy, Priority.MEDIUM, 400), busyOne);
-
-        SupportTestFixture.signInAs("s4d_admin", "ADMIN");
-        List<WorkloadDto> rows = workloadService.calculateWorkload();
-        int total = rows.stream().mapToInt(WorkloadDto::getTotalEstimatedDuration).sum();
-        int heavyMinutes = rows.stream().filter(r -> heavy.getCode().equalsIgnoreCase(r.getSupportDepartment() != null ? r.getSupportDepartment() : r.getDepartment()))
-                .mapToInt(WorkloadDto::getTotalEstimatedDuration).sum();
-        long heavyShare = Math.round(100.0 * heavyMinutes / total);
-        assertTrue(heavyShare >= 25, "the heavy department holds a large share of the load (" + heavyShare + "%), so it is AT RISK for any threshold at or below that");
-
-        java.util.Set<String> needing = null;
-        for (int threshold : new int[]{1, 25, 50, 85, 100}) {
-            settings(true, true, true, threshold);
-            WorkloadRecommendationsDto result = recommendations.getRecommendations();
-            java.util.Set<String> codes = new java.util.TreeSet<>();
-            result.recommendations().forEach(r -> codes.add(r.departmentCode()));
-            result.unsupported().forEach(u -> codes.add(u.departmentCode()));
-            assertTrue(codes.contains(s.receiving.getCode()), "uncovered tasks make the receiver need support at threshold " + threshold);
-            assertFalse(codes.contains(heavy.getCode()), "a department with enough free staff does not need support at threshold " + threshold + ", AT RISK or not");
-            if (needing == null) needing = codes;
-            assertEquals(needing, codes, "the Capacity Threshold does not change who needs support (threshold " + threshold + ")");
-            var receiver = result.recommendations().stream().filter(r -> r.departmentCode().equals(s.receiving.getCode())).findFirst().orElseThrow();
-            assertEquals(2, receiver.pressure().uncoveredTasks());
-        }
     }
 
     // ── Cross-Department Assistance through the real HTTP endpoints ──────────────────────────────────────────

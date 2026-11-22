@@ -14,7 +14,10 @@ import com.hotel.workload.task.Priority;
 import com.hotel.workload.task.Task;
 import com.hotel.workload.task.TaskRepository;
 import com.hotel.workload.task.TaskStatus;
+import com.hotel.workload.workload.DepartmentCapacity;
+import com.hotel.workload.workload.DepartmentCapacityService;
 import com.hotel.workload.workload.WorkloadDto;
+import com.hotel.workload.workload.WorkloadStatus;
 import com.hotel.workload.workload.WorkloadRecommendationEngine;
 import com.hotel.workload.workload.WorkloadRecommendationsDto.Severity;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -88,6 +91,14 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         this.systemSettings = systemSettings;
     }
 
+    /** The shared department capacity figures. Optional (setter) so a hand-built service in a unit test keeps the original rules only. */
+    private DepartmentCapacityService capacityService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDepartmentCapacityService(DepartmentCapacityService capacityService) {
+        this.capacityService = capacityService;
+    }
+
     static final String CROSS_DEPARTMENT_OFF_MESSAGE =
             "Cross-department assistance is turned off in System Settings, so new support arrangements cannot be planned or confirmed. "
                     + "Existing support is not affected.";
@@ -132,9 +143,14 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         final List<Staff> free = new ArrayList<>();
         final List<Staff> lendable = new ArrayList<>();
         final List<Task> waiting = new ArrayList<>();
+        /** Tasks its own staff hold and no helper has yet: a helper may JOIN one while the department is at its limit. */
+        final List<Task> shareable = new ArrayList<>();
         /** Only for a donor in a Manager's narrowed load: how many tasks wait there (its task details are never loaded). */
         Integer waitingCountOverride;
         int assignedMinutes = 0;
+        /** Remaining task minutes (assigned + waiting) and the people whose capacity counts here, from DepartmentCapacityService. */
+        int remainingMinutes;
+        int capacityStaff;
 
         Stats(Department department) { this.department = department; }
 
@@ -157,6 +173,26 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         final Set<UUID> assignedTasks = new HashSet<>();
         final Map<UUID, Integer> minutesByStaff = new HashMap<>();
         final Map<UUID, Integer> countByStaff = new HashMap<>();
+        /** True when the capacity figures are available (then the capacity rules apply); risk is the saved switch and threshold. */
+        boolean modelled;
+        DepartmentCapacity.Risk risk = DepartmentCapacity.Risk.OFF;
+    }
+
+    /**
+     * Fills every department's remaining minutes and capacity staff from the shared capacity figures (aggregates only, so a Manager's narrowed
+     * load still knows each donor's utilization without loading its tasks). Without the capacity service the original rules apply alone.
+     */
+    private void applyCapacity(State state) {
+        if (capacityService == null) return;
+        state.modelled = true;
+        state.risk = capacityService.risk();
+        Map<String, DepartmentCapacityService.Figures> figures = capacityService.figures();
+        for (Stats stats : state.byCode.values()) {
+            DepartmentCapacityService.Figures f = figures.get(stats.department.getCode());
+            if (f == null) continue;
+            stats.remainingMinutes = f.remainingMinutes();
+            stats.capacityStaff = f.eligibleStaff();
+        }
     }
 
     /**
@@ -209,6 +245,13 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             state.activeTasksById.put(task.getId(), task);
             receiving.waiting.add(task);
         }
+        // The receiving department's tasks its own staff hold and that have no helper yet (a helper may join one while it is at its limit)
+        Set<UUID> alreadySupported = new HashSet<>(supportRepository.findTaskIdsByStatusAndReceivingDepartmentCodes(SupportStatus.ACTIVE, List.of(receiverCode)));
+        for (Task task : taskRepository.findHeldByDepartments(List.of(receiver), ACTIVE_STATUSES)) {
+            if (!WorkloadRecommendationEngine.canShare(task) || alreadySupported.contains(task.getId())) continue;
+            state.activeTasksById.put(task.getId(), task);
+            receiving.shareable.add(task);
+        }
         // The donors this Manager also manages: loaded in full, like the receiving department (their tasks are NOT added to the lookup of
         // plannable tasks: only the receiving department's tasks can be planned, as before)
         for (String code : managedCodes) {
@@ -231,7 +274,9 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             stats.free.sort(byName);
             stats.lendable.sort(byName);
             stats.waiting.sort(WorkloadRecommendationEngine.MOST_IMPORTANT_FIRST);
+            stats.shareable.sort(WorkloadRecommendationEngine.MOST_IMPORTANT_FIRST);
         }
+        applyCapacity(state);
         return state;
     }
 
@@ -248,7 +293,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         for (Assignment assignment : assignments) {
             UUID staffId = assignment.getStaff().getId();
             state.busyStaff.add(staffId);
-            state.assignedTasks.add(assignment.getTask().getId());
+            boolean firstHolder = state.assignedTasks.add(assignment.getTask().getId());
             int minutes = minutes(assignment.getTask());
             state.minutesByStaff.merge(staffId, minutes, Integer::sum);
             state.countByStaff.merge(staffId, 1, Integer::sum);
@@ -257,7 +302,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             String code = support != null ? support.getReceivingDepartmentCode()
                     : assignment.getStaff().getDepartment() == null ? null : assignment.getStaff().getDepartment().getCode();
             Stats stats = code == null ? null : state.byCode.get(code);
-            if (stats != null) stats.assignedMinutes += minutes;
+            // A task counts once for its department, however many people hold it
+            if (stats != null && firstHolder) stats.assignedMinutes += minutes;
         }
 
         for (Staff member : staffRepository.findAllWithUser()) {
@@ -278,6 +324,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             state.activeTasksById.put(task.getId(), task);
             Stats stats = task.getDepartment() == null ? null : state.byCode.get(task.getDepartment().getCode());
             if (stats != null && !state.assignedTasks.contains(task.getId())) stats.waiting.add(task);
+            else if (stats != null && WorkloadRecommendationEngine.canShare(task) && !supportByTask.containsKey(task.getId())) stats.shareable.add(task);
         }
 
         Comparator<Staff> byName = Comparator.comparing((Staff s) -> String.valueOf(s.getName()).toLowerCase()).thenComparing(s -> String.valueOf(s.getId()));
@@ -285,7 +332,9 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             stats.free.sort(byName);
             stats.lendable.sort(byName);
             stats.waiting.sort(WorkloadRecommendationEngine.MOST_IMPORTANT_FIRST);
+            stats.shareable.sort(WorkloadRecommendationEngine.MOST_IMPORTANT_FIRST);
         }
+        applyCapacity(state);
         return state;
     }
 
@@ -299,14 +348,53 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         return total;
     }
 
-    private static Metrics metrics(Stats stats, List<Task> waiting, int freeStaff, int assignedMinutes) {
+    /**
+     * {@code capacityStaff} is the number of people whose capacity counts for this department in the situation described (now, or after a
+     * plan). The remaining minutes are the department's own and never change with a plan: a helper takes a waiting task, which only moves
+     * its minutes from waiting to assigned.
+     */
+    private static Metrics metrics(Stats stats, State state, List<Task> waiting, int freeStaff, int assignedMinutes, int capacityStaff) {
         int uncovered = Math.max(0, waiting.size() - freeStaff);
         List<Task> uncoveredTasks = waiting.subList(Math.min(freeStaff, waiting.size()), waiting.size());
-        return new Metrics(waiting.size(), minutes(waiting), assignedMinutes, stats.available.size(), freeStaff, uncovered, minutes(uncoveredTasks));
+        int remaining = state.modelled ? stats.remainingMinutes : assignedMinutes + minutes(waiting);
+        int staff = state.modelled ? capacityStaff : 0;
+        WorkloadStatus level = state.modelled ? DepartmentCapacity.level(remaining, staff, state.risk) : null;
+        return new Metrics(waiting.size(), minutes(waiting), assignedMinutes, stats.available.size(), freeStaff, uncovered, minutes(uncoveredTasks),
+                remaining, staff, DepartmentCapacity.capacityMinutes(staff), state.modelled ? DepartmentCapacity.utilizationPercent(remaining, staff) : null,
+                level, level == WorkloadStatus.AT_RISK, state.modelled && DepartmentCapacity.noCapacity(remaining, staff));
     }
 
-    private static Metrics metrics(Stats stats) {
-        return metrics(stats, stats.waiting, stats.free.size(), stats.assignedMinutes);
+    private static Metrics metrics(Stats stats, State state) {
+        return metrics(stats, state, stats.waiting, stats.free.size(), stats.assignedMinutes, stats.capacityStaff);
+    }
+
+    /** True when the department is at or above its Capacity Threshold (never while the alert is off, never without capacity figures). */
+    private static boolean atRisk(Stats stats, State state) {
+        return state.modelled && DepartmentCapacity.atRisk(stats.remainingMinutes, stats.capacityStaff, state.risk);
+    }
+
+    /**
+     * How many helpers the department may use: the tasks its own free staff cannot take (the original rule), or, when it is at or above its
+     * Capacity Threshold, as many as would bring it below it, never more than the tasks a helper could take or join (waiting, or held by its own
+     * staff with no helper yet).
+     */
+    private static int allowedHelpers(Stats receiving, State state) {
+        int uncovered = Math.max(0, receiving.waiting.size() - receiving.free.size());
+        int forRisk = 0;
+        if (atRisk(receiving, state)) {
+            forRisk = Math.min(receiving.waiting.size() + receiving.shareable.size(),
+                    DepartmentCapacity.helpersToLeaveRisk(receiving.remainingMinutes, receiving.capacityStaff, state.risk));
+        }
+        return Math.max(uncovered, forRisk);
+    }
+
+    private static String limitText(State state) {
+        return state.risk.enabled() ? state.risk.thresholdPercent() + "%" : "a full shift per person";
+    }
+
+    private static String pct(Double value) {
+        if (value == null) return "n/a";
+        return value == Math.rint(value) ? String.valueOf(value.longValue()) : String.valueOf(value);
     }
 
     // ── options ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -334,13 +422,21 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             if (task.getPriority() == Priority.URGENT || task.getPriority() == Priority.HIGH) urgentOrHigh++;
             if (task.getDueDate() != null && !task.getDueDate().isAfter(state.today.plusDays(WorkloadRecommendationEngine.DUE_SOON_DAYS))) dueSoon++;
         }
-        Metrics receivingMetrics = metrics(receiving);
+        Metrics receivingMetrics = metrics(receiving, state);
+        boolean receivingAtRisk = atRisk(receiving, state);
+        String needReason = receivingMetrics.uncoveredTasks() > 0 ? (receivingAtRisk ? "BOTH" : "UNCOVERED_TASKS") : receivingAtRisk ? "HIGH_UTILIZATION" : "NONE";
         DepartmentSummary summary = new DepartmentSummary(receiving.department.getCode(), receiving.department.getName(),
-                severity(receiving, state.today), urgentOrHigh, dueSoon, receiving.activeStaff.size(), receivingMetrics);
+                severity(receiving, state.today), urgentOrHigh, dueSoon, receiving.activeStaff.size(), receivingMetrics, needReason);
 
-        List<WaitingTask> tasks = receiving.waiting.stream()
-                .map(t -> new WaitingTask(t.getId(), t.getTitle(), t.getCategory(), t.getPriority(), t.getEstimatedDuration(), t.getDueDate(), t.getDeadlineTime()))
-                .toList();
+        List<WaitingTask> tasks = new ArrayList<>(receiving.waiting.stream()
+                .map(t -> new WaitingTask(t.getId(), t.getTitle(), t.getCategory(), t.getPriority(), t.getEstimatedDuration(), t.getDueDate(), t.getDeadlineTime(), false))
+                .toList());
+        // At or above its limit a department may also offer the tasks its own staff hold: a helper joins one (adds a person, moves no work)
+        if (receivingAtRisk) {
+            receiving.shareable.stream()
+                    .map(t -> new WaitingTask(t.getId(), t.getTitle(), t.getCategory(), t.getPriority(), t.getEstimatedDuration(), t.getDueDate(), t.getDeadlineTime(), true))
+                    .forEach(tasks::add);
+        }
 
         List<DonorDepartment> donors = new ArrayList<>();
         for (Stats donor : state.byCode.values()) {
@@ -349,7 +445,17 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             int maxLendable = Math.min(donor.lendable.size(), Math.max(0, donor.free.size() - required));
             // With the manager's acknowledgement the one-person reserve may go, but the donor's own waiting work stays covered
             int overrideLendable = Math.max(maxLendable, Math.min(donor.lendable.size(), Math.max(0, donor.free.size() - donor.waitingCount())));
+            // Capacity rule: however many the reserve allows, the donor itself must stay below its limit with that many fewer people. Not overridable.
+            int safeToLend = Integer.MAX_VALUE;
+            if (state.modelled) {
+                safeToLend = 0;
+                while (safeToLend < donor.lendable.size() && !DepartmentCapacity.exceedsLimit(donor.remainingMinutes, donor.capacityStaff - (safeToLend + 1), state.risk)) safeToLend++;
+            }
+            boolean capacityLimited = state.modelled && maxLendable > safeToLend;
+            maxLendable = Math.min(maxLendable, safeToLend);
+            overrideLendable = Math.min(overrideLendable, safeToLend);
             String note = maxLendable > 0 ? null
+                    : capacityLimited ? "Lending anyone would push it to or past its own capacity limit."
                     : donor.free.size() <= 1 ? "Its only free staff member stays in reserve."
                     : "Its free staff are needed for its own waiting work and reserve.";
             List<DonorStaff> staff = donor.lendable.stream().map(s -> {
@@ -358,10 +464,13 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                         s.getUser() == null ? null : s.getUser().getProfileImageUrl());
             }).toList();
             donors.add(new DonorDepartment(donor.department.getCode(), donor.department.getName(), donor.free.size(), donor.available.size(),
-                    donor.waitingCount(), maxLendable, overrideLendable, maxLendable > 0, note, staff));
+                    donor.waitingCount(), maxLendable, overrideLendable, maxLendable > 0, note, staff,
+                    state.modelled ? DepartmentCapacity.utilizationPercent(donor.remainingMinutes, donor.capacityStaff) : null,
+                    state.modelled ? DepartmentCapacity.utilizationPercent(donor.remainingMinutes, donor.capacityStaff - 1) : null,
+                    state.modelled ? donor.capacityStaff : null));
         }
 
-        Options options = new Options(summary, tasks, receivingMetrics.uncoveredTasks(), donors, limitations());
+        Options options = new Options(summary, tasks, allowedHelpers(receiving, state), donors, limitations());
         return managerCodes == null ? options : redactOptionsForManager(options, managerCodes);
     }
 
@@ -372,7 +481,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
      */
     private static Options redactOptionsForManager(Options options, List<String> managedCodes) {
         List<DonorDepartment> donors = options.donors().stream().map(d -> managedCodes.contains(d.code()) ? d : new DonorDepartment(d.code(), d.name(), null, null, null, null, null, null, null,
-                d.staff().stream().map(s -> new DonorStaff(s.staffId(), s.name(), s.availability(), null, null, null, s.profileImageUrl())).toList())).toList();
+                d.staff().stream().map(s -> new DonorStaff(s.staffId(), s.name(), s.availability(), null, null, null, s.profileImageUrl())).toList(),
+                null, null, null)).toList();
         return new Options(options.receiving(), options.tasks(), options.maxHelpers(), donors, options.limitations());
     }
 
@@ -397,7 +507,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
 
     // ── validation ───────────────────────────────────────────────────────────────────────────────────────────
 
-    private record Pair(Staff staff, Task task) {}
+    /** {@code shared}: the helper joins a task its own staff already hold (so the task keeps its status and nothing moves between waiting and assigned). */
+    private record Pair(Staff staff, Task task, boolean shared) {}
 
     private static final class Resolved {
         final List<Problem> problems = new ArrayList<>();
@@ -451,14 +562,21 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             }
             if (staff != null && !checkStaff(staff, item, receiving, state, resolved)) ok = false;
             if (task != null && !checkTask(task, item, receiving, state, resolved)) ok = false;
-            if (ok) resolved.pairs.add(new Pair(staff, task));
+            // A task that passed the checks and is already held is a shared one: only a held task may be accepted, and only to be joined
+            if (ok) resolved.pairs.add(new Pair(staff, task, state.assignedTasks.contains(task.getId())));
         }
 
-        if (resolved.pairs.size() > receiving.waiting.size() - Math.min(receiving.free.size(), receiving.waiting.size())) {
+        int allowed = allowedHelpers(receiving, state);
+        if (resolved.pairs.size() > allowed) {
             int uncovered = Math.max(0, receiving.waiting.size() - receiving.free.size());
-            resolved.problems.add(new Problem("NOT_NEEDED", receiving.department.getName() + " has " + uncovered + " task"
-                    + (uncovered == 1 ? "" : "s") + " its own free staff cannot take, so it can use at most " + uncovered + " helper"
-                    + (uncovered == 1 ? "" : "s") + ".", null, null));
+            String why = allowed == 0
+                    ? receiving.department.getName() + " has no task its own free staff cannot take and is not at or above its capacity limit, so it does not need helpers."
+                    : uncovered >= allowed
+                    ? receiving.department.getName() + " has " + uncovered + " task" + (uncovered == 1 ? "" : "s") + " its own free staff cannot take, so it can use at most "
+                            + allowed + " helper" + (allowed == 1 ? "" : "s") + "."
+                    : receiving.department.getName() + " needs " + allowed + " more person" + (allowed == 1 ? "" : "s") + " to get below its capacity limit, so it can use at most "
+                            + allowed + " helper" + (allowed == 1 ? "" : "s") + ".";
+            resolved.problems.add(new Problem("NOT_NEEDED", why, null, null));
         }
 
         for (Pair pair : resolved.pairs) resolved.lendByDonor.merge(pair.staff().getDepartment().getCode(), 1, Integer::sum);
@@ -485,6 +603,17 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                     resolved.problems.add(reserve);
                     resolved.donorOf.put(reserve, lend.getKey());
                 }
+            }
+            // Capacity rule, never overridable: the donor must itself stay below its limit with these people gone, or the plan would only move
+            // the overload from one department to another
+            if (state.modelled && DepartmentCapacity.exceedsLimit(donor.remainingMinutes, donor.capacityStaff - lend.getValue(), state.risk)) {
+                resolved.reserveHardBlocked = true;
+                Double after = DepartmentCapacity.utilizationPercent(donor.remainingMinutes, donor.capacityStaff - lend.getValue());
+                Problem overload = new Problem("DONOR_OVERLOAD", donor.department.getName() + " would be "
+                        + (after == null ? "left with work and nobody to do it" : "at " + pct(after) + "% of its capacity")
+                        + " after lending " + lend.getValue() + " person" + (lend.getValue() == 1 ? "" : "s") + ", at or above its limit of " + limitText(state) + ".", null, null);
+                resolved.problems.add(overload);
+                resolved.donorOf.put(overload, lend.getKey());
             }
         }
         return resolved;
@@ -538,11 +667,15 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             resolved.problems.add(new Problem("TASK_FINISHED", title + " is already " + task.getStatus().getDisplayName().toLowerCase() + ".", item.getStaffId(), task.getId()));
             return false;
         }
-        if (state.assignedTasks.contains(task.getId()) || task.getStatus() != TaskStatus.PENDING) {
-            resolved.problems.add(new Problem("TASK_ALREADY_ASSIGNED", title + " is already assigned.", item.getStaffId(), task.getId()));
-            return false;
+        boolean held = state.assignedTasks.contains(task.getId());
+        if (!held && task.getStatus() == TaskStatus.PENDING) return true;
+        // A task its own staff already hold may take ONE helper, but only while the department is at or above its capacity limit and the task has none
+        if (held && WorkloadRecommendationEngine.canShare(task) && atRisk(receiving, state)
+                && supportRepository.findByTaskIdAndStatus(task.getId(), SupportStatus.ACTIVE).isEmpty()) {
+            return true;
         }
-        return true;
+        resolved.problems.add(new Problem("TASK_ALREADY_ASSIGNED", title + " is already assigned.", item.getStaffId(), task.getId()));
+        return false;
     }
 
     // ── preview ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -593,7 +726,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             return donorCode != null && managedCodes.contains(donorCode);
         };
         List<Problem> problems = preview.problems().stream()
-                .map(p -> "DONOR_RESERVE".equals(p.code()) && ofManagedDonor.test(p) ? p : redactProblem(p, visibleStaff, ownWaiting)).toList();
+                .map(p -> ("DONOR_RESERVE".equals(p.code()) || "DONOR_OVERLOAD".equals(p.code())) && ofManagedDonor.test(p) ? p : redactProblem(p, visibleStaff, ownWaiting)).toList();
         List<Problem> warnings = preview.warnings().stream()
                 .map(p -> ofManagedDonor.test(p) ? p : new Problem(p.code(), "The lending department's staffing is tight.", null, null)).toList();
         // The override hint is given only when every reserve problem concerns a donor this Manager manages
@@ -605,8 +738,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
 
     private static Problem redactProblem(Problem p, Set<UUID> visibleStaff, Set<UUID> ownWaiting) {
         switch (p.code()) {
-            case "DONOR_RESERVE":
-                return new Problem(p.code(), "The lending department cannot spare this person right now.", null, null);
+            case "DONOR_RESERVE": case "DONOR_OVERLOAD":
+                return new Problem("DONOR_RESERVE", "The lending department cannot spare this person right now.", null, null);
             case "TASK_WRONG_DEPARTMENT":
                 return new Problem("TASK_NOT_FOUND", "A selected task no longer exists.", p.staffId(), p.taskId());
             case "DUPLICATE_TASK":
@@ -630,9 +763,11 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         Stats receiving = resolved.receiving;
         Set<UUID> chosenTasks = resolved.pairs.stream().map(p -> p.task().getId()).collect(Collectors.toSet());
         List<Task> remaining = receiving.waiting.stream().filter(t -> !chosenTasks.contains(t.getId())).toList();
-        int addedMinutes = resolved.pairs.stream().mapToInt(p -> minutes(p.task())).sum();
+        // A helper who joins a held task adds no minutes: they are already counted as assigned
+        int addedMinutes = resolved.pairs.stream().filter(p -> !p.shared()).mapToInt(p -> minutes(p.task())).sum();
         DepartmentImpact receivingImpact = new DepartmentImpact("RECEIVING", receiving.department.getCode(), receiving.department.getName(),
-                metrics(receiving), metrics(receiving, remaining, receiving.free.size(), receiving.assignedMinutes + addedMinutes), 0, resolved.pairs.size());
+                metrics(receiving, state), metrics(receiving, state, remaining, receiving.free.size(), receiving.assignedMinutes + addedMinutes,
+                        receiving.capacityStaff + resolved.pairs.size()), 0, resolved.pairs.size());
 
         List<DepartmentImpact> donors = new ArrayList<>();
         for (Map.Entry<String, Integer> lend : resolved.lendByDonor.entrySet()) {
@@ -640,8 +775,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             // A Manager's response carries donor impact only for donors the Manager manages; for any other donor none is computed
             if (donor == null || (state.narrowed && !state.managedDonors.contains(lend.getKey()))) continue;
             // The lent person's task minutes are counted under the receiving department, so the donor's minutes do not change
-            donors.add(new DepartmentImpact("DONOR", donor.department.getCode(), donor.department.getName(), metrics(donor),
-                    metrics(donor, donor.waiting, Math.max(0, donor.free.size() - lend.getValue()), donor.assignedMinutes),
+            donors.add(new DepartmentImpact("DONOR", donor.department.getCode(), donor.department.getName(), metrics(donor, state),
+                    metrics(donor, state, donor.waiting, Math.max(0, donor.free.size() - lend.getValue()), donor.assignedMinutes, donor.capacityStaff - lend.getValue()),
                     Math.max(1, donor.waiting.size()), lend.getValue()));
         }
         // Blocked only by the donor reserve, and acknowledging the risk would allow it
@@ -656,7 +791,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         StringBuilder sb = new StringBuilder();
         sb.append("ack=").append(resolved.acknowledged).append(';');
         if (resolved.receiving != null) {
-            sb.append(resolved.receiving.department.getCode()).append('|').append(resolved.receiving.free.size()).append('|').append(resolved.receiving.waiting.size()).append(';');
+            sb.append(resolved.receiving.department.getCode()).append('|').append(resolved.receiving.free.size()).append('|').append(resolved.receiving.waiting.size())
+                    .append('|').append(resolved.receiving.remainingMinutes).append('|').append(resolved.receiving.capacityStaff).append(';');
         }
         List<Pair> ordered = new ArrayList<>(resolved.pairs);
         ordered.sort(Comparator.comparing(p -> p.staff().getId().toString()));
@@ -670,7 +806,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         }
         for (Map.Entry<String, Integer> lend : resolved.lendByDonor.entrySet()) {
             Stats donor = state.byCode.get(lend.getKey());
-            if (donor != null) sb.append(lend.getKey()).append('|').append(donor.free.size()).append('|').append(donor.waitingCount()).append(';');
+            if (donor != null) sb.append(lend.getKey()).append('|').append(donor.free.size()).append('|').append(donor.waitingCount())
+                    .append('|').append(donor.remainingMinutes).append('|').append(donor.capacityStaff).append(';');
         }
         try {
             byte[] hash = MessageDigest.getInstance("SHA-256").digest(sb.toString().getBytes(StandardCharsets.UTF_8));
@@ -734,8 +871,11 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                 assignment.setStaff(pair.staff());
                 assignment = assignmentRepository.save(assignment);
 
-                pair.task().setStatus(TaskStatus.ASSIGNED);
-                taskRepository.save(pair.task());
+                // A waiting task becomes assigned; a task its own staff already hold keeps its status and owner
+                if (!pair.shared()) {
+                    pair.task().setStatus(TaskStatus.ASSIGNED);
+                    taskRepository.save(pair.task());
+                }
 
                 SupportAssignment support = new SupportAssignment();
                 support.setPlanId(planId);
@@ -911,7 +1051,12 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
 
         List<Assignment> held = assignmentRepository.findAllByTaskId(task.getId());
         List<Assignment> mine = held.stream().filter(a -> a.getStaff().getId().equals(support.getStaffId())).toList();
-        if (held.size() > mine.size()) {
+        if (held.size() > mine.size() && !mine.isEmpty()) {
+            // The helper joined a task its own staff hold: release only the helper; the task keeps its owner and its status
+            if (workloadAlerts != null) workloadAlerts.track(List.of(support.getStaffId())); // workload alert emails: before it is released
+            assignmentRepository.deleteAll(mine);
+            support.end(SupportStatus.CANCELLED, SupportEndReason.MANUALLY_ENDED, now);
+        } else if (held.size() > mine.size()) {
             // Someone else holds the task now: nothing to release, the support just no longer applies
             support.end(SupportStatus.CANCELLED, SupportEndReason.TASK_REASSIGNED, now);
         } else {

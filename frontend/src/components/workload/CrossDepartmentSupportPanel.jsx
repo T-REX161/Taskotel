@@ -12,11 +12,13 @@ import {
 import { getSeverityLabel, getSeverityTone, normalizeRecommendations, recommendationsTurnedOff } from '../../utils/supportRecommendations';
 import { loadCrossDepartmentStatus } from '../../utils/crossDepartmentStatus';
 import { CROSS_DEPARTMENT_REFRESH_MS, canCreateSupport, supportPanelMode } from '../../utils/crossDepartmentVisibility';
+import { formatUtilization } from '../../utils/workloadUtils';
 import { departmentLabel } from '../../utils/departmentRegistry';
 import {
   SUPPORT_STAGES,
   archiveReducer,
   buildPlanRequest,
+  canArchiveSupport,
   canReview,
   describeArchiveOutcome,
   initialArchiveState,
@@ -51,7 +53,7 @@ const PREVIEW_DEBOUNCE_MS = 300;
 const Stat = ({ label, value }) => (
   <div className="min-w-0">
     <p className="text-[11px] text-gray-500">{label}</p>
-    <p className="text-sm font-semibold text-gray-900">{value}</p>
+    <p className="text-sm font-semibold text-gray-900 whitespace-nowrap">{value}</p>
   </div>
 );
 
@@ -281,6 +283,33 @@ function SupportPanelContent({ onChanged }) {
     }
   };
 
+  // Removes every listed ended record from the history, one by one through the same archive call as each row's trash button (the server
+  // decides, so a record that is still active or already removed is refused and counted). The list is reloaded from the server afterwards.
+  const [clearing, setClearing] = useState(false);
+  const [clearNote, setClearNote] = useState('');
+  const handleClearAll = async (rows) => {
+    if (archiveInFlight.current || rows.length === 0) return;
+    archiveInFlight.current = true;
+    setClearing(true);
+    let failed = 0;
+    for (const row of rows) {
+      try {
+        await archiveSupportAssignment(row.id);
+      } catch {
+        failed += 1;
+      }
+    }
+    archiveInFlight.current = false;
+    setClearing(false);
+    setClearNote(failed === 0
+      ? `${rows.length} ${rows.length === 1 ? 'record' : 'records'} removed from the history.`
+      : `${rows.length - failed} removed; ${failed} could not be removed (already removed, or not ended). Refreshing the list.`);
+    loadHistory();
+  };
+
+  const [confirmClear, setConfirmClear] = useState(false);
+  const clearableRows = (history.data || []).filter((row) => canArchiveSupport(row));
+
   const canEnd = ['ADMIN', 'MANAGER'].includes(getUserRole());
   const historyView = supportHistoryView(history);
   const confirming = state.confirm.status === 'reviewing' || state.confirm.status === 'submitting';
@@ -367,7 +396,7 @@ function SupportPanelContent({ onChanged }) {
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-2">
         <div className="min-w-0">
           <h2 className="text-base sm:text-lg font-bold text-gray-900">Cross-Department Support</h2>
-          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Lend available staff to an overloaded department until a task is completed.</p>
+          <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Lend available staff to a department that is over its capacity or short of free staff, until a task is completed.</p>
           {!permissions.canConfirm && (
             <p className="text-xs text-gray-500 mt-1">
               You can plan and preview support for the departments you manage and manage the support records that involve them. Only an Admin can confirm new support, and the staffing figures of departments you do not manage are not shown to your role.
@@ -450,12 +479,12 @@ function SupportPanelContent({ onChanged }) {
           <p className="text-sm text-gray-600 rounded-lg border border-gray-100 bg-gray-50/60 p-4 text-center">
             {recommendationsTurnedOff(needs.data)
               ? 'Workload recommendations are turned off in System Settings, so no suggestions are shown.'
-              : 'No department currently has more waiting work than free staff, so no support is needed.'}
+              : 'No department currently needs support: none has more waiting work than free staff, and none is at or above its capacity limit.'}
           </p>
         )}
         {departments.length > 0 && (
           <SupportNeedsList
-            departments={departments.map((d) => ({ code: d.departmentCode, name: d.departmentName, severity: d.severity, pressure: d.pressure, suggestionCount: d.suggestionCount }))}
+            departments={departments.map((d) => ({ code: d.departmentCode, name: d.departmentName, severity: d.severity, pressure: d.pressure, suggestionCount: d.suggestionCount, reason: d.reason }))}
             selectedCode={state.department}
             onSelect={(code) => dispatch(code === state.department ? { type: 'REQUEST_DESELECT' } : { type: 'SELECT_DEPARTMENT', code })}
           />
@@ -486,18 +515,24 @@ function SupportPanelContent({ onChanged }) {
                   Clear selection
                 </button>
               </div>
-              <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
+              <div className="space-y-3">
                 <div className="min-w-0">
                   <h3 className="text-lg font-bold text-gray-900 flex flex-wrap items-center gap-2 leading-7">
                     {receiving.name}
                     <span className={`px-1.5 py-px rounded-md border text-[11px] leading-4 font-semibold ${getSeverityTone(receiving.severity).chip}`}>{getSeverityLabel(receiving.severity)}</span>
                   </h3>
                 </div>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-x-6 gap-y-3 flex-1 basis-full md:basis-0 md:min-w-[28rem]">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-x-6 gap-y-3">
+                  {Number.isFinite(receiving.metrics.utilizationPercent) && (
+                    <Stat label="Utilization" value={`${formatUtilization(receiving.metrics.utilizationPercent)}${receiving.metrics.atRisk ? ' · at risk' : ''}`} />
+                  )}
+                  {Number.isFinite(receiving.metrics.remainingMinutes) && receiving.metrics.capacityMinutes > 0 && (
+                    <Stat label="Capacity" value={`${receiving.metrics.remainingMinutes} / ${receiving.metrics.capacityMinutes} min`} />
+                  )}
                   <Stat label="Waiting tasks" value={receiving.metrics.waitingTasks} />
                   <Stat label="Waiting minutes" value={formatMinutes(receiving.metrics.waitingMinutes)} />
                   <Stat label="Urgent / high" value={receiving.urgentOrHighTasks} />
-                  <Stat label="Free staff" value={`${receiving.metrics.freeStaff} of ${receiving.metrics.availableStaff} available`} />
+                  <Stat label="Free staff" value={`${receiving.metrics.freeStaff} of ${receiving.metrics.availableStaff}`} />
                   <Stat label="Uncovered tasks" value={receiving.metrics.uncoveredTasks} />
                 </div>
               </div>
@@ -555,14 +590,33 @@ function SupportPanelContent({ onChanged }) {
             endingId={endState.status === 'submitting' ? endState.row?.id : null}
             onArchive={(row) => archiveDispatch({ type: 'ARCHIVE_OPEN', row })}
             archivingId={archiveState.status === 'submitting' ? archiveState.row?.id : null}
+            onClearAll={handleClearAll}
+            clearing={clearing}
           />
         </div>
       )}
       {historyView === 'history' && (
-        <details className="group rounded-xl border border-gray-200">
+        <details className="group tk-collapsible rounded-xl border border-gray-200">
           <summary className="flex items-center justify-between gap-2 cursor-pointer select-none px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-gray-900 rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">
             <span>Support history ({history.data.length})</span>
-            <span aria-hidden="true" className="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+            <span className="flex items-center gap-2">
+              {/* Clear all lives in this heading row so it takes no space of its own, and shows only once the list is open (group-open); a click here never opens or closes the list */}
+              {canEnd && clearableRows.length > 0 && (confirmClear ? (
+                <span className="hidden group-open:flex items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
+                  <span className="text-xs font-normal text-gray-600">Remove {clearableRows.length}?</span>
+                  <button type="button" disabled={clearing} onClick={(event) => { event.preventDefault(); setConfirmClear(false); }}
+                    className="px-2 py-0.5 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">Cancel</button>
+                  <button type="button" data-testid="clear-history-confirm" disabled={clearing}
+                    onClick={async (event) => { event.preventDefault(); await handleClearAll(clearableRows); setConfirmClear(false); }}
+                    className="px-2 py-0.5 text-xs font-medium text-red-700 border border-red-200 rounded-lg hover:bg-red-50 cursor-pointer disabled:opacity-50 disabled:cursor-wait">{clearing ? 'Removing…' : 'Remove all'}</button>
+                </span>
+              ) : (
+                <button type="button" data-testid="clear-history" title="Remove every ended record from the history (they stay in the audit trail)"
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); setConfirmClear(true); }}
+                  className="hidden group-open:inline-block px-2 py-0.5 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:text-red-700 hover:border-red-200 hover:bg-red-50 cursor-pointer">Clear all</button>
+              ))}
+              <span aria-hidden="true" className="text-xs text-gray-400 group-open:rotate-180 transition-transform">▾</span>
+            </span>
           </summary>
           <div className="px-3 pb-3">
             <SupportHistory
@@ -576,6 +630,13 @@ function SupportPanelContent({ onChanged }) {
             />
           </div>
         </details>
+      )}
+
+      {clearNote && (
+        <div role="status" className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700" data-testid="clear-history-note">
+          <p>{clearNote}</p>
+          <button type="button" onClick={() => setClearNote('')} className="underline cursor-pointer">Dismiss</button>
+        </div>
       )}
 
       {endDialog}

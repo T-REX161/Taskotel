@@ -1,7 +1,7 @@
 // Pure helpers for the dashboard. Everything is derived from what the backend returned; nothing is invented.
 import { formatDate as formatDateValue } from './dateTimeFormat.js';
 import { getPreferences } from './preferences.js';
-import { SHIFT_MINUTES } from './workloadUtils.js';
+import { SHIFT_MINUTES, formatUtilization } from './workloadUtils.js';
 
 /** The task statuses the summary reports, in display order. Staff do not receive a cancelled count. */
 export const TASK_STATUSES = [
@@ -220,11 +220,11 @@ export function buildInsights({ isStaff, own, staffWorkload, tasks, recommendati
   // Capacity warnings come from the dashboard summary itself; the backend sends none while the alert is switched off in System Settings
   if (Array.isArray(capacityAlerts) && capacityAlerts.length > 0) {
     const top = capacityAlerts[0];
-    const full = top.percentInWork >= 100;
+    const full = top.noCapacity === true || (top.utilizationPercent ?? 0) >= 100;
     items.push({ key: 'capacity', kind: 'capacity', rank: full ? 95 : 75, tone: full ? 'red' : 'amber', to: '/workload',
       details: { type: 'capacity', total: capacityAlerts.length, rows: capacityAlerts.slice(0, INSIGHT_DETAIL_LIMIT), viewAll: '/workload' },
       title: `${plural(capacityAlerts.length, 'department', 'departments')} at capacity limit`,
-      detail: `${top.departmentName} · ${top.staffInWork} of ${top.operationalStaff} available staff in work (${top.percentInWork}%, limit ${top.thresholdPercent}%)${capacityAlerts.length > 1 ? ` +${capacityAlerts.length - 1} more` : ''}` });
+      detail: `${top.departmentName} · ${top.noCapacity ? `${top.remainingMinutes} min of work and no available staff` : `${formatUtilization(top.utilizationPercent)} of capacity in use (${top.remainingMinutes} of ${top.capacityMinutes} min, limit ${top.thresholdPercent}%)`}${capacityAlerts.length > 1 ? ` +${capacityAlerts.length - 1} more` : ''}` });
   }
 
   if (showSupport && recommendations?.status === 'ready') {

@@ -292,6 +292,52 @@ public class CrossDepartmentSupportScenarioTest {
         assertEquals(3, rebuilt.path("pressure").path("uncoveredTasks").asInt());
     }
 
+    // ── capacity over HTTP ───────────────────────────────────────────────────────────────────────────────────
+
+    private JsonNode capacityOf(String bearer, Department department) throws Exception {
+        return byField(get("/api/workload/department-capacity", bearer).path("departments"), "code", department.getCode());
+    }
+
+    @Test
+    @DisplayName("Capacity over HTTP: confirming support moves capacity (receiver 39.6% -> 13.2%, donor 3 -> 1 people) while the remaining minutes stay 190; ending restores both")
+    void capacityEndpointFollowsTheSupportLifecycle() throws Exception {
+        String admin = token("scn_admin", Role.ADMIN);
+        // Receiving: 1 eligible person holding a 40-minute task + 3 waiting tasks (40 + 50 + 60 min) = 190 minutes on 480 of capacity.
+        var s = fx.overloaded(3, 3);
+        Staff helperA = s.donors.get(0);
+        Staff helperB = s.donors.get(1);
+
+        JsonNode before = capacityOf(admin, s.receiving);
+        assertEquals(190, before.path("remainingMinutes").asInt());
+        assertEquals(40, before.path("assignedMinutes").asInt());
+        assertEquals(150, before.path("waitingMinutes").asInt());
+        assertEquals(1, before.path("eligibleStaff").asInt());
+        assertEquals(480, before.path("capacityMinutes").asInt());
+        assertEquals(39.6, before.path("utilizationPercent").asDouble());
+        assertEquals(3, capacityOf(admin, s.donor).path("eligibleStaff").asInt());
+
+        JsonNode created = body(call(HttpMethod.POST, "/api/support/assignments", admin, plan(s.receiving, helperA, s.tasks.get(0), helperB, s.tasks.get(1)), 201));
+        JsonNode during = capacityOf(admin, s.receiving);
+        assertEquals(190, during.path("remainingMinutes").asInt(), "a helper joining does not change the department's minutes");
+        assertEquals(130, during.path("assignedMinutes").asInt(), "40 held + the two tasks the helpers took (40 + 50)");
+        assertEquals(60, during.path("waitingMinutes").asInt());
+        assertEquals(3, during.path("eligibleStaff").asInt());
+        assertEquals(2, during.path("helpersIn").asInt());
+        assertEquals(13.2, during.path("utilizationPercent").asDouble(), "190 / (3 x 480)");
+        JsonNode donorDuring = capacityOf(admin, s.donor);
+        assertEquals(1, donorDuring.path("eligibleStaff").asInt(), "the donor lost exactly what the receiver gained");
+        assertEquals(2, donorDuring.path("lentOut").asInt());
+        assertEquals(0, donorDuring.path("remainingMinutes").asInt());
+
+        for (JsonNode record : created) body(call(HttpMethod.POST, "/api/support/assignments/" + record.path("id").asText() + "/end", admin, null, 200));
+        JsonNode after = capacityOf(admin, s.receiving);
+        assertEquals(190, after.path("remainingMinutes").asInt());
+        assertEquals(1, after.path("eligibleStaff").asInt());
+        assertEquals(0, after.path("helpersIn").asInt());
+        assertEquals(39.6, after.path("utilizationPercent").asDouble());
+        assertEquals(3, capacityOf(admin, s.donor).path("eligibleStaff").asInt(), "the helpers are released to their home department");
+    }
+
     // ── permissions ──────────────────────────────────────────────────────────────────────────────────────────
 
     @Test

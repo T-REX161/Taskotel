@@ -23,15 +23,26 @@ public final class SupportDtos {
     /** The one System Settings fact a Manager may read: whether NEW cross-department support can be planned. Nothing else from the settings. */
     public record CrossDepartmentStatus(boolean crossDepartmentAssistanceEnabled) {}
 
+    /**
+     * The capacity fields follow DepartmentCapacity: remainingMinutes = assigned + waiting task minutes (they do not change when someone
+     * helps), eligibleStaff = the people whose capacity counts for this department (a helper counts for the department they help, not their
+     * home), utilizationPercent = remainingMinutes / (eligibleStaff x shift) x 100, null when there is work but nobody to do it.
+     */
     public record Metrics(int waitingTasks, int waitingMinutes, int assignedMinutes, int availableStaff, int freeStaff,
-                          int uncoveredTasks, int uncoveredMinutes) {}
+                          int uncoveredTasks, int uncoveredMinutes,
+                          int remainingMinutes, int eligibleStaff, long capacityMinutes, Double utilizationPercent, WorkloadStatus level,
+                          boolean atRisk, boolean noCapacity) {}
 
-    /** The receiving department with what is waiting in it. */
+    /**
+     * The receiving department with what is waiting in it. needReason: UNCOVERED_TASKS (more waiting tasks than free staff), HIGH_UTILIZATION
+     * (at or above the Capacity Threshold), BOTH, or NONE (it does not currently need support).
+     */
     public record DepartmentSummary(String code, String name, Severity severity, int urgentOrHighTasks,
-                                    int overdueOrDueSoonTasks, int activeStaff, Metrics metrics) {}
+                                    int overdueOrDueSoonTasks, int activeStaff, Metrics metrics, String needReason) {}
 
+    /** {@code shared}: not a waiting task but one its own staff already hold; a helper may JOIN it while the department is at its limit. */
     public record WaitingTask(UUID id, String title, String category, Priority priority, Integer estimatedDuration,
-                              LocalDate dueDate, LocalTime deadlineTime) {}
+                              LocalDate dueDate, LocalTime deadlineTime, boolean shared) {}
 
     /** The workload figures are null in a Manager's response (they are the donor department's data). */
     public record DonorStaff(UUID staffId, String name, Availability availability, Integer activeTaskCount,
@@ -43,7 +54,8 @@ public final class SupportDtos {
      * one free person it normally keeps in reserve may go (never fewer than {@code maxLendable}).
      */
     public record DonorDepartment(String code, String name, Integer freeStaff, Integer availableStaff, Integer waitingTasks,
-                                  Integer maxLendable, Integer overrideLendable, Boolean canLend, String note, List<DonorStaff> staff) {}
+                                  Integer maxLendable, Integer overrideLendable, Boolean canLend, String note, List<DonorStaff> staff,
+                                  Double utilizationPercent, Double utilizationAfterOne, Integer eligibleStaff) {}
 
     public record Options(DepartmentSummary receiving, List<WaitingTask> tasks, int maxHelpers,
                           List<DonorDepartment> donors, List<String> limitations) {}

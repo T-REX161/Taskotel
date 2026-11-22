@@ -10,14 +10,22 @@
       "code" : "RS_B",
       "metrics" : {
         "assignedMinutes" : 20,
+        "atRisk" : false,
         "availableStaff" : 2,
+        "capacityMinutes" : 480,
+        "eligibleStaff" : 1,
         "freeStaff" : 1,
+        "level" : "LOW",
+        "noCapacity" : false,
+        "remainingMinutes" : 80,
         "uncoveredMinutes" : 0,
         "uncoveredTasks" : 0,
+        "utilizationPercent" : 16.7,
         "waitingMinutes" : 60,
         "waitingTasks" : 1
       },
       "name" : "RS_B name",
+      "needReason" : "NONE",
       "overdueOrDueSoonTasks" : 1,
       "severity" : "MODERATE",
       "urgentOrHighTasks" : 1
@@ -29,6 +37,7 @@
       "estimatedDuration" : 60,
       "id" : "<task:RS B pending>",
       "priority" : "URGENT",
+      "shared" : false,
       "title" : "RS B pending"
     } ]
   }

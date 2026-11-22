@@ -108,11 +108,13 @@ export const getDashboardSummary = () => {
 };
 
 /**
- * The saved Capacity Threshold for colouring the Workload page's department cards: { enabled, capacityThresholdPercent }. Read-only, and only
- * for Admin and Manager (the roles that see those cards; Staff are refused with 403). Changing the setting stays Admin only (PUT /api/system-settings).
+ * Each department's remaining workload, staff capacity, utilization and risk level, plus the saved Capacity Threshold they are judged by:
+ * { enabled, capacityThresholdPercent, shiftMinutes, departments: [{ code, name, remainingMinutes, eligibleStaff, utilizationPercent, level, atRisk, ... }] }.
+ * Read-only, and only for Admin and Manager (an Admin gets every department, a Manager the ones they manage; Staff are refused with 403).
+ * Changing the threshold stays Admin only (PUT /api/system-settings).
  */
-export const getDepartmentRiskThreshold = () => {
-  return apiFetch('/api/workload/department-risk-threshold');
+export const getDepartmentCapacity = () => {
+  return apiFetch('/api/workload/department-capacity');
 };
 
 /**

@@ -475,6 +475,17 @@ html:not(.dark) .hover\:bg-slate-100:hover {
   .clock-roll-out { display: none; }
 }
 
+/* A <details> that opens and closes smoothly (height and fade) in browsers that support ::details-content; the others open and close at once.
+   Reduced motion: the shared rule below shortens every transition to about 1ms. */
+.tk-collapsible { interpolate-size: allow-keywords; }
+.tk-collapsible::details-content {
+  height: 0;
+  overflow: clip;
+  opacity: 0;
+  transition: height 320ms cubic-bezier(0.22, 0.61, 0.36, 1), opacity 240ms ease-out, content-visibility 320ms allow-discrete;
+}
+.tk-collapsible[open]::details-content { height: auto; opacity: 1; }
+
 /* ── Motion: reduced-motion strategy for the shared tokens (src/theme/motion.cjs) ──────────────────────────
    With prefers-reduced-motion: reduce
    - the shared entrance and exit animations (animate-fade-in/-out, -dialog-in/-out, -menu-in/-out, -toast-in/-out) do

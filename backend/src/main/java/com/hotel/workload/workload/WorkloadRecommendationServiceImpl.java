@@ -63,6 +63,55 @@ public class WorkloadRecommendationServiceImpl implements WorkloadRecommendation
         this.systemSettings = systemSettings;
     }
 
+    /** The shared department capacity figures. Optional (setter) so a hand-built service in a unit test keeps the original uncovered-task rule only. */
+    private DepartmentCapacityService capacityService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDepartmentCapacityService(DepartmentCapacityService capacityService) {
+        this.capacityService = capacityService;
+    }
+
+    /**
+     * Every department's remaining task minutes and capacity staff, and the risk rule, so a department can need help because of its utilization
+     * (not only because it has more waiting tasks than free staff) and a donor is never pushed past its own limit. Aggregates only.
+     */
+    /** For support lookups: which tasks already have a helper. Optional (setter) like the capacity service. */
+    private com.hotel.workload.support.SupportAssignmentRepository supportRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setSupportRepository(com.hotel.workload.support.SupportAssignmentRepository supportRepository) {
+        this.supportRepository = supportRepository;
+    }
+
+    /** The tasks a helper may join, by department code: held by the department's own staff and without a helper yet. Limited to {@code receivers}. */
+    private Map<String, List<com.hotel.workload.task.Task>> shareableTasks(java.util.Collection<com.hotel.workload.staff.Department> receivers) {
+        Map<String, List<com.hotel.workload.task.Task>> result = new HashMap<>();
+        if (supportRepository == null || receivers.isEmpty()) return result;
+        List<String> codes = receivers.stream().map(com.hotel.workload.staff.Department::getCode).toList();
+        java.util.Set<java.util.UUID> supported = new HashSet<>(supportRepository.findTaskIdsByStatusAndReceivingDepartmentCodes(com.hotel.workload.support.SupportStatus.ACTIVE, codes));
+        for (com.hotel.workload.task.Task task : taskRepository.findHeldByDepartments(receivers, ACTIVE_STATUSES)) {
+            if (task.getDepartment() == null || !WorkloadRecommendationEngine.canShare(task) || supported.contains(task.getId())) continue;
+            result.computeIfAbsent(task.getDepartment().getCode(), k -> new java.util.ArrayList<>()).add(task);
+        }
+        return result;
+    }
+
+    private WorkloadRecommendationEngine.CapacityInputs capacityInputs(java.util.Collection<com.hotel.workload.staff.Department> receivers) {
+        WorkloadRecommendationEngine.CapacityInputs inputs = capacityInputs();
+        return inputs.modelled() ? inputs.withShareable(shareableTasks(receivers)) : inputs;
+    }
+
+    private WorkloadRecommendationEngine.CapacityInputs capacityInputs() {
+        if (capacityService == null) return WorkloadRecommendationEngine.CapacityInputs.NONE;
+        Map<String, Integer> remaining = new HashMap<>();
+        Map<String, Integer> staff = new HashMap<>();
+        for (DepartmentCapacityService.Figures figures : capacityService.figures().values()) {
+            remaining.put(figures.code(), figures.remainingMinutes());
+            staff.put(figures.code(), figures.eligibleStaff());
+        }
+        return WorkloadRecommendationEngine.CapacityInputs.of(remaining, staff, capacityService.risk());
+    }
+
     static final String CROSS_DEPARTMENT_OFF_NOTE = "Cross-department assistance is turned off in System Settings, so no support suggestions are being made.";
 
     static final String TURNED_OFF_NOTE ="Workload recommendations are turned off in System Settings (Auto-Balancing Trigger). No suggestions are being made.";
@@ -86,7 +135,8 @@ public class WorkloadRecommendationServiceImpl implements WorkloadRecommendation
                     taskRepository.findByStatusIn(ACTIVE_STATUSES),
                     assignmentRepository.findAllActiveAssignments(ACTIVE_STATUSES),
                     LocalDate.now(),
-                    LocalDateTime.now());
+                    LocalDateTime.now(),
+                    capacityInputs(departmentRepository.findAllByOrderByCreatedAtAscNameAsc().stream().filter(com.hotel.workload.staff.Department::isActive).toList()));
         }
         if (scope.isDepartment()) {
             Map<String, Integer> waitingByDepartment = new HashMap<>();
@@ -107,7 +157,8 @@ public class WorkloadRecommendationServiceImpl implements WorkloadRecommendation
                     waitingByDepartment,
                     new HashSet<>(assignmentRepository.findBusyStaffIds(ACTIVE_STATUSES)),
                     LocalDate.now(),
-                    LocalDateTime.now());
+                    LocalDateTime.now(),
+                    capacityInputs(scope.managedDepartments()));
         }
         // Staff have no recommendations (also blocked by SecurityConfig); a direct call is refused the same way
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to perform this action.");

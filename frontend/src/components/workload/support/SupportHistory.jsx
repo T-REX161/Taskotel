@@ -36,16 +36,19 @@ const Cell = ({ label, children, className = '' }) => (
  * projection (no approver) or, where their department only lent the person, the donor projection (name, own department,
  * status and dates). Only what the server sent is shown; withheld details are labelled, never filled in.
  */
-export default function SupportHistory({ history, departmentName, canEnd = false, onEnd, endingId = null, historyOnly = false, activeOnly = false, onArchive, archivingId = null, role = 'ADMIN' }) {
+export default function SupportHistory({ history, departmentName, canEnd = false, onEnd, endingId = null, historyOnly = false, activeOnly = false, onArchive, archivingId = null, onClearAll, clearing = false, role = 'ADMIN' }) {
   // historyOnly: just the completed and ended records, with no heading, tabs or "no one is on support" message. The panel
   // uses it inside a collapsed "Support history" area when nobody is on active support.
   // activeOnly: just the arrangements still in progress, with no heading or tabs. The panel uses it while cross-department
   // assistance is switched off, so existing support can be followed and ended without showing the rest of the feature.
   const [tab, setTab] = useState(historyOnly ? 'ended' : 'active');
+  const [confirmClear, setConfirmClear] = useState(false);
   const { status, data, error } = history;
   const rows = (data || []).filter((row) => (tab === 'active' ? row.status === 'ACTIVE' : row.status !== 'ACTIVE'));
   const activeCount = (data || []).filter((row) => row.status === 'ACTIVE').length;
   const endedCount = (data || []).length - activeCount;
+  // "Clear all" archives every ended record shown, exactly like the trash button of each row (they stay in the audit trail)
+  const clearable = tab === 'ended' ? rows.filter((row) => canArchiveSupport(row)) : [];
 
   return (
     <section aria-label={historyOnly ? 'Support history' : activeOnly ? 'Active support assignments' : 'Support assignments'} className="space-y-3">
@@ -74,6 +77,41 @@ export default function SupportHistory({ history, departmentName, canEnd = false
         <p className="text-sm text-gray-500 rounded-xl border border-gray-200 px-3 py-5 text-center">
           {tab === 'active' ? 'No one is on temporary support right now.' : 'No completed or ended support yet.'}
         </p>
+      )}
+      {status === 'ready' && !historyOnly && canEnd && onClearAll && clearable.length > 0 && (
+        <div className="flex flex-wrap items-center justify-end gap-2" data-testid="clear-history-bar">
+          {confirmClear ? (
+            <>
+              <span className="text-xs text-gray-600">Remove {clearable.length} ended {clearable.length === 1 ? 'record' : 'records'} from the history? They stay in the audit trail.</span>
+              <button
+                type="button"
+                onClick={() => setConfirmClear(false)}
+                disabled={clearing}
+                className="px-2.5 py-1 text-xs font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                data-testid="clear-history-confirm"
+                disabled={clearing}
+                onClick={async () => { await onClearAll(clearable); setConfirmClear(false); }}
+                className="px-2.5 py-1 text-xs font-medium text-red-700 border border-red-200 rounded-lg hover:bg-red-50 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+              >
+                {clearing ? 'Removing…' : 'Remove all'}
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              data-testid="clear-history"
+              onClick={() => setConfirmClear(true)}
+              className="px-2.5 py-1 text-xs font-medium text-gray-600 border border-gray-300 rounded-lg hover:text-red-700 hover:border-red-200 hover:bg-red-50 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500"
+            >
+              Clear all
+            </button>
+          )}
+        </div>
       )}
       {status === 'ready' && rows.length > 0 && (
         <div className="rounded-xl border border-gray-200 overflow-hidden">

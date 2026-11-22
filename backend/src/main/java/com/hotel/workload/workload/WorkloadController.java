@@ -13,26 +13,26 @@ public class WorkloadController {
 
     private final WorkloadService workloadService;
     private final com.hotel.workload.staff.DepartmentService departmentService;
-    private final com.hotel.workload.settings.SystemSettingsService systemSettings;
+    private final DepartmentCapacityService departmentCapacityService;
 
     public WorkloadController(WorkloadService workloadService, com.hotel.workload.staff.DepartmentService departmentService,
-                              com.hotel.workload.settings.SystemSettingsService systemSettings) {
+                              DepartmentCapacityService departmentCapacityService) {
         this.workloadService = workloadService;
         this.departmentService = departmentService;
-        this.systemSettings = systemSettings;
+        this.departmentCapacityService = departmentCapacityService;
     }
 
     /**
-     * GET /api/workload/department-risk-threshold
-     * The saved Capacity Threshold, read-only, for the accounts that see the "Workload by Department" cards: an Admin and a valid Manager.
-     * A department whose displayed share of the total load is at or above this percentage is AT RISK. Staff are refused (they have their own
-     * page without department cards and need no department-level information): at the URL level in SecurityConfig and again in the service,
-     * from the signed-in account in the database. Same source as the Admin's System Settings page (the one GLOBAL row, or the defaults).
-     * Changing it stays Admin only (PUT /api/system-settings).
+     * GET /api/workload/department-capacity
+     * Each department's remaining workload, staff capacity, utilization and risk level (see DepartmentCapacity), plus the saved Capacity
+     * Threshold they are judged by. For the accounts that see the "Workload by Department" cards: an Admin sees every department and a valid
+     * Manager the departments they manage. Staff are refused (they have their own page without department cards): at the URL level in
+     * SecurityConfig and again in the service, from the signed-in account in the database. Read-only; changing the threshold stays Admin
+     * only (PUT /api/system-settings).
      */
-    @GetMapping("/department-risk-threshold")
-    public ResponseEntity<com.hotel.workload.settings.DepartmentRiskThresholdDto> getDepartmentRiskThreshold() {
-        return ResponseEntity.ok(systemSettings.departmentRiskThreshold());
+    @GetMapping("/department-capacity")
+    public ResponseEntity<DepartmentCapacityDto> getDepartmentCapacity() {
+        return ResponseEntity.ok(departmentCapacityService.forCaller());
     }
 
     /**

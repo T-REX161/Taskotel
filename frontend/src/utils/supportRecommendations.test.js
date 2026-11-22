@@ -69,7 +69,7 @@ describe('Cross-Department Support panel wiring', () => {
   it('handles loading, empty, error and retry states, success and failure feedback, and the limitations', () => {
     assert.ok(panel.includes("status: 'loading'") && panel.includes('Calculating recommendations'));
     assert.ok(panel.includes("needs.status === 'error'") && panel.includes('role="alert"') && panel.includes('Try again'));
-    assert.ok(panel.includes('no support is needed'));
+    assert.ok(panel.includes('No department currently needs support'));
     assert.ok(panel.includes('Support confirmed') && panel.includes('Nothing was created'));
     assert.ok(panel.includes('The plan was out of date'));
     assert.ok(panel.includes('What these suggestions do not take into account'));

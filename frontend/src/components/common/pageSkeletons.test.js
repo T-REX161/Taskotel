@@ -96,7 +96,9 @@ describe('each skeleton follows its loaded page: same containers, columns and wi
     for (const cls of ['grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4', 'bg-white rounded-xl p-4 shadow-2xs border border-gray-100 flex items-center space-x-3.5',
       'bg-white rounded-xl border border-gray-100 shadow-2xs px-4 py-3 space-y-2.5', 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2', 'grid grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))] gap-4',
       'min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 overflow-hidden', 'block md:hidden divide-y divide-gray-100', 'w-full text-left border-collapse table-fixed']) {
-      assert.ok(page.includes(cls) && html.includes(cls), cls);
+      // the legend tiles live in their own component now; the skeleton still reserves the same grid
+      const home = cls === 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2' ? read('components/workload/DepartmentLegendTiles.jsx') : page;
+      assert.ok(home.includes(cls) && html.includes(cls), cls);
     }
     assert.ok(page.includes('bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3'));
     assert.deepEqual(cols(html), ['w-[24%] lg:w-[25%]', 'w-[16%] lg:w-[18%]', 'w-[11%] lg:w-[10%]', 'w-[12%] lg:w-[10%]', 'w-[18%] lg:w-[22%]', 'w-[19%] lg:w-[15%]']);

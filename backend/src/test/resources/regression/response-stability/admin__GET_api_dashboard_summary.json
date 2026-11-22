@@ -6,14 +6,7 @@
     "atRiskStaff" : 0,
     "availableStaff" : 3,
     "cancelledTasks" : 0,
-    "capacityAlerts" : [ {
-      "departmentCode" : "RS_B",
-      "departmentName" : "RS_B name",
-      "operationalStaff" : 1,
-      "percentInWork" : 100,
-      "staffInWork" : 1,
-      "thresholdPercent" : 85
-    } ],
+    "capacityAlerts" : [ ],
     "completedTasks" : 0,
     "highWorkloadStaff" : 0,
     "inProgressTasks" : 0,

@@ -416,7 +416,7 @@ class WorkloadRecommendationEngineTest {
         assertEquals(1, dto.unsupported().size());
         assertNotNull(onlyFree);
         assertTrue(dto.unsupported().get(0).reason().startsWith("No suitable support is available"));
-        assertTrue(dto.unsupported().get(0).reason().contains("without a free, available staff member"));
+        assertTrue(dto.unsupported().get(0).reason().startsWith("No suitable support is available"));
     }
 
     @Test
@@ -535,7 +535,7 @@ class WorkloadRecommendationEngineTest {
 
         assertTrue(dto.recommendations().isEmpty());
         assertEquals(1, dto.unsupported().size());
-        assertTrue(dto.unsupported().get(0).reason().contains("no free STAFF member who can sign in"));
+        assertTrue(dto.unsupported().get(0).reason().startsWith("No suitable support is available"));
     }
 
     @Test

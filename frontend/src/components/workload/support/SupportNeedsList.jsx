@@ -1,5 +1,5 @@
 import React from 'react';
-import { getSeverityLabel, getSeverityTone, pickMostUrgent } from '../../../utils/supportRecommendations';
+import { describeNeed, getSeverityLabel, getSeverityTone, pickMostUrgent, pressureUtilizationText } from '../../../utils/supportRecommendations';
 import { formatMinutes } from '../../../utils/supportPlan';
 
 const Figure = ({ label, value, warn }) => (
@@ -40,6 +40,7 @@ export default function SupportNeedsList({ departments, selectedCode, onSelect }
                   {getSeverityLabel(dept.severity)}
                   {urgent && <span className="font-semibold text-amber-700">· Most urgent</span>}
                 </span>
+                {describeNeed(p) && <span className="mt-0.5 block text-[11px] text-gray-600" data-testid="need-reason">{describeNeed(p)}</span>}
               </span>
               <span
                 aria-hidden="true"
@@ -51,10 +52,11 @@ export default function SupportNeedsList({ departments, selectedCode, onSelect }
               </span>
             </span>
 
-            <dl className="mt-3 grid grid-cols-3 gap-x-2">
+            <dl className="mt-3 grid grid-cols-4 gap-x-2">
               <Figure label="Waiting" value={p.waitingTasks} />
               <Figure label="Minutes" value={formatMinutes(p.waitingMinutes).replace(' min', '')} />
               <Figure label="Uncovered" value={p.uncoveredTasks} warn={p.uncoveredTasks > 0} />
+              <Figure label="Utilization" value={pressureUtilizationText(p) ?? '–'} warn={p.atRisk === true} />
             </dl>
 
             <span className="mt-2.5 flex items-center justify-between gap-2 border-t border-gray-100 pt-2 text-[11px]">
@@ -63,6 +65,9 @@ export default function SupportNeedsList({ departments, selectedCode, onSelect }
                 ? <span className="font-semibold text-emerald-700 whitespace-nowrap">{dept.suggestionCount} suggested helper{dept.suggestionCount === 1 ? '' : 's'}</span>
                 : <span className="font-medium text-amber-700 text-right">No helpers available</span>}
             </span>
+            {dept.suggestionCount === 0 && dept.reason && (
+              <span className="mt-2 block text-[11px] leading-4 text-amber-800" data-testid="no-helper-reason">{dept.reason}</span>
+            )}
           </button>
         );
       })}

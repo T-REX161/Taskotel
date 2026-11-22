@@ -4,6 +4,8 @@
 // A plan is a list of { staffId, taskId } pairs for one receiving department. Its life:
 //   recommended (from the API)  ->  selected, not confirmed (here)  ->  active support (after confirm)  ->  completed.
 
+import { formatUtilization } from './workloadUtils.js';
+
 export const MAX_PLAN_SIZE = 20;
 
 export const initialSupportState = {
@@ -66,8 +68,15 @@ export const hasDonorFigures = (donor) =>
 
 /** The line under a lending department's name: its figures, or a plain statement that they are withheld (never a made-up number). */
 export const donorSummaryText = (donor) => (hasDonorFigures(donor)
-  ? `${donor.freeStaff} free of ${donor.availableStaff} available · ${donor.waitingTasks} waiting`
+  ? `${donor.freeStaff} free of ${donor.availableStaff} available · ${donor.waitingTasks} waiting${donorUtilizationText(donor)}`
   : `Department figures: ${RESTRICTED_LABEL.toLowerCase()}`);
+
+/** The lending department's utilization now and, if it lends one person, after (only when the server sent them): the cost of lending, in the open. */
+export function donorUtilizationText(donor) {
+  if (!Number.isFinite(donor?.utilizationPercent)) return '';
+  const after = donor.maxLendable > 0 && Number.isFinite(donor.utilizationAfterOne) ? ` (${formatUtilization(donor.utilizationAfterOne)} after lending one)` : '';
+  return ` · ${formatUtilization(donor.utilizationPercent)} utilized${after}`;
+}
 
 /** A helper's current workload, or a plain statement that it is withheld. */
 export function personWorkloadText(person) {
@@ -134,14 +143,17 @@ export function whyCannotAdd(options, plan, donorCode, staffId) {
   // A suggestion on screen can be older than the options: never add someone who is no longer offered
   if (!isOffered(options, staffId)) return 'That person is no longer available to lend.';
   if (plan.length >= MAX_PLAN_SIZE) return `A plan can have at most ${MAX_PLAN_SIZE} pairs.`;
-  if (nextFreeTaskId(options?.tasks, plan) === null) return 'Every waiting task already has a helper in this plan.';
+  if (nextFreeTaskId(options?.tasks, plan) === null) return 'Every task offered already has a helper in this plan.';
   if (plan.length >= (options?.maxHelpers ?? 0)) return 'The department cannot use more helpers than it has uncovered tasks.';
   // The normal reserve is full: only a manager's acknowledgement (see needsReserveOverride) can still allow this person.
   // When the department's figures are withheld from the viewer the capacity is unknown, so nothing is assumed here: the
   // server's preview applies the reserve rule and says so.
   const capacity = donorCapacityLeft(options, plan)[donorCode];
   if (capacity !== null && (capacity ?? 0) <= 0 && (donorOverrideLeft(options, plan)[donorCode] ?? 0) <= 0) {
-    return 'That department must keep a free person in reserve.';
+    // The server states the real reason for the department (its capacity limit, or its reserve); the neutral wording covers the case where
+    // earlier people in this plan used up what it could lend
+    const donor = (options?.donors || []).find((d) => d.code === donorCode);
+    return donor?.note || 'That department cannot lend anyone else without going past its limit or its reserve.';
   }
   return '';
 }

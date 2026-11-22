@@ -109,4 +109,12 @@ public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     /** The ids of staff who hold at least one active assignment (ids only, no assignment or task detail). */
     @Query("SELECT DISTINCT a.staff.id FROM Assignment a WHERE a.task.status IN :statuses")
     List<UUID> findBusyStaffIds(@Param("statuses") List<TaskStatus> statuses);
+
+    /**
+     * The held part of each department's remaining workload, as [department code of the TASK, task count, minutes] rows. Every task is counted
+     * ONCE, however many people hold it (a helper who joins a task adds a person, never minutes). A supported task belongs to the department being
+     * helped, so support is attributed to that department automatically and nothing is counted twice. Counts and sums only.
+     */
+    @Query("SELECT t.department.code, COUNT(t.id), COALESCE(SUM(COALESCE(t.estimatedDuration, 0)), 0) FROM Task t WHERE t.department IS NOT NULL AND t.status IN :statuses AND EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t) GROUP BY t.department.code")
+    List<Object[]> activeAssignedByTaskDepartmentCode(@Param("statuses") List<TaskStatus> statuses);
 }

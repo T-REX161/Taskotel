@@ -152,7 +152,7 @@ export function SystemSettingsPage() {
               <SettingCard
                 icon={<BellIcon className="h-5 w-5" />}
                 title="Max Task Capacity Alert"
-                description="Show a dashboard warning when a department reaches the capacity threshold below"
+                description="Mark a department AT RISK, warn on the dashboard and suggest support when it reaches the capacity threshold below"
               >
                 <SettingSwitch label="Max Task Capacity Alert" checked={form.capacityAlertEnabled} disabled={saving} onChange={() => change({ capacityAlertEnabled: !form.capacityAlertEnabled })} />
               </SettingCard>
@@ -160,7 +160,7 @@ export function SystemSettingsPage() {
               <SettingCard
                 icon={<GaugeIcon className="h-5 w-5" />}
                 title="Capacity Threshold"
-                description={`The department workload percentage at which a department becomes AT RISK (red). Enter ${THRESHOLD_MIN} to ${THRESHOLD_MAX}.`}
+                description={`Utilization (remaining task minutes as a share of staff capacity) at which a department becomes AT RISK. Enter ${THRESHOLD_MIN} to ${THRESHOLD_MAX}.`}
                 error={!thresholdCheck.valid ? thresholdCheck.message : null}
               >
                 <div className={`relative flex items-center overflow-hidden rounded-lg border bg-white transition-colors focus-within:ring-2 ${thresholdCheck.valid ? 'border-gray-300 hover:border-gray-400 focus-within:border-emerald-500 focus-within:ring-emerald-200' : 'border-red-400 focus-within:ring-red-200'} ${saving ? 'opacity-60 bg-gray-50' : ''}`}>

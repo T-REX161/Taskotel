@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { WorkloadIcon, DepartmentsIcon, TasksIcon } from '../icons/Icons';
 import { workloadTone } from '../../utils/dashboardView';
+import { formatUtilization } from '../../utils/workloadUtils';
 import { getSeverityLabel, getSeverityBadge } from '../../utils/supportRecommendations';
 
 const ICONS = { workload: WorkloadIcon, capacity: WorkloadIcon, support: DepartmentsIcon, tasks: TasksIcon };
@@ -50,9 +51,11 @@ function Details({ details }) {
               <Row key={r.departmentCode}>
                 <span className="min-w-0 flex-1">
                   <span className="block font-medium text-gray-900 truncate" title={r.departmentName}>{r.departmentName}</span>
-                  <span className="block text-gray-500 truncate">{r.staffInWork} of {r.operationalStaff} available staff in work · limit {r.thresholdPercent}%</span>
+                  <span className="block text-gray-500 truncate">
+                    {r.noCapacity ? `${r.remainingMinutes} min of work, no available staff` : `${r.remainingMinutes} of ${r.capacityMinutes} min of capacity · limit ${r.thresholdPercent}%`}
+                  </span>
                 </span>
-                <span className="tabular-nums text-gray-700">{r.percentInWork}%</span>
+                <span className="tabular-nums text-gray-700">{r.noCapacity ? 'No capacity' : formatUtilization(r.utilizationPercent)}</span>
               </Row>
             );
           }

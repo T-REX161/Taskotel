@@ -49,17 +49,19 @@ public class AdminDashboardSummaryDto {
     private long atRiskStaff;
 
     /**
-     * Capacity warnings (System Settings: Max Task Capacity Alert and Capacity Threshold): one entry per department in the caller's scope
-     * whose share of staff in work has reached the threshold. Always empty while the alert is switched off.
+     * Capacity warnings (System Settings: Max Task Capacity Alert and Capacity Threshold): one entry per department in the caller's scope that
+     * is AT RISK, meaning its utilization (remaining task minutes / staff capacity x 100, see DepartmentCapacity) is at or above the
+     * threshold. This is the same rule the Workload page cards and Cross-Department Support use. Always empty while the alert is switched off.
      */
     private java.util.List<CapacityAlert> capacityAlerts = new java.util.ArrayList<>();
 
     /**
-     * staffInWork: eligible Staff of the department holding at least one active assignment (the numerator); operationalStaff: all eligible
-     * Staff of the department (the denominator). Eligible = Staff role, active, AVAILABLE, with a department, the same population for both, so
-     * percentInWork never exceeds 100. Managers, Administrators, inactive and unavailable Staff and Staff without a department are in neither.
+     * remainingMinutes: estimated minutes of the department's active tasks, assigned and waiting; capacityMinutes: eligible staff (active
+     * STAFF accounts marked AVAILABLE, counting helpers on support for the department they help) times the standard shift; utilizationPercent:
+     * their ratio to one decimal, or null when there is work but nobody eligible to do it (noCapacity).
      */
-    public record CapacityAlert(String departmentCode, String departmentName, int staffInWork, int operationalStaff, int percentInWork, int thresholdPercent) {}
+    public record CapacityAlert(String departmentCode, String departmentName, int remainingMinutes, long capacityMinutes, int eligibleStaff,
+                                Double utilizationPercent, int thresholdPercent, boolean noCapacity) {}
 
     public java.util.List<CapacityAlert> getCapacityAlerts() { return capacityAlerts; }
     public void setCapacityAlerts(java.util.List<CapacityAlert> capacityAlerts) { this.capacityAlerts = capacityAlerts; }

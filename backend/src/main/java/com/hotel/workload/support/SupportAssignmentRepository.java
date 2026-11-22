@@ -39,6 +39,10 @@ public interface SupportAssignmentRepository extends JpaRepository<SupportAssign
 
     Optional<SupportAssignment> findByTaskIdAndStatus(UUID taskId, SupportStatus status);
 
+    /** The tasks that already have a helper with this status, among those of the given receiving departments (ids only). */
+    @Query("SELECT s.taskId FROM SupportAssignment s WHERE s.status = :status AND s.receivingDepartmentCode IN :codes")
+    List<UUID> findTaskIdsByStatusAndReceivingDepartmentCodes(@Param("status") SupportStatus status, @Param("codes") Collection<String> codes);
+
     boolean existsByTaskId(UUID taskId);
 
     /** True when this account approved any support record (history that deleting the account would orphan). */

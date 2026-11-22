@@ -68,9 +68,23 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findWaitingByDepartment(@Param("department") com.hotel.workload.staff.Department department, @Param("statuses") Collection<TaskStatus> statuses);
 
     /**
+     * The active tasks of these departments that someone already holds (at least one assignment). Used only to offer a helper a task of an
+     * overloaded department to join; limited by department in the query, so no other department's task is loaded.
+     */
+    @Query("SELECT t FROM Task t WHERE t.department IN :departments AND t.status IN :statuses AND EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t)")
+    List<Task> findHeldByDepartments(@Param("departments") Collection<com.hotel.workload.staff.Department> departments, @Param("statuses") Collection<TaskStatus> statuses);
+
+    /**
      * How many tasks wait (active, nobody holds them) in each department, as [department code, count] rows. Counts only: no task detail is
      * returned. Needed so a donor department's reserve rule can be applied without loading its tasks.
      */
     @Query("SELECT t.department.code, COUNT(t) FROM Task t WHERE t.department IS NOT NULL AND t.status IN :statuses AND NOT EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t) GROUP BY t.department.code")
     List<Object[]> countWaitingByDepartmentCode(@Param("statuses") Collection<TaskStatus> statuses);
+
+    /**
+     * The estimated minutes of the tasks that wait (active, nobody holds them) in each department, as [department code, minutes] rows. A task
+     * with no estimate counts as 0. Sums only: no task detail is returned. Part of a department's remaining workload (see DepartmentCapacity).
+     */
+    @Query("SELECT t.department.code, COALESCE(SUM(COALESCE(t.estimatedDuration, 0)), 0) FROM Task t WHERE t.department IS NOT NULL AND t.status IN :statuses AND NOT EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t) GROUP BY t.department.code")
+    List<Object[]> sumWaitingMinutesByDepartmentCode(@Param("statuses") Collection<TaskStatus> statuses);
 }

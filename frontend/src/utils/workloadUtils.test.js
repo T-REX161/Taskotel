@@ -4,13 +4,13 @@ import {
   deriveWorkloadStatus,
   getWorkloadStatusBadge,
   getWorkloadProgressBarColor,
-  getDepartmentShareBarColor,
-  getDepartmentShareStatus,
-  getDepartmentLegendRanges,
-  parseRiskThresholdAnswer,
+  getDepartmentLevelBarColor,
+  departmentLevelLabel,
+  formatUtilization,
+  parseDepartmentCapacityAnswer,
   describeDepartmentRisk,
-  isDepartmentAtRisk,
-  normalizeRiskThreshold,
+  getDepartmentLegendRanges,
+  levelForUtilization,
   calculateWorkloadPercentage,
   calculateProjectedWorkload,
   calculateWorkloadSummary,
@@ -502,199 +502,133 @@ describe('workloadUtils', () => {
 
 
 
-describe('getDepartmentShareBarColor (department bar colour from the percentage of total load)', () => {
-  const BLUE = 'bg-blue-600 dark:bg-blue-500';
-  const GREEN = 'bg-emerald-600 dark:bg-emerald-500';
-  const ORANGE = 'bg-orange-600 dark:bg-orange-500';
+describe('department risk is capacity based and decided by the server: the helpers the Workload page uses', () => {
   const RED = 'bg-red-600 dark:bg-red-500';
 
-  it('the examples: Housekeeping 27, Front Desk 13, Maintenance 46, Food and Beverage 10, Security 4', () => {
-    assert.equal(getDepartmentShareBarColor(27), GREEN);
-    assert.equal(getDepartmentShareBarColor(13), BLUE);
-    assert.equal(getDepartmentShareBarColor(46), GREEN);
-    assert.equal(getDepartmentShareBarColor(10), BLUE);
-    assert.equal(getDepartmentShareBarColor(4), BLUE);
+  const entry = (overrides = {}) => ({
+    code: 'HOUSEKEEPING', name: 'Housekeeping', remainingMinutes: 600, assignedMinutes: 400, waitingMinutes: 200, activeTasks: 3, waitingTasks: 1,
+    eligibleStaff: 2, helpersIn: 0, lentOut: 0, capacityMinutes: 960, utilizationPercent: 62.5, level: 'HIGH', atRisk: false, noCapacity: false, ...overrides,
+  });
+  const answer = (overrides = {}) => ({ enabled: true, capacityThresholdPercent: 85, shiftMinutes: 480, departments: [entry()], ...overrides });
+
+  it('maps each level to the colour of its tile, and anything else to neutral grey', () => {
+    assert.equal(getDepartmentLevelBarColor('LOW'), 'bg-blue-600 dark:bg-blue-500');
+    assert.equal(getDepartmentLevelBarColor('NORMAL'), 'bg-emerald-600 dark:bg-emerald-500');
+    assert.equal(getDepartmentLevelBarColor('HIGH'), 'bg-orange-600 dark:bg-orange-500');
+    assert.equal(getDepartmentLevelBarColor('AT_RISK'), RED);
+    for (const unknown of [undefined, null, '', 'CRITICAL', 'at_risk']) assert.equal(getDepartmentLevelBarColor(unknown), 'bg-gray-400', String(unknown));
   });
 
-  it('every boundary: 0, 25 | 26, 50 | 51, 75 | 76, 100', () => {
-    for (const [value, color] of [[0, BLUE], [25, BLUE], [26, GREEN], [50, GREEN], [51, ORANGE], [75, ORANGE], [76, RED], [100, RED]]) {
-      assert.equal(getDepartmentShareBarColor(value), color, String(value));
-    }
+  it('labels a card with its level, and NO STAFF when it has work and nobody to do it', () => {
+    assert.equal(departmentLevelLabel(entry({ level: 'AT_RISK', atRisk: true })), 'AT RISK');
+    assert.equal(departmentLevelLabel(entry({ level: 'LOW' })), 'LOW');
+    assert.equal(departmentLevelLabel(entry({ level: 'HIGH', noCapacity: true, utilizationPercent: null, eligibleStaff: 0 })), 'NO STAFF');
+    assert.equal(departmentLevelLabel(null), null);
+    assert.equal(departmentLevelLabel({ level: 'nonsense' }), null);
   });
 
-  it('is not capped at 100, ignores negatives, and gives a neutral colour for a missing or invalid value', () => {
-    assert.equal(getDepartmentShareBarColor(250), RED);
-    assert.equal(getDepartmentShareBarColor(-5), BLUE);
-    for (const bad of [null, undefined, '', NaN, 'abc']) assert.equal(getDepartmentShareBarColor(bad), 'bg-gray-400', String(bad));
+  it('formats a utilization to one decimal without a trailing .0, and n/a when there is no capacity', () => {
+    assert.equal(formatUtilization(66.7), '66.7%');
+    assert.equal(formatUtilization(100), '100%');
+    assert.equal(formatUtilization(104.2), '104.2%');
+    assert.equal(formatUtilization(0), '0%');
+    assert.equal(formatUtilization(null), 'n/a');
+    assert.equal(formatUtilization(undefined), 'n/a');
   });
 
-  it('uses the strong 600 shades on the light theme (#2563EB, #059669, #EA580C, #DC2626) and brighter 500 shades on the dark theme', () => {
-    assert.ok([BLUE, GREEN, ORANGE, RED].every((c) => /^bg-[a-z]+-600 dark:bg-[a-z]+-500$/.test(c)));
-  });
-
-  it('works on the aggregated department data: the colour follows the share that is displayed', () => {
-    const rows = [
-      { department: 'HOUSEKEEPING', totalEstimatedDuration: 270, activeTaskCount: 1 },
-      { department: 'FRONT_DESK', totalEstimatedDuration: 130, activeTaskCount: 1 },
-      { department: 'MAINTENANCE', totalEstimatedDuration: 460, activeTaskCount: 1 },
-      { department: 'ROOM_SERVICE', totalEstimatedDuration: 140, activeTaskCount: 1 },
+  it('reads a complete answer, and treats anything incomplete or invalid as unreadable (null), never as zeros or defaults', () => {
+    const ok = parseDepartmentCapacityAnswer(answer());
+    assert.equal(ok.status, 'ready');
+    assert.equal(ok.enabled, true);
+    assert.equal(ok.threshold, 85);
+    assert.equal(ok.shiftMinutes, 480);
+    assert.equal(ok.departments.length, 1);
+    assert.equal(parseDepartmentCapacityAnswer(answer({ enabled: false })).enabled, false);
+    assert.equal(parseDepartmentCapacityAnswer(answer({ departments: [] })).departments.length, 0, 'no departments is a valid answer');
+    assert.equal(parseDepartmentCapacityAnswer(answer({ departments: [entry({ utilizationPercent: null, noCapacity: true, level: 'AT_RISK', atRisk: true, eligibleStaff: 0, capacityMinutes: 0 })] })).status, 'ready');
+    const bad = [
+      null, undefined, {}, 'x', 5, [],
+      answer({ enabled: 'true' }), answer({ enabled: undefined }),
+      answer({ capacityThresholdPercent: 0 }), answer({ capacityThresholdPercent: 101 }), answer({ capacityThresholdPercent: '85' }), answer({ capacityThresholdPercent: 85.5 }),
+      answer({ shiftMinutes: 0 }), answer({ shiftMinutes: '480' }),
+      answer({ departments: null }), answer({ departments: {} }),
+      answer({ departments: [null] }), answer({ departments: [entry({ code: '' })] }), answer({ departments: [entry({ name: 5 })] }),
+      answer({ departments: [entry({ remainingMinutes: -1 })] }), answer({ departments: [entry({ eligibleStaff: 1.5 })] }), answer({ departments: [entry({ activeTasks: '3' })] }),
+      answer({ departments: [entry({ utilizationPercent: '62.5' })] }), answer({ departments: [entry({ utilizationPercent: -1 })] }),
+      answer({ departments: [entry({ level: 'CRITICAL' })] }), answer({ departments: [entry({ atRisk: 'no' })] }), answer({ departments: [entry({ noCapacity: undefined })] }),
+      answer({ departments: [entry(), entry({ level: undefined })] }),
     ];
-    const res = calculateDepartmentWorkloads(rows, [['HOUSEKEEPING', 'Housekeeping'], ['FRONT_DESK', 'Front Desk'], ['MAINTENANCE', 'Maintenance'], ['ROOM_SERVICE', 'Room Service'], ['FOOD_AND_BEVERAGE', 'Food & Beverage'], ['SECURITY', 'Security']].map(([code, name]) => ({ code, name, active: true })));
-    const colorOf = (code) => getDepartmentShareBarColor(res.find((d) => d.code === code).percentage);
-    assert.equal(res.find((d) => d.code === 'HOUSEKEEPING').percentage, 27);
-    assert.equal(colorOf('HOUSEKEEPING'), GREEN);
-    assert.equal(colorOf('FRONT_DESK'), BLUE);
-    assert.equal(colorOf('MAINTENANCE'), GREEN);
-    assert.equal(colorOf('ROOM_SERVICE'), BLUE);
-    assert.equal(colorOf('SECURITY'), BLUE, 'no work: 0% is LOW');
-  });
-});
-
-describe('Capacity Threshold drives the AT RISK colour of the department bars', () => {
-  const RED = 'bg-red-600 dark:bg-red-500';
-  const shares = { Housekeeping: 27, 'Front Desk': 13, Maintenance: 46, 'Room Service': 0, 'Food & Beverage': 10, Security: 4 };
-  const atRisk = (threshold) => Object.entries(shares).filter(([, p]) => getDepartmentShareStatus(p, threshold) === 'AT_RISK').map(([n]) => n);
-
-  it('threshold 10: every department at or above 10% is red and AT RISK, exactly 10% included', () => {
-    assert.deepEqual(atRisk(10), ['Housekeeping', 'Front Desk', 'Maintenance', 'Food & Beverage']);
-    for (const name of atRisk(10)) assert.equal(getDepartmentShareBarColor(shares[name], 10), RED, name);
+    for (const value of bad) assert.equal(parseDepartmentCapacityAnswer(value), null, JSON.stringify(value));
   });
 
-  it('departments below the threshold keep their existing colour and status', () => {
-    assert.equal(getDepartmentShareBarColor(0, 10), getDepartmentShareBarColor(0));
-    assert.equal(getDepartmentShareBarColor(4, 10), getDepartmentShareBarColor(4));
-    assert.equal(getDepartmentShareStatus(0, 10), 'LOW');
-    assert.equal(getDepartmentShareStatus(4, 10), 'LOW');
-  });
-
-  it('the comparison is >=: one below the threshold is not at risk, equal and above are', () => {
-    for (const threshold of [1, 10, 50, 85, 100]) {
-      assert.equal(isDepartmentAtRisk(threshold - 1, threshold), false, `${threshold - 1} < ${threshold}`);
-      assert.equal(isDepartmentAtRisk(threshold, threshold), true, `${threshold} = ${threshold}`);
-      assert.equal(isDepartmentAtRisk(threshold + 1, threshold), true, `${threshold + 1} > ${threshold}`);
-    }
-  });
-
-  it('changing the threshold changes the result: 27% is at risk at 25 and below, and not at 28', () => {
-    assert.equal(getDepartmentShareStatus(27, 25), 'AT_RISK');
-    assert.equal(getDepartmentShareStatus(27, 27), 'AT_RISK');
-    assert.equal(getDepartmentShareStatus(27, 28), 'NORMAL');
-    assert.notEqual(getDepartmentShareBarColor(27, 28), RED);
-  });
-
-  it('bar colour and status label always agree', () => {
-    for (let p = 0; p <= 100; p += 1) {
-      for (const threshold of [undefined, null, 1, 10, 50, 85, 100]) {
-        assert.equal(getDepartmentShareBarColor(p, threshold) === RED, getDepartmentShareStatus(p, threshold) === 'AT_RISK', `${p}% @ ${threshold}`);
-      }
-    }
-  });
-
-  it('without a usable threshold nothing is overridden: the existing colours apply (including above 75% red)', () => {
-    for (const threshold of [undefined, null, 0, 101, 10.5, '10', NaN]) {
-      assert.equal(normalizeRiskThreshold(threshold), null, String(threshold));
-      assert.equal(getDepartmentShareStatus(30, threshold), 'NORMAL');
-      assert.equal(getDepartmentShareStatus(76, threshold), 'AT_RISK');
-    }
-  });
-
-  it('a non-number percentage stays neutral grey with no status', () => {
-    assert.equal(getDepartmentShareBarColor(null, 10), 'bg-gray-400');
-    assert.equal(getDepartmentShareStatus('abc', 10), null);
-  });
-});
-
-describe('Workload Thresholds legend follows the saved Capacity Threshold', () => {
-  const show = (t) => getDepartmentLegendRanges(t).map((r) => `${r.label}: ${r.text}`);
-
-  it('40%: LOW 0–25, NORMAL 26–39, AT RISK 40–100, and no HIGH', () => {
-    assert.deepEqual(show(40), ['LOW: 0–25%', 'NORMAL: 26–39%', 'AT RISK: 40–100%']);
-    assert.ok(!getDepartmentLegendRanges(40).some((r) => r.status === 'HIGH'));
-  });
-
-  it('10%: only what is left below 10 (LOW) and AT RISK from 10; NORMAL and HIGH disappear', () => {
-    assert.deepEqual(show(10), ['LOW: 0–9%', 'AT RISK: 10–100%']);
-  });
-
-  it('85%: LOW, NORMAL and HIGH keep their ranges (HIGH now runs on to just under 85), AT RISK starts at 85', () => {
-    assert.deepEqual(show(85), ['LOW: 0–25%', 'NORMAL: 26–50%', 'HIGH: 51–84%', 'AT RISK: 85–100%']);
-  });
-
-  it('100%: everything below 100 keeps its range and AT RISK is exactly 100%', () => {
-    assert.deepEqual(show(100), ['LOW: 0–25%', 'NORMAL: 26–50%', 'HIGH: 51–99%', 'AT RISK: 100%']);
-  });
-
-  it('the ranges use plain numbers, no "Above" or "under" wording', () => {
-    for (let t = 1; t <= 100; t += 1) for (const r of getDepartmentLegendRanges(t)) assert.match(r.text, /^\d+(–\d+)?%$/, `${t}: ${r.text}`);
-    assert.equal(show(1)[0], 'LOW: 0%');
-  });
-
-  it('other edges: 1% leaves only 0%, 25% / 26% / 50% / 51% / 52% drop or keep the right categories', () => {
-    assert.deepEqual(getDepartmentLegendRanges(1).map((r) => r.status), ['LOW', 'AT_RISK']);
-    assert.deepEqual(getDepartmentLegendRanges(25).map((r) => r.status), ['LOW', 'AT_RISK']);
-    assert.deepEqual(getDepartmentLegendRanges(26).map((r) => r.status), ['LOW', 'AT_RISK']);
-    assert.deepEqual(getDepartmentLegendRanges(27).map((r) => r.status), ['LOW', 'NORMAL', 'AT_RISK']);
-    assert.deepEqual(getDepartmentLegendRanges(50).map((r) => r.status), ['LOW', 'NORMAL', 'AT_RISK']);
-    assert.deepEqual(getDepartmentLegendRanges(51).map((r) => r.status), ['LOW', 'NORMAL', 'AT_RISK']);
-    assert.deepEqual(getDepartmentLegendRanges(52).map((r) => r.status), ['LOW', 'NORMAL', 'HIGH', 'AT_RISK']);
-  });
-
-  it('without a usable threshold the original four fixed ranges are shown', () => {
-    for (const t of [null, undefined, 0, 101, 'x']) {
-      assert.deepEqual(show(t), ['LOW: 0–25%', 'NORMAL: Above 25%–50%', 'HIGH: Above 50%–75%', 'AT RISK: Above 75%']);
-    }
-  });
-
-  it('for EVERY threshold 1-100 and EVERY percentage 0-100: exactly one legend range holds it, and it is the status the bar and label use', () => {
-    for (let t = 1; t <= 100; t += 1) {
-      const ranges = getDepartmentLegendRanges(t);
-      for (let p = 0; p <= 100; p += 1) {
-        const holding = ranges.filter((r) => p >= r.from && p <= (r.to ?? 100));
-        assert.equal(holding.length, 1, `${p}% @ ${t}% is in exactly one legend range`);
-        assert.equal(holding[0].status, getDepartmentShareStatus(p, t), `${p}% @ ${t}%`);
-        assert.equal(getDepartmentShareBarColor(p, t).startsWith('bg-red') , holding[0].status === 'AT_RISK', `${p}% @ ${t}% colour`);
-      }
-      // AT RISK begins exactly at the threshold, inclusive
-      assert.equal(ranges.at(-1).status, 'AT_RISK');
-      assert.equal(ranges.at(-1).from, t);
-      assert.equal(getDepartmentShareStatus(t, t), 'AT_RISK');
-      assert.notEqual(getDepartmentShareStatus(t - 1, t), 'AT_RISK');
-      // every category shown can really occur, none is empty
-      for (const r of ranges) assert.ok(r.to === null || r.to >= r.from, `${r.status} @ ${t}% is not empty`);
-    }
-  });
-
-  it('below the threshold the existing bands and colours are kept', () => {
-    for (let t = 1; t <= 100; t += 1) {
-      for (let p = 0; p < t; p += 1) {
-        const expected = p <= 25 ? 'LOW' : p <= 50 ? 'NORMAL' : 'HIGH';
-        assert.equal(getDepartmentShareStatus(p, t), expected, `${p}% @ ${t}%`);
-      }
-    }
-  });
-});
-
-describe('the department-risk threshold answer and its explanation', () => {
-  it('a readable answer becomes ready (with the value) or off; anything else is null, never the defaults', () => {
-    assert.deepEqual(parseRiskThresholdAnswer({ enabled: true, capacityThresholdPercent: 40 }), { status: 'ready', value: 40 });
-    assert.deepEqual(parseRiskThresholdAnswer({ enabled: true, capacityThresholdPercent: 1 }), { status: 'ready', value: 1 });
-    assert.deepEqual(parseRiskThresholdAnswer({ enabled: true, capacityThresholdPercent: 100 }), { status: 'ready', value: 100 });
-    assert.deepEqual(parseRiskThresholdAnswer({ enabled: false, capacityThresholdPercent: 40 }), { status: 'off' });
-    for (const bad of [null, undefined, {}, 'x', 5, { enabled: true }, { enabled: true, capacityThresholdPercent: 0 }, { enabled: true, capacityThresholdPercent: 101 },
-      { enabled: true, capacityThresholdPercent: '40' }, { enabled: true, capacityThresholdPercent: 40.5 }, { enabled: 'true', capacityThresholdPercent: 40 }, { capacityThresholdPercent: 40 }]) {
-      assert.equal(parseRiskThresholdAnswer(bad), null, JSON.stringify(bad));
-    }
-  });
-
-  it('the explanation follows the saved threshold, and speaks only about the department cards', () => {
-    assert.match(describeDepartmentRisk({ status: 'ready', value: 40 }), /AT RISK from 40%/);
-    assert.match(describeDepartmentRisk({ status: 'ready', value: 10 }), /AT RISK from 10%/);
-    assert.doesNotMatch(describeDepartmentRisk({ status: 'ready', value: 40 }), /85|75|480/);
-    assert.match(describeDepartmentRisk({ status: 'off' }), /alert is off.*default ranges/i);
+  it('explains the levels in terms of utilization and the threshold, speaks only about departments, and says when it is unavailable or the alert is off', () => {
+    const ready = describeDepartmentRisk({ status: 'ready', enabled: true, threshold: 40 });
+    assert.match(ready, /remaining task minutes as a share of its staff capacity/);
+    assert.match(ready, /480-minute shift/);
+    assert.match(ready, /AT RISK from 40%/);
+    assert.doesNotMatch(ready, /total workload|hotel's total|individual|staff member/i, 'no share-of-total wording, and nothing about individual staff statuses');
+    assert.match(describeDepartmentRisk({ status: 'ready', enabled: true, threshold: 10 }), /AT RISK from 10%/);
+    assert.match(describeDepartmentRisk({ status: 'ready', enabled: false, threshold: 40 }), /alert is off, so no department is marked AT RISK/i);
     assert.match(describeDepartmentRisk({ status: 'unavailable' }), /could not be loaded.*unavailable/);
-    for (const state of [{ status: 'ready', value: 40 }, { status: 'off' }, { status: 'unavailable' }, { status: 'loading' }]) {
-      assert.match(describeDepartmentRisk(state), /department card/);
-      assert.doesNotMatch(describeDepartmentRisk(state), /staff member|individual/i);
-    }
+  });
+
+  describe('the legend lists exactly the levels that can occur, in plain numbers', () => {
+    const shown = (threshold, enabled = true) => getDepartmentLegendRanges(threshold, enabled).map((t) => `${t.label} ${t.text}`);
+
+    it('40%: LOW 0-25, NORMAL 25-40, AT RISK 40+, and no HIGH', () => {
+      assert.deepEqual(shown(40), ['LOW 0–25%', 'NORMAL 25–40%', 'AT RISK 40%+']);
+    });
+    it('10%: only what is left below the risk level (LOW up to 10) and AT RISK from 10; NORMAL and HIGH are impossible and absent', () => {
+      assert.deepEqual(shown(10), ['LOW 0–10%', 'AT RISK 10%+']);
+    });
+    it('85%: LOW, NORMAL and HIGH keep their ranges (HIGH runs on to 85), AT RISK starts at 85', () => {
+      assert.deepEqual(shown(85), ['LOW 0–25%', 'NORMAL 25–50%', 'HIGH 50–85%', 'AT RISK 85%+']);
+    });
+    it('100%: AT RISK starts at exactly 100', () => {
+      assert.deepEqual(shown(100), ['LOW 0–25%', 'NORMAL 25–50%', 'HIGH 50–100%', 'AT RISK 100%+']);
+    });
+    it('edges: 1, 25, 26, 50 and 51 drop or keep the right levels', () => {
+      assert.deepEqual(getDepartmentLegendRanges(1).map((t) => t.status), ['LOW', 'AT_RISK']);
+      assert.deepEqual(getDepartmentLegendRanges(25).map((t) => t.status), ['LOW', 'AT_RISK']);
+      assert.deepEqual(getDepartmentLegendRanges(26).map((t) => t.status), ['LOW', 'NORMAL', 'AT_RISK']);
+      assert.deepEqual(getDepartmentLegendRanges(50).map((t) => t.status), ['LOW', 'NORMAL', 'AT_RISK']);
+      assert.deepEqual(getDepartmentLegendRanges(51).map((t) => t.status), ['LOW', 'NORMAL', 'HIGH', 'AT_RISK']);
+    });
+    it('with the alert off there is no AT RISK tile and HIGH is everything above 50%', () => {
+      assert.deepEqual(shown(40, false), ['LOW 0–25%', 'NORMAL 25–50%', 'HIGH 50%+']);
+    });
+    it('every text is plain numbers: no "Above" or "under" wording', () => {
+      for (let t = 1; t <= 100; t += 1) for (const tile of getDepartmentLegendRanges(t)) assert.match(tile.text, /^\d+(–\d+)?%\+?$/, `${t}: ${tile.text}`);
+    });
+
+    it('for EVERY threshold 1-100, alert on or off, and EVERY utilization 0 to 250 in steps of 0.1: its level is a tile in the legend, and every tile is reachable', () => {
+      for (const enabled of [true, false]) {
+        for (let t = 1; t <= 100; t += 1) {
+          const tiles = getDepartmentLegendRanges(t, enabled).map((x) => x.status);
+          const reached = new Set();
+          for (let tenths = 0; tenths <= 2500; tenths += 1) {
+            const u = tenths / 10;
+            const level = levelForUtilization(u, t, enabled);
+            assert.ok(tiles.includes(level), `${u}% at threshold ${t} (alert ${enabled}) is ${level}, which the legend does not show: ${tiles}`);
+            reached.add(level);
+          }
+          assert.deepEqual([...reached].sort(), [...tiles].sort(), `threshold ${t} (alert ${enabled}): the legend shows exactly the levels that can occur`);
+        }
+      }
+    });
+  });
+
+  it('the level rule is the server\'s: AT RISK from the threshold inclusive, then LOW up to 25, NORMAL up to 50, HIGH above', () => {
+    assert.equal(levelForUtilization(25, 85), 'LOW');
+    assert.equal(levelForUtilization(25.1, 85), 'NORMAL');
+    assert.equal(levelForUtilization(50, 85), 'NORMAL');
+    assert.equal(levelForUtilization(50.1, 85), 'HIGH');
+    assert.equal(levelForUtilization(84.9, 85), 'HIGH');
+    assert.equal(levelForUtilization(85, 85), 'AT_RISK');
+    assert.equal(levelForUtilization(104.2, 85), 'AT_RISK');
+    assert.equal(levelForUtilization(12, 10), 'AT_RISK', 'a low threshold overrides the bands');
+    assert.equal(levelForUtilization(9.9, 10), 'LOW');
+    assert.equal(levelForUtilization(150, 85, false), 'HIGH', 'alert off: never AT RISK');
+    assert.equal(levelForUtilization(null, 85), null);
   });
 });

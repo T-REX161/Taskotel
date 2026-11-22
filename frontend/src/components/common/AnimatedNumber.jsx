@@ -10,9 +10,10 @@ const easeOut = (p) => 1 - (1 - p) ** 4;
  * the value changes later. With reduced motion it simply shows the value. The animated digits are hidden from assistive
  * technology, which reads the final value only, so a screen reader never hears the count.
  *
- * Props: value (number), duration (ms, default 700: the same as the bars), delay (ms, only before the first count).
+ * Props: value (number), duration (ms, default 700: the same as the bars), delay (ms, only before the first count), decimals (default 0:
+ * whole numbers; 1 shows one decimal, without a trailing .0).
  */
-export default function AnimatedNumber({ value, duration = 700, delay = 0 }) {
+export default function AnimatedNumber({ value, duration = 700, delay = 0, decimals = 0 }) {
   const target = Number(value);
   const animate = Number.isFinite(target) && !reducedMotion();
   const [shown, setShown] = useState(animate ? 0 : target);
@@ -48,7 +49,7 @@ export default function AnimatedNumber({ value, duration = 700, delay = 0 }) {
 
   return (
     <>
-      <span aria-hidden="true">{Number.isFinite(target) ? Math.round(shown) : value}</span>
+      <span aria-hidden="true">{Number.isFinite(target) ? String(Math.round(shown * 10 ** decimals) / 10 ** decimals) : value}</span>
       <span className="sr-only">{value}</span>
     </>
   );

@@ -161,12 +161,12 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       const section = pageSource.slice(start, pageSource.indexOf('</section>', start));
       assert.ok(pageSource.includes('min-w-0 bg-white rounded-xl shadow-2xs border border-gray-100 px-4 pt-3 pb-4 sm:px-5 sm:pt-3.5 sm:pb-5 space-y-3" aria-label="Workload by department"'), 'Same container style as the summary');
       assert.ok(section.includes('grid-cols-[repeat(auto-fill,minmax(min(100%,17rem),1fr))]'), 'Auto-fill grid, so rows are added as departments grow');
-      assert.ok(section.includes('{departmentWorkloads.map((dept) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
+      assert.ok(section.includes('{departmentCards.map((dept) => {') && section.includes('key={dept.code}'), 'One card per department from the data');
       assert.ok(section.includes('min-w-0 bg-white rounded-xl p-4 shadow-2xs border border-gray-100'), 'Each department is a card');
-      for (const field of ['{dept.name}', '{dept.totalMinutes} mins', 'dept.percentage', 'dept.activeTaskCount', 'dept.staffCount', 'getDepartmentShareBarColor(dept.percentage, riskThreshold)']) {
+      for (const field of ['{dept.name}', '{dept.remainingMinutes} mins', 'dept.utilizationPercent', 'dept.activeTasks', 'dept.eligibleStaff', 'getDepartmentLevelBarColor(dept.level)']) {
         assert.ok(section.includes(field), 'Card shows ' + field);
       }
-      for (const fixed of ['lg:grid-cols-3', 'md:grid-cols-2', 'SUPPORTED_DEPARTMENTS', 'departmentWorkloads[', 'slice(']) {
+      for (const fixed of ['lg:grid-cols-3', 'md:grid-cols-2', 'SUPPORTED_DEPARTMENTS', 'departmentCards[', 'slice(']) {
         assert.ok(!section.includes(fixed), 'No hardcoded department count: ' + fixed);
       }
     });
@@ -388,8 +388,8 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
         'Summary cards must be calculated from full workload dataset, not paginated slice'
       );
       assert.ok(
-        pageSource.includes('calculateDepartmentWorkloads(visibleWorkload, departments, { strict: isManager })'),
-        'Department totals must be calculated from full workload dataset, not paginated slice'
+        pageSource.includes("capacityState.status === 'ready' ? capacityState.departments : []"),
+        'Department figures come from the whole capacity answer of the server, never from a paginated slice'
       );
 
       // Verify calculation across 7 staff records where visible page has only 5 records
@@ -438,11 +438,9 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
   });
 
   describe('Workload by Department Panel', () => {
-    it('uses calculateDepartmentWorkloads to aggregate department metrics', () => {
-      assert.ok(
-        pageSource.includes('calculateDepartmentWorkloads'),
-        'Page must call calculateDepartmentWorkloads'
-      );
+    it('takes the department figures from the server capacity answer instead of aggregating them in the browser', () => {
+      assert.ok(pageSource.includes('getDepartmentCapacity()') && pageSource.includes('parseDepartmentCapacityAnswer'));
+      assert.ok(!pageSource.includes('calculateDepartmentWorkloads') && !pageSource.includes('dept.percentage'), 'no client-side share-of-total aggregation is left in the page');
     });
 
     it('renders every department of the list with proportional progress bars', () => {
@@ -472,22 +470,23 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
       assert.strictEqual(sumDeptMinutes, 300);
     });
 
-    it('keeps the note that the department total comes from the active staff workloads, as a tooltip rather than a line of text', () => {
-      assert.ok(
-        pageSource.includes('title="Calculated from active staff workloads"') && !pageSource.includes('mathematical consistency') && pageSource.includes('{summary.totalWorkload} mins'),
-        'The note is a tooltip on the label, and the total is unchanged'
-      );
-      assert.ok(!pageSource.includes('Calculated from active staff workloads.'), 'No separate line of small print under the total');
+    it('explains the total through an info button that opens its breakdown, not a line of text', () => {
+      assert.ok(pageSource.includes('<TotalRemainingBreakdown totals={remainingTotals} departments={departmentCards} shiftMinutes={capacityState.shiftMinutes} />'));
+      const breakdown = fs.readFileSync(path.join(__dirname, '..', 'components', 'workload', 'TotalRemainingBreakdown.jsx'), 'utf8');
+      assert.ok(breakdown.includes('{totals.assigned} assigned') && breakdown.includes('{totals.waiting} waiting') && breakdown.includes('{totals.remaining} mins'));
+      assert.ok(breakdown.includes('aria-expanded={open}') && breakdown.includes("event.key === 'Escape'") && breakdown.includes('mousedown'), 'toggle, Escape and outside click');
+      assert.ok(breakdown.includes('Utilization % = total') && breakdown.includes('assumed'), 'the formula and its assumption are stated');
+      assert.ok(!pageSource.includes('Calculated from active staff workloads'), 'the old "from active staff workloads" note is gone');
     });
 
-    it('shows the total in the section header, top-right, and no longer in a bar under the cards', () => {
+    it('shows the total remaining minutes in the section header, top-right, above the cards', () => {
       const section = pageSource.slice(pageSource.indexOf('aria-label="Workload by department"'), pageSource.indexOf('{/* 4. Staff Workload Distribution'));
-      const total = section.indexOf('{summary.totalWorkload} mins');
-      assert.ok(total > section.indexOf('Workload by Department</h2>') && total < section.indexOf('departmentWorkloads.map('), 'Total sits in the header, above the cards');
+      const total = section.indexOf('<TotalRemainingBreakdown');
+      assert.ok(total > section.indexOf('Workload by Department</h2>') && total < section.indexOf('departmentCards.map('), 'Total sits in the header, above the cards');
       assert.ok(section.includes('justify-between') && section.includes('sm:ml-auto sm:text-right'), 'Heading left, total right; stacks on small screens');
-      assert.ok(/Total load<\/span>\s*<span className="font-bold[^"]*">\{summary\.totalWorkload\} mins/.test(section) && section.includes('gap-x-2.5'), 'Label then bold value on one line, ~10px apart');
-      assert.strictEqual(section.split('>Total load<').length, 2, 'Only one total: the bottom bar is gone');
-      assert.ok(!section.includes('Total Department Workload Callout') && !/\b422\b/.test(pageSource), 'No old bar and no hardcoded total');
+      assert.strictEqual(section.split('<TotalRemainingBreakdown').length, 2, 'Only one total');
+      const breakdown = fs.readFileSync(path.join(__dirname, '..', 'components', 'workload', 'TotalRemainingBreakdown.jsx'), 'utf8');
+      assert.ok(/Total remaining<\/span>\s*<span className="font-bold[^"]*">\{totals\.remaining\} mins/.test(breakdown) && breakdown.includes('gap-x-2.5'), 'Label then bold value on one line');
     });
   });
 
@@ -547,141 +546,124 @@ describe('WorkloadPage Component Integration & Compact Desktop Table Layout', ()
   });
 });
 
-describe('Department Risk Levels card (the fixed default tiles, shown while the alert is off): header row plus four status tiles', () => {
+describe('Department Risk Levels legend: built from the server answer, never from fixed ranges', () => {
   const source = fs.readFileSync(path.join(__dirname, 'WorkloadPage.jsx'), 'utf8');
+  const tiles = fs.readFileSync(path.join(__dirname, '..', 'components', 'workload', 'DepartmentLegendTiles.jsx'), 'utf8');
   const start = source.indexOf('aria-label="Department risk levels"');
   const card = source.slice(start, source.indexOf('</section>', start));
-  const text = card.replace(/<[^>]+>/g, '|').replace(/\s+/g, ' ');
 
-  it('has the heading and the supporting text on one header row', () => {
+  it('has the heading with a tooltip that follows the state, and no explanatory note above the tiles', () => {
     assert.ok(card.includes('>Department Risk Levels</h2>'));
-    assert.ok(card.includes('title={describeDepartmentRisk(riskState)}'), 'The explanation is a tooltip on the heading that follows the saved threshold, not a line of text');
-    assert.ok(!card.includes('480-minute shift'), 'the staff shift basis is not part of the department legend');
+    assert.ok(card.includes('title={describeDepartmentRisk(capacityState)}'), 'the explanation is a tooltip on the heading, not a line of text');
+    assert.ok(!source.includes('department-risk-note') && !source.includes('These ranges are for the department cards'));
   });
 
-  it('shows four tiles with the required names and ranges, in order', () => {
-    const expected = [['LOW', '0–25%'], ['NORMAL', 'Above 25%–50%'], ['HIGH', 'Above 50%–75%'], ['AT RISK', 'Above 75%']];
-    const tiles = card.split('<li ').slice(1);
-    assert.equal(tiles.length, 4);
-    tiles.forEach((tile, i) => {
-      const t = tile.replace(/<[^>]+>/g, '|').replace(/\s+/g, ' ');
-      assert.ok(t.includes(expected[i][0]) && t.includes(expected[i][1]), 'tile ' + i + ': ' + expected[i].join(' / '));
-    });
-    assert.ok(!/\bmins?\b/.test(text), 'no minute-based labels remain');
-    assert.ok(!text.includes('100%') || text.includes('Can exceed 100%'), 'AT RISK is never capped at 100%');
+  it('draws its tiles from getDepartmentLegendRanges(threshold, enabled) of the server answer: no fixed tile or range remains in the page', () => {
+    assert.ok(card.includes("capacityState.status === 'ready' ? ("));
+    assert.ok(card.includes('<DepartmentLegendTiles ranges={getDepartmentLegendRanges(capacityState.threshold, capacityState.enabled)} />'));
+    assert.ok(!card.includes('<li ') && !card.includes('Above 75%') && !card.includes('Above 25%') && !card.includes('0–25%'), 'no hardcoded tiles');
   });
 
-  it('tints each tile with its own status colour (blue, emerald, orange, red) and keeps a coloured dot; the theme palette maps these for dark mode', () => {
+  it('an unreadable answer shows an explicit unavailable state with no ranges at all', () => {
+    assert.ok(card.includes("capacityState.status === 'unavailable' ? ("), 'its own branch');
+    assert.ok(card.includes('data-testid="department-legend-unavailable"') && card.includes('Risk levels are unavailable: the department capacity could not be loaded.'));
+    const unavailable = card.slice(card.indexOf("capacityState.status === 'unavailable' ? ("), card.indexOf(') : null}'));
+    assert.ok(!/LOW|NORMAL|HIGH|AT RISK|25%|50%|75%/.test(unavailable), 'the unavailable state shows no ranges');
+  });
+
+  it('says so when the Max Task Capacity Alert is off, and then shows no AT RISK tile (getDepartmentLegendRanges drops it)', () => {
+    assert.ok(card.includes('data-testid="department-legend-alert-off"') && card.includes('Max Task Capacity Alert is off: AT RISK is not evaluated'));
+    assert.ok(card.includes('!capacityState.enabled'));
+  });
+
+  it('every tile keeps the status colours for light and dark, one tile per level in the list it is given', () => {
     for (const hue of ['blue', 'emerald', 'orange', 'red']) {
-      assert.ok(card.includes('border-' + hue + '-200 bg-' + hue + '-100 dark:border-' + hue + '-100 dark:bg-' + hue + '-50'), hue + ' tile: stronger tint on light, original on dark');
-      assert.ok(card.includes('w-3 h-3 rounded-full bg-' + hue + '-600 dark:bg-' + hue + '-500'), hue + ' dot: 12px, strong 600 on light, 500 on dark (same as the department bars)');
-      assert.ok(card.includes('text-' + hue + '-700'), hue + ' label keeps its readable shade');
+      assert.ok(tiles.includes('border-' + hue + '-200 bg-' + hue + '-100 dark:border-' + hue + '-100 dark:bg-' + hue + '-50'), hue + ' tile: stronger tint on light, original on dark');
+      assert.ok(tiles.includes('bg-' + hue + '-600 dark:bg-' + hue + '-500'), hue + ' dot: the same colours as the department bars');
+      assert.ok(tiles.includes('text-' + hue + '-700'), hue + ' label keeps its readable shade');
     }
-    const darkUtilities = card.match(/dark:[a-z0-9:-]+/g) || [];
-    assert.ok(darkUtilities.length > 0 && darkUtilities.every((u) => /^dark:(bg|border)-(blue|emerald|orange|red)-(50|100|500)$/.test(u)), 'dark variants only keep the dark look: tint, border and dot colours');
+    const darkUtilities = tiles.match(/dark:[a-z0-9:-]+/g) || [];
+    assert.ok(darkUtilities.length > 0 && darkUtilities.every((u) => /^dark:(bg|border)-(blue|emerald|orange|red)-(50|100|500)$/.test(u)), 'dark variants only keep the dark look');
+    assert.ok(tiles.includes('ranges.map((range)'));
+    assert.ok(tiles.includes('grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'), 'responsive: one column on phones, two on small screens, four on desktop');
   });
 
-  it('is responsive: one column on phones, two on small screens, four on desktop', () => {
-    assert.ok(card.includes('grid-cols-1 sm:grid-cols-2 lg:grid-cols-4'));
-  });
-
-  it('the percentage bands are the same boundaries as the minute thresholds over 480 minutes (120, 240, 360)', () => {
+  it('the staff status bands stay the fixed 25/50/75% of the 480-minute shift (120, 240, 360), unrelated to the threshold', () => {
     assert.deepEqual([0.25, 0.5, 0.75].map((p) => p * 480), [120, 240, 360]);
   });
 });
 
-describe('Workload by Department: the bar colour follows the percentage of total load shown on the card', () => {
+describe('Workload by Department: the cards are the server\'s capacity answer', () => {
   const source = fs.readFileSync(path.join(__dirname, 'WorkloadPage.jsx'), 'utf8');
   const start = source.indexOf('aria-label="Workload by department"');
-  const section = source.slice(start, source.indexOf('</section>', start));
+  const section = source.slice(start, source.indexOf('{/* Cross-department support suggestions'));
 
-  it('has no per-department palette and uses the shared colour helper', () => {
+  it('has no per-department palette; the bar colour and the label come from the server\'s level through the shared helpers', () => {
     assert.ok(!source.includes('getDepartmentBarColor'));
     for (const hue of ['bg-indigo-500', 'bg-amber-500', 'bg-purple-500', 'bg-teal-500']) assert.ok(!section.includes(hue), hue);
-    assert.ok(section.includes('getDepartmentShareBarColor(dept.percentage, riskThreshold)'));
+    assert.ok(section.includes('getDepartmentLevelBarColor(dept.level)') && section.includes('departmentLevelLabel(dept)'));
+    assert.ok(section.includes('data-testid="department-status"'), 'the label is on the card');
   });
 
-  it('keeps the label, the bar width and the counts exactly as they were', () => {
-    assert.ok(section.includes('<AnimatedNumber value={dept.percentage} />%') && !section.includes('--tk-delay') && !section.includes('delay={') && !section.includes('of total load'), 'Just the percentage: the card sits under "Workload by Department", so "of total load" is implied');
-    assert.ok(section.includes('Math.min(dept.percentage, 100)'));
-    assert.ok(section.includes('text-2xs text-gray-500') && section.includes("dept.activeTaskCount === 1 ? 'task' : 'tasks'"));
-    assert.ok(!section.includes('of capacity') && !section.includes('No available capacity'));
-  });
-});
-
-describe('Workload by Department: the Capacity Threshold wiring', () => {
-  const source = fs.readFileSync(new URL('./WorkloadPage.jsx', import.meta.url), 'utf8');
-  const settings = fs.readFileSync(new URL('./SettingsPage.jsx', import.meta.url), 'utf8');
-
-  it('reads the saved threshold with every refresh, so a changed setting shows up without a reload, and a failed read never breaks the page', () => {
-    assert.ok(source.includes('getDepartmentRiskThreshold()'));
-    assert.ok(source.includes('parseRiskThresholdAnswer(answer)') && source.includes('.catch(() => null)'), 'a failed or unreadable answer is never taken for the defaults');
-    assert.ok(source.includes("prev.status === 'ready' || prev.status === 'off' ? prev : { status: 'unavailable' }"), 'a failed refresh keeps the last known answer, or marks the levels unavailable');
-    assert.ok(source.includes("['ADMIN', 'MANAGER'].includes(getUserRole()) ? getDepartmentRiskThreshold()"), 'only Admin and Manager ask for it');
+  it('shows remaining minutes, utilization with one decimal, the task count and the eligible staff; the bar is the utilization', () => {
+    assert.ok(section.includes('<AnimatedNumber value={dept.utilizationPercent} decimals={1} />') && !section.includes('--tk-delay') && !section.includes('delay={'));
+    assert.ok(section.includes('{dept.remainingMinutes} mins') && section.includes('eligible staff') && section.includes("dept.activeTasks === 1 ? 'task' : 'tasks'"));
+    assert.ok(section.includes('Math.min(dept.utilizationPercent ?? 0, 100)') && section.includes('dept.noCapacity ? 100'), 'full bar when there is work and nobody to do it');
+    assert.ok(section.includes("dept.noCapacity ? 'No capacity'"));
+    assert.ok(section.includes('dept.helpersIn > 0') && section.includes('dept.lentOut > 0'), 'a helper in or out is visible on the card');
+    assert.ok(section.includes('text-2xs text-gray-500') && !section.includes('of total load'));
   });
 
-  it('the bar colour and the label come from the same threshold, and nothing is hardcoded', () => {
-    assert.ok(source.includes('getDepartmentShareBarColor(dept.percentage, riskThreshold)'));
-    assert.ok(source.includes('getDepartmentShareStatus(dept.percentage, riskThreshold)'));
-    assert.ok(source.includes('data-testid="department-status"'), 'label on the card');
-    assert.ok(!/riskThreshold\s*(>=?|===?)\s*\d/.test(source) && !/useState\(\s*(10|85)\s*\)/.test(source));
+  it('computes nothing itself: no share of the total, no level rule and no threshold comparison in the page', () => {
+    for (const forbidden of ['levelForUtilization', 'calculateDepartmentWorkloads', 'dept.percentage', 'getDepartmentShare', 'riskThreshold', 'riskState']) {
+      assert.ok(!source.includes(forbidden), 'the page does not use ' + forbidden);
+    }
+    assert.ok(!/capacityState\.threshold\s*(>=?|<=?|===?)/.test(source) && !/utilizationPercent\s*(>=?|<=?)\s*\d/.test(source), 'no threshold or percentage comparison in the page');
   });
 
-  it('the Capacity Threshold setting is described as the department workload percentage at which a department becomes AT RISK', () => {
-    assert.ok(settings.includes('The department workload percentage at which a department becomes AT RISK (red)'));
-    assert.ok(!settings.includes('available staff who have active work'));
+  it('asks for the capacity with every refresh, only as Admin or Manager; a failed read keeps the last answer or says the figures are unavailable', () => {
+    assert.ok(source.includes("['ADMIN', 'MANAGER'].includes(getUserRole()) ? getDepartmentCapacity()"), 'only Admin and Manager ask for it');
+    assert.ok(source.includes('parseDepartmentCapacityAnswer(answer)') && source.includes('.catch(() => null)'), 'a failed or unreadable answer is never taken for figures');
+    assert.ok(source.includes("prev.status === 'ready' ? prev : { status: 'unavailable' }"), 'a failed refresh keeps the last answer, or marks the figures unavailable');
+  });
+
+  it('an unavailable answer shows an explicit message instead of cards', () => {
+    assert.ok(section.includes("capacityState.status === 'unavailable' ? ("));
+    assert.ok(section.includes('data-testid="department-cards-unavailable"') && section.includes('Department workload is unavailable'));
   });
 });
 
-describe('Workload Thresholds legend wiring', () => {
+describe('The Capacity Threshold setting, the support panel and the staff table stay consistent and apart', () => {
   const source = fs.readFileSync(path.join(__dirname, 'WorkloadPage.jsx'), 'utf8');
-  const tiles = fs.readFileSync(path.join(__dirname, '..', 'components', 'workload', 'DepartmentLegendTiles.jsx'), 'utf8');
+  const settings = fs.readFileSync(path.join(__dirname, 'SettingsPage.jsx'), 'utf8');
+  const read = (...parts) => fs.readFileSync(path.join(__dirname, '..', ...parts), 'utf8');
 
-  it('the legend is built from the saved threshold, the same state that colours the bars; an unreadable threshold shows an explicit unavailable state, never fixed ranges', () => {
-    assert.ok(source.includes("riskState.status === 'ready' ? ("));
-    assert.ok(source.includes('<DepartmentLegendTiles ranges={getDepartmentLegendRanges(riskState.value)} />'));
-    assert.ok(source.includes("riskState.status === 'unavailable' ? ("), 'its own branch');
-    assert.ok(source.includes('data-testid="department-legend-unavailable"') && source.includes('Risk levels are unavailable: the Capacity Threshold could not be loaded.'));
-    const unavailable = source.slice(source.indexOf("riskState.status === 'unavailable' ? ("), source.indexOf(') : ('));
-    assert.ok(!/LOW|NORMAL|HIGH|AT RISK|25%|50%|75%/.test(unavailable), 'the unavailable state shows no ranges');
-    assert.ok(source.includes('getDepartmentShareBarColor(dept.percentage, riskThreshold)'));
-    assert.ok(source.includes("const riskKnown = riskState.status !== 'unavailable';") && source.includes(": 'bg-gray-400';") && source.includes(': null;'), 'while unavailable the cards make no risk claim: a neutral bar and no label');
+  it('the setting is described as the utilization at which a department becomes AT RISK, with no trace of the earlier meanings', () => {
+    assert.ok(settings.includes('Utilization (remaining task minutes as a share of staff capacity) at which a department becomes AT RISK'));
+    assert.ok(settings.includes('Mark a department AT RISK, warn on the dashboard and suggest support when it reaches the capacity threshold below'));
+    for (const old of ['available staff who have active work', 'share of the total workload', 'department workload percentage']) assert.ok(!settings.includes(old), old);
   });
 
-  it('the default tiles appear only while the Max Task Capacity Alert is off, and say so', () => {
-    assert.ok(source.includes("riskState.status === 'off' && ("));
-    assert.ok(source.includes('data-testid="department-legend-default-note"') && source.includes('Default ranges: Max Task Capacity Alert is off'));
+  it('Cross-Department Support shows the server\'s capacity figures and projections and recomputes none of them', () => {
+    const panel = read('components', 'workload', 'CrossDepartmentSupportPanel.jsx');
+    const preview = read('components', 'workload', 'support', 'SupportImpactPreview.jsx');
+    const needs = read('components', 'workload', 'support', 'SupportNeedsList.jsx');
+    for (const text of [panel, preview, needs]) {
+      assert.ok(!/levelForUtilization|getDepartmentLegendRanges|describeDepartmentRisk|capacityThresholdPercent/.test(text), 'no level rule or threshold in the support UI');
+    }
+    assert.ok(needs.includes('pressureUtilizationText(p)') && needs.includes('describeNeed(p)') && needs.includes('data-testid="no-helper-reason"'), 'utilization, the reason and the no-safe-helper explanation');
+    assert.ok(preview.includes('hasUtilization(data.receiving)') && preview.includes('riskVerdict(data.receiving, receivingName)'), 'projected utilization and the verdict come from the preview');
+    assert.ok(panel.includes('receiving.metrics.utilizationPercent'));
   });
 
-  it('the department legend is kept completely apart from individual Staff statuses: the staff section never reads the department risk state', () => {
+  it('the department legend is kept completely apart from individual Staff statuses: the staff section never reads the department state', () => {
     const staffSection = source.slice(source.indexOf('{/* 4. Staff Workload Distribution'));
     assert.ok(staffSection.length > 500, 'found the staff section');
-    for (const name of ['riskThreshold', 'riskState', 'getDepartmentLegendRanges', 'getDepartmentShareStatus', 'getDepartmentShareBarColor', 'DepartmentLegendTiles']) {
+    for (const name of ['capacityState', 'departmentCards', 'getDepartmentLegendRanges', 'getDepartmentLevelBarColor', 'departmentLevelLabel', 'DepartmentLegendTiles']) {
       assert.ok(!staffSection.includes(name), 'the staff table does not use ' + name);
     }
     assert.ok(staffSection.includes('getWorkloadStatusBadge') && staffSection.includes('getWorkloadProgressBarColor'), 'staff keep their own status helpers');
     const summaryBlock = source.slice(source.indexOf('const summaryCards'), source.indexOf('const summaryCards') + 1800);
-    assert.ok(!summaryBlock.includes('riskThreshold') && !summaryBlock.includes('riskState'), 'the summary counts of people by status are unaffected too');
-  });
-
-  it('Cross-Department Support is governed by its own rules: nothing in it reads the Capacity Threshold or the department risk status', () => {
-    const panel = fs.readFileSync(path.join(__dirname, '..', 'components', 'workload', 'CrossDepartmentSupportPanel.jsx'), 'utf8');
-    const recommendations = fs.readFileSync(path.join(__dirname, '..', 'utils', 'supportRecommendations.js'), 'utf8');
-    for (const text of [panel, recommendations]) {
-      assert.ok(!/riskThreshold|riskState|department-risk-threshold|capacityThreshold|getDepartmentShareStatus|AT_RISK/.test(text), 'support does not depend on AT RISK');
-    }
-  });
-
-  it('every tile keeps the status colours for light and dark, one tile per category in the list it is given', () => {
-    for (const hue of ['blue', 'emerald', 'orange', 'red']) {
-      assert.ok(tiles.includes('border-' + hue + '-200 bg-' + hue + '-100 dark:border-' + hue + '-100 dark:bg-' + hue + '-50'));
-      assert.ok(tiles.includes('bg-' + hue + '-600 dark:bg-' + hue + '-500'));
-      assert.ok(tiles.includes('text-' + hue + '-700'));
-    }
-    assert.ok(tiles.includes('ranges.map((range)'));
-  });
-
-  it('there is no explanatory note above the legend: the tiles speak for themselves', () => {
-    assert.ok(!source.includes('department-risk-note') && !source.includes('These ranges are for the department cards'));
+    assert.ok(!summaryBlock.includes('capacityState') && !summaryBlock.includes('departmentCards'), 'the summary counts of people by status are unaffected too');
   });
 });

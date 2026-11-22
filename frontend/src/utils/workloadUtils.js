@@ -72,120 +72,113 @@ export function getWorkloadProgressBarColor(status) {
   }
 }
 
-/**
- * Fill colour of a department's bar on the Workload page, from the percentage of the total load shown on its card (the whole number that is
- * displayed): 0-25 LOW blue, above 25-50 NORMAL green, above 50-75 HIGH orange, above 75 AT RISK red (the legend's hues).
- * The 600 shades (#2563EB, #059669, #EA580C, #DC2626) are strong on the light theme; the dark theme uses the brighter 500 shades so the
- * fill stays clear against the dark track. Not a number: neutral grey.
+/*
+ * Department risk on the Workload page is CAPACITY based, and decided by the server (DepartmentCapacity on the backend):
  *
- * @param {number|string|null|undefined} percentage
- * @returns {string}
- */
-export function getDepartmentShareBarColor(percentage, atRiskThreshold) {
-  const status = getDepartmentShareStatus(percentage, atRiskThreshold);
-  if (status === null) return 'bg-gray-400';
-  if (status === 'LOW') return 'bg-blue-600 dark:bg-blue-500';
-  if (status === 'NORMAL') return 'bg-emerald-600 dark:bg-emerald-500';
-  if (status === 'HIGH') return 'bg-orange-600 dark:bg-orange-500';
-  return 'bg-red-600 dark:bg-red-500';
-}
-
-/**
- * The saved Capacity Threshold as a usable number: a whole number from 1 to 100, otherwise null (not loaded, switched off, or unreadable),
- * in which case nothing is overridden and the existing colours apply.
- */
-export function normalizeRiskThreshold(value) {
-  return Number.isInteger(value) && value >= 1 && value <= 100 ? value : null;
-}
-
-/** A department is AT RISK once its displayed share of the total load is AT OR ABOVE the Capacity Threshold (>=, so exactly equal counts). */
-export function isDepartmentAtRisk(percentage, atRiskThreshold) {
-  const threshold = normalizeRiskThreshold(atRiskThreshold);
-  const value = Number(percentage);
-  if (threshold === null || percentage === null || percentage === undefined || percentage === '' || !Number.isFinite(value)) return false;
-  return value >= threshold;
-}
-
-/**
- * The status of a department card, the one source for its bar colour, its label and the Workload Thresholds legend.
+ *   utilization = remaining task minutes / (eligible available staff x one standard shift) x 100
  *
- * With a usable Capacity Threshold T, AT_RISK begins at T (inclusive): every share from T up is AT_RISK, and below T the existing bands
- * apply (0-25 LOW, above 25-50 NORMAL, above 50 HIGH, which now runs up to just under T, so a band that T cuts off simply disappears).
- * Without one (not loaded, switched off, unreadable) the original fixed bands apply unchanged (above 75 is AT_RISK).
- * null when the percentage is not a number.
+ * Remaining minutes are the estimated minutes of the department's active tasks, held or waiting; they do not fall because a helper joins.
+ * A person on cross-department support counts for the department they help and not for their home one. A department is AT RISK when
+ * its utilization is at or above the saved Capacity Threshold (and the Max Task Capacity Alert is on). Below it, LOW is up to 25%, NORMAL
+ * up to 50% and HIGH above that. The page never recomputes any of this: it shows what the server says, so the cards, the legend, the
+ * dashboard and Cross-Department Support cannot disagree. (Individual staff statuses are a different, fixed measure: see
+ * getWorkloadStatusBadge.)
  */
-export function getDepartmentShareStatus(percentage, atRiskThreshold) {
-  const value = Number(percentage);
-  if (percentage === null || percentage === undefined || percentage === '' || !Number.isFinite(value)) return null;
-  const threshold = normalizeRiskThreshold(atRiskThreshold);
-  const share = Math.max(0, value);
-  if (threshold !== null) {
-    if (share >= threshold) return 'AT_RISK';
-    if (share <= 25) return 'LOW';
-    if (share <= 50) return 'NORMAL';
-    return 'HIGH';
+
+const DEPARTMENT_LEVELS = ['LOW', 'NORMAL', 'HIGH', 'AT_RISK'];
+
+/** Bar fill for a department level (the 600 shades are strong on the light theme, the 500 shades keep contrast on the dark one). */
+export function getDepartmentLevelBarColor(level) {
+  switch (level) {
+    case 'LOW': return 'bg-blue-600 dark:bg-blue-500';
+    case 'NORMAL': return 'bg-emerald-600 dark:bg-emerald-500';
+    case 'HIGH': return 'bg-orange-600 dark:bg-orange-500';
+    case 'AT_RISK': return 'bg-red-600 dark:bg-red-500';
+    default: return 'bg-gray-400';
   }
-  if (share <= 25) return 'LOW';
-  if (share <= 50) return 'NORMAL';
-  if (share <= 75) return 'HIGH';
-  return 'AT_RISK';
 }
 
+/** The label on a department card: its level, or NO STAFF when it has work and nobody eligible to do it. */
+export function departmentLevelLabel(entry) {
+  if (!entry) return null;
+  if (entry.noCapacity) return 'NO STAFF';
+  return DEPARTMENT_LEVELS.includes(entry.level) ? entry.level.replace('_', ' ') : null;
+}
+
+/** A utilization as shown: "66.7%", "100%", or "n/a" when the department has work but no capacity. */
+export function formatUtilization(value) {
+  if (!Number.isFinite(value)) return 'n/a';
+  return `${Number.isInteger(value) ? value : value.toFixed(1)}%`;
+}
+
+const isCount = (value) => Number.isInteger(value) && value >= 0;
+
 /**
- * What the department-risk threshold endpoint answered, as the page's state: { status: 'ready', value } when the Capacity Threshold applies
- * (alert switched on, a whole number 1-100), { status: 'off' } when the Max Task Capacity Alert is switched off (the default bands apply),
- * and null when the answer cannot be read, which the page treats as "unavailable" (never as the defaults).
+ * The department-capacity endpoint's answer as the page's state, or null when it is not a complete, valid answer (nothing is guessed or
+ * defaulted: an unreadable answer is "unavailable", never zeros or the old fixed ranges).
+ *
+ * @returns {{ status: 'ready', enabled: boolean, threshold: number, shiftMinutes: number, departments: Array<object> } | null}
  */
-export function parseRiskThresholdAnswer(answer) {
+export function parseDepartmentCapacityAnswer(answer) {
   if (!answer || typeof answer !== 'object' || typeof answer.enabled !== 'boolean') return null;
-  if (answer.enabled === false) return { status: 'off' };
-  const value = normalizeRiskThreshold(answer.capacityThresholdPercent);
-  return value === null ? null : { status: 'ready', value };
+  const threshold = answer.capacityThresholdPercent;
+  if (!Number.isInteger(threshold) || threshold < 1 || threshold > 100) return null;
+  if (!Number.isInteger(answer.shiftMinutes) || answer.shiftMinutes <= 0) return null;
+  if (!Array.isArray(answer.departments)) return null;
+  for (const d of answer.departments) {
+    const valid = d && typeof d === 'object' && typeof d.code === 'string' && d.code && typeof d.name === 'string'
+      && ['remainingMinutes', 'assignedMinutes', 'waitingMinutes', 'activeTasks', 'waitingTasks', 'eligibleStaff', 'helpersIn', 'lentOut'].every((k) => isCount(d[k]))
+      && Number.isFinite(d.capacityMinutes) && d.capacityMinutes >= 0
+      && (d.utilizationPercent === null || (Number.isFinite(d.utilizationPercent) && d.utilizationPercent >= 0))
+      && DEPARTMENT_LEVELS.includes(d.level) && typeof d.atRisk === 'boolean' && typeof d.noCapacity === 'boolean';
+    if (!valid) return null;
+  }
+  return { status: 'ready', enabled: answer.enabled, threshold, shiftMinutes: answer.shiftMinutes, departments: answer.departments };
 }
 
 /**
- * The explanation of the department risk levels (the heading's tooltip), from the page's threshold state. It describes the department
- * cards only: individual staff statuses use their own, fixed ranges and are not affected by the Capacity Threshold.
+ * The explanation of the department levels (the heading's tooltip), from the page's state. It describes the department cards only:
+ * individual staff statuses use their own fixed ranges and are not affected by the Capacity Threshold.
  */
 export function describeDepartmentRisk(state) {
-  const base = "Each department card shows its share of the hotel's total workload.";
-  if (state?.status === 'ready') return `${base} A department is AT RISK from ${state.value}% (the Capacity Threshold in System Settings).`;
-  if (state?.status === 'off') return `${base} The Max Task Capacity Alert is off, so the default ranges apply.`;
-  if (state?.status === 'unavailable') return `${base} The Capacity Threshold could not be loaded, so the risk levels are unavailable.`;
+  const base = 'Utilization is the department\'s remaining task minutes as a share of its staff capacity (eligible available staff x a 480-minute shift).';
+  if (state?.status === 'ready' && state.enabled) return `${base} A department is AT RISK from ${state.threshold}% (the Capacity Threshold in System Settings).`;
+  if (state?.status === 'ready') return `${base} The Max Task Capacity Alert is off, so no department is marked AT RISK.`;
+  if (state?.status === 'unavailable') return 'The department capacity could not be loaded, so the risk levels are unavailable.';
   return base;
 }
 
+/** The level a utilization has under the server's rule (kept here so the legend can be proven to describe exactly the levels that can occur). */
+export function levelForUtilization(utilization, threshold, enabled = true) {
+  if (!Number.isFinite(utilization)) return null;
+  if (enabled && utilization >= threshold) return 'AT_RISK';
+  if (utilization <= 25) return 'LOW';
+  if (utilization <= 50) return 'NORMAL';
+  return 'HIGH';
+}
+
 /**
- * The Workload Thresholds legend for the department cards, derived from the same rule as {@link getDepartmentShareStatus} so the legend,
- * the bar colours and the status labels cannot disagree. Displayed percentages are whole numbers, so every range is in whole percents.
- * Returns the categories that can actually occur, in order, each as { status, label, from, to, text } (from/to inclusive, whole percents;
- * to is 100 for the last). A category the threshold makes impossible is left out (HIGH at 40%, NORMAL and HIGH at 10%).
- * Without a usable threshold: the original four fixed ranges.
+ * The legend for the department cards: one tile per level that can actually occur under the saved threshold, in plain numbers. AT RISK
+ * starts at the threshold (inclusive); below it LOW is up to 25%, NORMAL up to 50% and HIGH above 50%, each cut off where the threshold
+ * begins, so a level the threshold makes impossible is not listed (at 40% there is no HIGH; at 10% there is only LOW below the risk
+ * level). With the alert off there is no AT RISK tile and HIGH is everything above 50%.
  *
- * @param {number|null|undefined} atRiskThreshold
- * @returns {Array<{ status: 'LOW'|'NORMAL'|'HIGH'|'AT_RISK', label: string, from: number, to: number|null, text: string }>}
+ * @returns {Array<{ status: string, label: string, text: string }>}
  */
-export function getDepartmentLegendRanges(atRiskThreshold) {
-  const threshold = normalizeRiskThreshold(atRiskThreshold);
-  if (threshold === null) {
+export function getDepartmentLegendRanges(threshold, enabled = true) {
+  const tiles = [];
+  if (!enabled || !Number.isInteger(threshold)) {
     return [
-      { status: 'LOW', label: 'LOW', from: 0, to: 25, text: '0–25%' },
-      { status: 'NORMAL', label: 'NORMAL', from: 26, to: 50, text: 'Above 25%–50%' },
-      { status: 'HIGH', label: 'HIGH', from: 51, to: 75, text: 'Above 50%–75%' },
-      { status: 'AT_RISK', label: 'AT RISK', from: 76, to: null, text: 'Above 75%' },
+      { status: 'LOW', label: 'LOW', text: '0–25%' },
+      { status: 'NORMAL', label: 'NORMAL', text: '25–50%' },
+      { status: 'HIGH', label: 'HIGH', text: '50%+' },
     ];
   }
-  // Whole-percent ranges, from and to both included ("0–25%", "26–50%"), a single value when a range is one percent wide
-  const range = (status, label, from, to) => ({ status, label, from, to, text: from === to ? `${from}%` : `${from}–${to}%` });
-  const ranges = [];
-  // LOW: 0 up to 25, or up to just below T when T cuts it (T is at least 1, so 0% is always below it)
-  ranges.push(range('LOW', 'LOW', 0, Math.min(25, threshold - 1)));
-  // NORMAL: 26 up to 50, or up to just below T
-  if (threshold >= 27) ranges.push(range('NORMAL', 'NORMAL', 26, Math.min(50, threshold - 1)));
-  // HIGH: 51 up to just below T (when T is above the old 75 line it keeps running up to T)
-  if (threshold >= 52) ranges.push(range('HIGH', 'HIGH', 51, threshold - 1));
-  ranges.push(range('AT_RISK', 'AT RISK', threshold, 100));
-  return ranges;
+  tiles.push({ status: 'LOW', label: 'LOW', text: `0–${Math.min(25, threshold)}%` });
+  if (threshold > 25) tiles.push({ status: 'NORMAL', label: 'NORMAL', text: `25–${Math.min(50, threshold)}%` });
+  if (threshold > 50) tiles.push({ status: 'HIGH', label: 'HIGH', text: `50–${threshold}%` });
+  tiles.push({ status: 'AT_RISK', label: 'AT RISK', text: `${threshold}%+` });
+  return tiles;
 }
 
 /**

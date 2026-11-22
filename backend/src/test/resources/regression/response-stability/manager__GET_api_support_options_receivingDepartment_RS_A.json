@@ -10,14 +10,22 @@
       "code" : "RS_A",
       "metrics" : {
         "assignedMinutes" : 45,
+        "atRisk" : false,
         "availableStaff" : 3,
+        "capacityMinutes" : 960,
+        "eligibleStaff" : 2,
         "freeStaff" : 2,
+        "level" : "LOW",
+        "noCapacity" : false,
+        "remainingMinutes" : 75,
         "uncoveredMinutes" : 0,
         "uncoveredTasks" : 0,
+        "utilizationPercent" : 7.8,
         "waitingMinutes" : 30,
         "waitingTasks" : 1
       },
       "name" : "RS_A name",
+      "needReason" : "NONE",
       "overdueOrDueSoonTasks" : 1,
       "severity" : "MODERATE",
       "urgentOrHighTasks" : 1
@@ -29,6 +37,7 @@
       "estimatedDuration" : 30,
       "id" : "<task:RS A pending>",
       "priority" : "HIGH",
+      "shared" : false,
       "title" : "RS A pending"
     } ]
   }

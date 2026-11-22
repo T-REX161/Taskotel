@@ -1,5 +1,17 @@
 import React from 'react';
 import { CONFIRM_ADMIN_ONLY, RESTRICTED_LABEL, beforeAfter, describeProblems, formatMinutes } from '../../../utils/supportPlan';
+import { formatUtilization } from '../../../utils/workloadUtils';
+
+/** True when the server sent a department's utilization before and after the plan (an older answer without capacity figures shows nothing here). */
+const hasUtilization = (impact) => Number.isFinite(impact?.before?.utilizationPercent) && Number.isFinite(impact?.after?.utilizationPercent);
+
+/** What the plan does to the receiving department's risk, only from the server's own projection: never a claim the numbers do not back. */
+export function riskVerdict(receiving, name) {
+  if (!receiving?.before || !receiving?.after || receiving.before.atRisk !== true) return null;
+  return receiving.after.atRisk === true
+    ? `${name} would still be at or above its capacity limit with this plan.`
+    : `This plan brings ${name} below its capacity limit.`;
+}
 
 /** Donor impact rows the server actually sent with figures: an Admin's preview sends all of them, a Manager's only the departments they manage. */
 const donorsWithFigures = (donors) =>
@@ -30,6 +42,15 @@ function ImpactTable({ impact, title, note }) {
           <Row label="Assigned minutes" before={before.assignedMinutes} after={after.assignedMinutes} format={formatMinutes} emphasize />
           <Row label="Free staff" before={before.freeStaff} after={after.freeStaff} emphasize />
           <Row label="Uncovered tasks" before={before.uncoveredTasks} after={after.uncoveredTasks} emphasize />
+          {Number.isFinite(before.remainingMinutes) && (
+            <Row label="Remaining minutes" before={before.remainingMinutes} after={after.remainingMinutes} format={formatMinutes} emphasize />
+          )}
+          {Number.isFinite(before.eligibleStaff) && (
+            <Row label="Capacity staff" before={before.eligibleStaff} after={after.eligibleStaff} emphasize />
+          )}
+          {Number.isFinite(before.utilizationPercent) && Number.isFinite(after.utilizationPercent) && (
+            <Row label="Utilization" before={before.utilizationPercent} after={after.utilizationPercent} format={formatUtilization} emphasize />
+          )}
         </tbody>
       </table>
     </div>
@@ -125,12 +146,27 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
               <dl className="space-y-1.5">
                 <Headline label={`${receivingName} waiting tasks`} value={beforeAfter(data.receiving.before.waitingTasks, data.receiving.after.waitingTasks)} />
                 <Headline label={`${receivingName} uncovered`} value={beforeAfter(data.receiving.before.uncoveredTasks, data.receiving.after.uncoveredTasks)} />
+                {hasUtilization(data.receiving) && (
+                  <Headline
+                    label={`${receivingName} utilization`}
+                    hint="Remaining task minutes as a share of its staff capacity"
+                    value={beforeAfter(formatUtilization(data.receiving.before.utilizationPercent), formatUtilization(data.receiving.after.utilizationPercent))}
+                  />
+                )}
                 {donors.map((donor) => (
                   <Headline
                     key={donor.code}
                     label={`${donor.name} free staff`}
                     hint={`Lending ${donor.lending}; must keep at least ${donor.reserveRequired} free`}
                     value={beforeAfter(donor.before.freeStaff, donor.after.freeStaff)}
+                  />
+                ))}
+                {donors.filter(hasUtilization).map((donor) => (
+                  <Headline
+                    key={`${donor.code}-utilization`}
+                    label={`${donor.name} utilization`}
+                    hint="Its own work is unchanged; it has fewer people"
+                    value={beforeAfter(formatUtilization(donor.before.utilizationPercent), formatUtilization(donor.after.utilizationPercent))}
                   />
                 ))}
                 {someFiguresWithheld && (
@@ -141,6 +177,9 @@ export default function SupportImpactPreview({ preview, receivingName, canReview
                   />
                 )}
               </dl>
+              {riskVerdict(data.receiving, receivingName) && (
+                <p role="note" className="text-xs text-gray-700" data-testid="risk-verdict">{riskVerdict(data.receiving, receivingName)}</p>
+              )}
               <details className="text-xs">
                 <summary className="cursor-pointer font-medium text-gray-600 w-fit rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500">Full breakdown</summary>
                 <div className="mt-2 space-y-2">

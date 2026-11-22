@@ -156,57 +156,42 @@ public class DashboardServiceImpl implements DashboardService {
         return dto;
     }
 
-    /** System Settings (Max Task Capacity Alert, Capacity Threshold). Optional (setter) so a hand-built service in a unit test shows no alerts. */
-    private com.hotel.workload.settings.SystemSettingsService systemSettings;
+    /** The shared department capacity figures. Optional (setter) so a hand-built service in a unit test shows no alerts. */
+    private com.hotel.workload.workload.DepartmentCapacityService capacityService;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setSystemSettings(com.hotel.workload.settings.SystemSettingsService systemSettings) {
-        this.systemSettings = systemSettings;
+    void setDepartmentCapacityService(com.hotel.workload.workload.DepartmentCapacityService capacityService) {
+        this.capacityService = capacityService;
     }
 
     /**
-     * Capacity warnings for the caller's scope, only while the alert is switched on. A department is warned about when the share of its
-     * eligible staff who are in work has reached the configured threshold:
-     * (eligible staff with at least one active assignment) / (all eligible staff) x 100.
-     * Eligible = Staff role AND active AND AVAILABLE AND has a department; numerator and denominator use exactly this one population, so the
-     * percentage can never exceed 100. Managers, Administrators, inactive Staff, unavailable Staff (even when they hold work) and Staff with no
-     * department are in neither. A department with no eligible staff has no denominator, so it never warns (no division by zero). One entry
-     * per department, so there are no duplicate warnings.
-     * A Manager's scope is their own department only. Read-only: nothing is stored, sent or reassigned.
+     * Capacity warnings for the caller's scope, only while the Max Task Capacity Alert is on. A department is warned about when it is AT RISK:
+     * its utilization (remaining task minutes / staff capacity x 100) is at or above the saved Capacity Threshold. Remaining minutes are the
+     * estimated minutes of its active tasks (PENDING, ASSIGNED, IN_PROGRESS), held or waiting; capacity is its eligible staff (active STAFF
+     * accounts marked AVAILABLE, a helper on support counting for the department they help) times the standard shift. A department with work
+     * but nobody eligible to do it has no capacity and is always warned about. One entry per department, so there are no duplicate warnings.
+     * This is the same figure and rule as the Workload page cards and Cross-Department Support (DepartmentCapacityService). A Manager's scope is
+     * their own departments only. Read-only: nothing is stored, sent or reassigned.
      */
     private void applyCapacityAlerts(AdminDashboardSummaryDto dto, DepartmentScope scope) {
-        if (systemSettings == null) return;
-        com.hotel.workload.settings.SystemSettingsDto settings = systemSettings.current();
-        if (!settings.capacityAlertEnabled()) return;
-        int threshold = settings.capacityThresholdPercent();
-
-        List<Staff> candidates = scope.isDepartment()
-                ? staffRepository.findByDepartmentInAndUserRole(scope.managedDepartments(), com.hotel.workload.security.Role.STAFF)
-                : staffRepository.findAllWithUser();
-        java.util.Set<java.util.UUID> busy = new java.util.HashSet<>(assignmentRepository.findBusyStaffIds(ACTIVE_STATUSES));
-
-        java.util.Map<String, int[]> counts = new java.util.LinkedHashMap<>(); // code -> {eligible staff, eligible staff in work}
-        java.util.Map<String, String> names = new java.util.HashMap<>();
-        for (Staff staff : candidates) {
-            // One eligible population for numerator and denominator: Staff role, active, AVAILABLE, with a department
-            if (staff.getUser() == null || staff.getUser().getRole() != com.hotel.workload.security.Role.STAFF
-                    || !staff.isActive() || staff.getAvailability() != Availability.AVAILABLE || staff.getDepartment() == null) continue;
-            String code = staff.getDepartment().getCode();
-            int[] c = counts.computeIfAbsent(code, k -> new int[2]);
-            names.put(code, staff.getDepartment().getName());
-            c[0]++;
-            if (busy.contains(staff.getId())) c[1]++;
-        }
+        if (capacityService == null) return;
+        com.hotel.workload.workload.DepartmentCapacity.Risk risk = capacityService.risk();
+        if (!risk.enabled()) return;
+        java.util.Set<String> allowed = scope.isDepartment() ? new java.util.HashSet<>(scope.managedDepartmentCodes()) : null;
 
         List<AdminDashboardSummaryDto.CapacityAlert> alerts = new java.util.ArrayList<>();
-        for (java.util.Map.Entry<String, int[]> e : counts.entrySet()) {
-            int total = e.getValue()[0];
-            int inWork = e.getValue()[1];
-            if (total > 0 && inWork * 100 >= threshold * total) {
-                alerts.add(new AdminDashboardSummaryDto.CapacityAlert(e.getKey(), names.get(e.getKey()), inWork, total, inWork * 100 / total, threshold));
-            }
+        for (com.hotel.workload.workload.DepartmentCapacityService.Figures figures : capacityService.figures().values()) {
+            if (allowed != null && !allowed.contains(figures.code())) continue;
+            int remaining = figures.remainingMinutes();
+            int staff = figures.eligibleStaff();
+            if (!com.hotel.workload.workload.DepartmentCapacity.atRisk(remaining, staff, risk)) continue;
+            alerts.add(new AdminDashboardSummaryDto.CapacityAlert(figures.code(), figures.name(), remaining,
+                    com.hotel.workload.workload.DepartmentCapacity.capacityMinutes(staff), staff,
+                    com.hotel.workload.workload.DepartmentCapacity.utilizationPercent(remaining, staff), risk.thresholdPercent(),
+                    com.hotel.workload.workload.DepartmentCapacity.noCapacity(remaining, staff)));
         }
-        alerts.sort(java.util.Comparator.comparingInt(AdminDashboardSummaryDto.CapacityAlert::percentInWork).reversed()
+        // The most pressed first (a department with no capacity at all is the most pressed), then by name
+        alerts.sort(java.util.Comparator.comparingDouble((AdminDashboardSummaryDto.CapacityAlert a) -> a.utilizationPercent() == null ? Double.MAX_VALUE : a.utilizationPercent()).reversed()
                 .thenComparing(AdminDashboardSummaryDto.CapacityAlert::departmentName));
         dto.setCapacityAlerts(alerts);
     }

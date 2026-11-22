@@ -75,8 +75,13 @@ public final class WorkloadRecommendationEngine {
         /** The free staff who may be suggested to another department (a subset of freeStaff). */
         final List<Staff> lendable = new ArrayList<>();
         final List<Task> waiting = new ArrayList<>();
+        /** Tasks its own staff already hold, that a helper may JOIN while the department is at its limit (see canShare). */
+        final List<Task> shareable = new ArrayList<>();
         /** Only for a donor department in a receiver-scoped run: how many tasks wait there (its task details are never loaded). */
         Integer waitingCountOverride;
+        /** Remaining task minutes and the staff whose capacity counts here (see DepartmentCapacity); only meaningful with capacity inputs. */
+        int remainingMinutes;
+        int capacityStaff;
 
         Stats(Department department) {
             this.department = department;
@@ -100,7 +105,8 @@ public final class WorkloadRecommendationEngine {
                                                        List<Task> activeTasks,
                                                        List<Assignment> activeAssignments,
                                                        LocalDate today,
-                                                       LocalDateTime now) {
+                                                       LocalDateTime now,
+                                                       CapacityInputs capacity) {
         Set<UUID> busyStaff = new HashSet<>();
         Set<UUID> assignedTasks = new HashSet<>();
         for (Assignment assignment : activeAssignments) {
@@ -130,7 +136,8 @@ public final class WorkloadRecommendationEngine {
             if (stats != null && !assignedTasks.contains(task.getId())) stats.waiting.add(task);
         }
 
-        return finish(all, null, null, tasksWithoutDepartment, today, now);
+        applyCapacity(all, capacity);
+        return finish(all, null, null, tasksWithoutDepartment, today, now, capacity);
     }
 
     private static void classifyStaff(Map<String, Stats> byCode, List<Staff> staff, Set<UUID> busyStaff) {
@@ -165,7 +172,8 @@ public final class WorkloadRecommendationEngine {
                                                                   Map<String, Integer> waitingCountByDepartment,
                                                                   Set<UUID> busyStaff,
                                                                   LocalDate today,
-                                                                  LocalDateTime now) {
+                                                                  LocalDateTime now,
+                                                                        CapacityInputs capacity) {
         Map<String, Stats> byCode = new HashMap<>();
         List<Stats> all = new ArrayList<>();
         for (Department department : departments) {
@@ -187,7 +195,8 @@ public final class WorkloadRecommendationEngine {
             if (task.getDepartment() != null && receiving.department.getCode().equals(task.getDepartment().getCode())) receiving.waiting.add(task);
         }
         Set<String> only = Set.of(receiving.department.getCode());
-        return finish(all, only, only, 0, today, now);
+        applyCapacity(all, capacity);
+        return finish(all, only, only, 0, today, now, capacity);
     }
 
     /**
@@ -214,7 +223,8 @@ public final class WorkloadRecommendationEngine {
                                                                  Map<String, Integer> waitingCountByDepartment,
                                                                  Set<UUID> busyStaff,
                                                                  LocalDate today,
-                                                                 LocalDateTime now) {
+                                                                 LocalDateTime now,
+                                                                       CapacityInputs capacity) {
         Map<String, Stats> byCode = new HashMap<>();
         List<Stats> all = new ArrayList<>();
         for (Department department : departments) {
@@ -244,79 +254,117 @@ public final class WorkloadRecommendationEngine {
                 stats.waitingCountOverride = waitingCountByDepartment.getOrDefault(code, 0);
             }
         }
-        return finish(all, managedCodes, managedCodes, 0, today, now);
+        applyCapacity(all, capacity);
+        return finish(all, managedCodes, managedCodes, 0, today, now, capacity);
     }
 
     /**
-     * Ranks the pressured departments and suggests donors. {@code receiverCodes} null = every department (Admin, nothing redacted);
+     * Ranks the departments that need help and suggests donors. {@code receiverCodes} null = every department (Admin, nothing redacted);
      * otherwise only those departments are receivers, and a donor whose code is not in {@code detailCodes} is redacted.
+     *
+     * <p>A department needs help when it has uncovered waiting tasks (more waiting tasks than free staff: the original rule), or, when the
+     * capacity inputs are present and the Max Task Capacity Alert is on, when its utilization is at or above the Capacity Threshold even though
+     * its own free staff could take every waiting task. A helper always takes a WAITING task (support adds a person to a task nobody holds), so
+     * a department at risk with no waiting task is reported as needing help but without anyone to send, and says why.
+     *
+     * <p>A donor is accepted only if, after lending, it still keeps a free person and enough free staff for its own waiting work (the original
+     * reserve rule) AND its own utilization stays below the limit (the threshold when the alert is on, otherwise a full shift per person), so
+     * a recommendation never just moves the overload to another department. Projections are computed from the remaining minutes (which do not
+     * change when someone helps) and the capacity (the helper's moves from the donor to the receiver).
      */
     private static WorkloadRecommendationsDto finish(List<Stats> all, Set<String> receiverCodes, Set<String> detailCodes,
-                                                     int tasksWithoutDepartment, LocalDate today, LocalDateTime now) {
+                                                     int tasksWithoutDepartment, LocalDate today, LocalDateTime now, CapacityInputs capacity) {
         Comparator<Staff> byName = Comparator.comparing((Staff s) -> String.valueOf(s.getName()).toLowerCase()).thenComparing(s -> String.valueOf(s.getId()));
         Comparator<Task> mostImportantFirst = MOST_IMPORTANT_FIRST;
         for (Stats stats : all) {
             stats.freeStaff.sort(byName);
             stats.lendable.sort(byName);
             stats.waiting.sort(mostImportantFirst);
+            stats.shareable.sort(mostImportantFirst);
         }
 
         List<Stats> pressured = new ArrayList<>();
         for (Stats stats : all) {
-            if (stats.uncovered() > 0 && (receiverCodes == null || receiverCodes.contains(stats.department.getCode()))) pressured.add(stats);
+            boolean inScope = receiverCodes == null || receiverCodes.contains(stats.department.getCode());
+            if (inScope && (stats.uncovered() > 0 || atRisk(stats, capacity))) pressured.add(stats);
         }
         pressured.sort(Comparator
-                .comparing((Stats s) -> severity(s, today))
+                .comparing((Stats s) -> severity(s, today, capacity))
                 .thenComparingInt((Stats s) -> -s.uncovered())
+                .thenComparingDouble((Stats s) -> -utilizationForSort(s, capacity))
                 .thenComparing(s -> s.department.getName().toLowerCase()));
 
         List<DepartmentRecommendation> recommendations = new ArrayList<>();
         List<UnsupportedDepartment> unsupported = new ArrayList<>();
+        boolean modelled = capacity.modelled();
 
         for (Stats receiver : pressured) {
-            Severity severity = severity(receiver, today);
-            Pressure pressure = pressure(receiver, today);
+            boolean riskDriven = atRisk(receiver, capacity);
+            Severity severity = severity(receiver, today, capacity);
+            Pressure pressure = pressure(receiver, today, capacity);
             List<Task> uncovered = receiver.uncoveredTasks();
-            int wanted = Math.min(uncovered.size(), MAX_SUGGESTIONS_PER_DEPARTMENT);
+            // The tasks a helper could take: the uncovered ones first, then (only for a department at risk) its other waiting tasks, most important first
+            List<Task> coverable = new ArrayList<>(uncovered);
+            if (riskDriven) {
+                for (Task task : receiver.waiting) if (!uncovered.contains(task)) coverable.add(task);
+                // Then the tasks its own staff already hold: a helper joins one, adding a person without moving any work
+                coverable.addAll(receiver.shareable);
+            }
+            int helpersForRisk = riskDriven ? DepartmentCapacity.helpersToLeaveRisk(receiver.remainingMinutes, receiver.capacityStaff, capacity.risk()) : 0;
+            int wanted = Math.min(Math.min(coverable.size(), MAX_SUGGESTIONS_PER_DEPARTMENT), Math.max(uncovered.size(), helpersForRisk));
             List<Suggestion> suggestions = new ArrayList<>();
             int uncoveredBefore = uncovered.size();
-            int minutesBefore = minutes(uncovered);
 
             while (suggestions.size() < wanted) {
-                Stats donor = bestDonor(all, receiver);
+                Stats donor = bestDonor(all, receiver, capacity);
                 if (donor == null) break;
                 Staff chosen = donor.lendable.get(0);
-                Task covers = uncovered.get(suggestions.size());
                 int index = suggestions.size();
-                int minutesAfter = minutes(uncovered.subList(index + 1, uncovered.size()));
+                Task covers = coverable.get(index);
+                int minutesAfter = minutes(uncovered.subList(Math.min(index + 1, uncovered.size()), uncovered.size()));
                 int freeBefore = donor.freeStaff.size();
                 int availableBefore = donor.availableStaff.size();
-                DonorImpact donorImpact = new DonorImpact(freeBefore, freeBefore - 1, availableBefore, availableBefore - 1, donor.waitingCount());
+                Double donorUtilizationBefore = modelled ? DepartmentCapacity.utilizationPercent(donor.remainingMinutes, donor.capacityStaff) : null;
+                Double donorUtilizationAfter = modelled ? DepartmentCapacity.utilizationPercent(donor.remainingMinutes, donor.capacityStaff - 1) : null;
+                DonorImpact donorImpact = new DonorImpact(freeBefore, freeBefore - 1, availableBefore, availableBefore - 1, donor.waitingCount(),
+                        donorUtilizationBefore, donorUtilizationAfter);
+                // receiver.capacityStaff already includes the helpers chosen earlier in this run for this department
+                Double receiverUtilizationBefore = modelled ? DepartmentCapacity.utilizationPercent(receiver.remainingMinutes, receiver.capacityStaff) : null;
+                Double receiverUtilizationAfter = modelled ? DepartmentCapacity.utilizationPercent(receiver.remainingMinutes, receiver.capacityStaff + 1) : null;
+                Boolean stillAtRisk = modelled ? DepartmentCapacity.atRisk(receiver.remainingMinutes, receiver.capacityStaff + 1, capacity.risk()) : null;
+                int uncoveredHere = Math.max(0, uncoveredBefore - index);
                 ReceiverImpact receiverImpact = new ReceiverImpact(
-                        uncoveredBefore - index, uncoveredBefore - index - 1,
-                        minutes(uncovered.subList(index, uncovered.size())), minutesAfter);
+                        uncoveredHere, Math.max(0, uncoveredHere - 1),
+                        minutes(uncovered.subList(Math.min(index, uncovered.size()), uncovered.size())), minutesAfter,
+                        receiverUtilizationBefore, receiverUtilizationAfter, stillAtRisk);
                 if (receiverCodes != null && !detailCodes.contains(donor.department.getCode())) {
                     // Only the minimum a Manager needs to judge a helper: name and home department name. Nothing about the donor's workload.
-                    suggestions.add(new Suggestion(null, chosen.getName(), null, donor.department.getName(), covers.getTitle(), null, receiverImpact,
-                            List.of("Currently free and available to help.", couldTakeReason(covers))));
+                    List<String> reasons = new ArrayList<>();
+                    // Only neutral reasons: the receiving department's own projection travels in receiverImpact, and nothing about the donor
+                    reasons.add("Currently free and available to help.");
+                    reasons.add(couldTakeReason(covers));
+                    suggestions.add(new Suggestion(null, chosen.getName(), null, donor.department.getName(), covers.getTitle(), null, receiverImpact, reasons));
                 } else {
                     suggestions.add(new Suggestion(chosen.getId(), chosen.getName(), donor.department.getCode(), donor.department.getName(),
-                            covers.getTitle(), donorImpact, receiverImpact, suggestionReasons(donor, freeBefore, covers)));
+                            covers.getTitle(), donorImpact, receiverImpact,
+                            suggestionReasons(donor, freeBefore, covers, receiver, donorUtilizationAfter, receiverUtilizationBefore, receiverUtilizationAfter, stillAtRisk, capacity)));
                 }
                 // The chosen person leaves the lending department's lists, so later receivers see what is really left
                 donor.lendable.remove(chosen);
                 donor.freeStaff.remove(chosen);
                 donor.availableStaff.remove(chosen);
+                if (modelled) {
+                    donor.capacityStaff--;
+                    receiver.capacityStaff++;
+                }
             }
 
             if (suggestions.isEmpty()) {
                 unsupported.add(new UnsupportedDepartment(receiver.department.getCode(), receiver.department.getName(), severity, pressure,
-                        "No suitable support is available: every other department either has no free STAFF member who can sign in "
-                                + "to lend, or would be left without a free, available staff member or without enough free staff for its "
-                                + "own waiting work if it lent someone."));
+                        noHelperReason(coverable, uncovered, riskDriven)));
             } else {
                 recommendations.add(new DepartmentRecommendation(receiver.department.getCode(), receiver.department.getName(),
-                        severity, pressure, receiverReasons(receiver, pressure), suggestions));
+                        severity, pressure, receiverReasons(receiver, pressure, capacity), suggestions));
             }
         }
 
@@ -324,12 +372,44 @@ public final class WorkloadRecommendationEngine {
                 limitations(tasksWithoutDepartment));
     }
 
+    private static String noHelperReason(List<Task> coverable, List<Task> uncovered, boolean riskDriven) {
+        if (coverable.isEmpty() && uncovered.isEmpty() && riskDriven) {
+            return "At or above its limit, but it has no active task a helper could join.";
+        }
+        return "No suitable support is available: no other department can lend a free person without being left short or over its own limit.";
+    }
+
+    /** A task a helper may join: its own staff hold it and it is under way or about to be (assigned or in progress). */
+    public static boolean canShare(Task task) {
+        return task != null && (task.getStatus() == com.hotel.workload.task.TaskStatus.ASSIGNED || task.getStatus() == com.hotel.workload.task.TaskStatus.IN_PROGRESS);
+    }
+
+    private static boolean atRisk(Stats stats, CapacityInputs capacity) {
+        return capacity.modelled() && DepartmentCapacity.atRisk(stats.remainingMinutes, stats.capacityStaff, capacity.risk());
+    }
+
+    private static double utilizationForSort(Stats stats, CapacityInputs capacity) {
+        if (!capacity.modelled()) return 0;
+        Double utilization = DepartmentCapacity.utilizationPercent(stats.remainingMinutes, stats.capacityStaff);
+        return utilization == null ? Double.MAX_VALUE : utilization;
+    }
+
+    private static void applyCapacity(List<Stats> all, CapacityInputs capacity) {
+        if (!capacity.modelled()) return;
+        for (Stats stats : all) {
+            stats.remainingMinutes = capacity.remainingMinutes().getOrDefault(stats.department.getCode(), 0);
+            stats.capacityStaff = capacity.eligibleStaff().getOrDefault(stats.department.getCode(), 0);
+            stats.shareable.clear();
+            stats.shareable.addAll(capacity.shareable().getOrDefault(stats.department.getCode(), List.of()));
+        }
+    }
+
     /**
-     * The department that can best lend one more person: after lending it must still have at least one free, available
-     * staff member and enough free staff for every task waiting in it. A person already suggested to another department
-     * has been removed from its lists.
+     * The department that can best lend one more person: after lending it must still have at least one free, available staff member and enough
+     * free staff for every task waiting in it, and (with capacity inputs) its own utilization must stay below the limit with one person fewer.
+     * A person already suggested to another department has been removed from its lists and its capacity already reduced.
      */
-    private static Stats bestDonor(List<Stats> all, Stats receiver) {
+    private static Stats bestDonor(List<Stats> all, Stats receiver, CapacityInputs capacity) {
         Stats best = null;
         int bestSpare = Integer.MIN_VALUE;
         for (Stats candidate : all) {
@@ -338,6 +418,8 @@ public final class WorkloadRecommendationEngine {
             int freeAfter = free - 1;
             // Reserve rule: at least one free person must remain, whether or not anything is waiting
             if (candidate.lendable.isEmpty() || freeAfter < Math.max(1, candidate.waitingCount())) continue;
+            // Capacity rule: lending must not push the donor itself to or past its limit (that would only move the overload)
+            if (capacity.modelled() && DepartmentCapacity.exceedsLimit(candidate.remainingMinutes, candidate.capacityStaff - 1, capacity.risk())) continue;
             int spare = freeAfter - candidate.waitingCount();
             if (spare > bestSpare || (spare == bestSpare && best != null
                     && candidate.department.getName().compareToIgnoreCase(best.department.getName()) < 0)) {
@@ -358,7 +440,14 @@ public final class WorkloadRecommendationEngine {
         return critical ? Severity.CRITICAL : high ? Severity.HIGH : Severity.MODERATE;
     }
 
-    private static Pressure pressure(Stats stats, LocalDate today) {
+    /** As above, and a department that is at risk with more work than a full shift of its people can do is at least HIGH. */
+    private static Severity severity(Stats stats, LocalDate today, CapacityInputs capacity) {
+        Severity base = severity(stats, today);
+        if (base == Severity.MODERATE && atRisk(stats, capacity) && DepartmentCapacity.atOrAbove(stats.remainingMinutes, stats.capacityStaff, 100)) return Severity.HIGH;
+        return base;
+    }
+
+    private static Pressure pressure(Stats stats, LocalDate today, CapacityInputs capacity) {
         int urgentOrHigh = 0;
         int dueSoon = 0;
         int noDuration = 0;
@@ -367,9 +456,16 @@ public final class WorkloadRecommendationEngine {
             if (task.getDueDate() != null && !task.getDueDate().isAfter(today.plusDays(DUE_SOON_DAYS))) dueSoon++;
             if (task.getEstimatedDuration() == null) noDuration++;
         }
+        boolean modelled = capacity.modelled();
+        boolean riskDriven = atRisk(stats, capacity);
+        String need = stats.uncovered() > 0 ? (riskDriven ? "BOTH" : "UNCOVERED_TASKS") : "HIGH_UTILIZATION";
         return new Pressure(stats.waiting.size(), minutes(stats.waiting), urgentOrHigh, dueSoon,
                 stats.activeStaff.size(), stats.availableStaff.size(), stats.freeStaff.size(),
-                stats.uncovered(), minutes(stats.uncoveredTasks()), noDuration);
+                stats.uncovered(), minutes(stats.uncoveredTasks()), noDuration,
+                modelled ? stats.remainingMinutes : 0, modelled ? stats.capacityStaff : 0, modelled ? DepartmentCapacity.capacityMinutes(stats.capacityStaff) : 0,
+                modelled ? DepartmentCapacity.utilizationPercent(stats.remainingMinutes, stats.capacityStaff) : null,
+                modelled ? DepartmentCapacity.level(stats.remainingMinutes, stats.capacityStaff, capacity.risk()) : null,
+                riskDriven, modelled && DepartmentCapacity.noCapacity(stats.remainingMinutes, stats.capacityStaff), need);
     }
 
     /**
@@ -391,11 +487,38 @@ public final class WorkloadRecommendationEngine {
         return total;
     }
 
-    private static List<String> receiverReasons(Stats stats, Pressure p) {
+    private static String pct(Double value) {
+        if (value == null) return "n/a";
+        return value == Math.rint(value) ? String.valueOf(value.longValue()) : String.valueOf(value);
+    }
+
+    private static String limitText(CapacityInputs capacity) {
+        return capacity.risk().enabled() ? capacity.risk().thresholdPercent() + "%" : "a full shift per person";
+    }
+
+    private static String receiverProjection(Stats receiver, Double before, Double after, Boolean stillAtRisk, CapacityInputs capacity) {
+        return "With this person " + receiver.department.getName() + " goes from " + pct(before) + "% to " + pct(after) + "% of its capacity ("
+                + (Boolean.TRUE.equals(stillAtRisk) ? "still at or above" : "below") + " the " + limitText(capacity) + " limit).";
+    }
+
+    private static List<String> receiverReasons(Stats stats, Pressure p, CapacityInputs capacity) {
         List<String> reasons = new ArrayList<>();
-        reasons.add(plural(p.waitingTasks(), "task") + " waiting for someone (" + p.waitingMinutes() + " min) and "
-                + p.freeStaff() + " available staff with no active task, so " + plural(p.uncoveredTasks(), "task")
-                + " (" + p.uncoveredMinutes() + " min) cannot be picked up by the department's own staff.");
+        if (p.uncoveredTasks() > 0) {
+            reasons.add(plural(p.waitingTasks(), "task") + " waiting for someone (" + p.waitingMinutes() + " min) and "
+                    + p.freeStaff() + " available staff with no active task, so " + plural(p.uncoveredTasks(), "task")
+                    + " (" + p.uncoveredMinutes() + " min) cannot be picked up by the department's own staff.");
+        } else {
+            reasons.add("Its own free staff could take its " + plural(p.waitingTasks(), "waiting task") + ", but its workload is too high for the staff it has.");
+        }
+        if (p.atRisk()) {
+            if (p.noCapacity()) {
+                reasons.add("It has " + p.remainingMinutes() + " min of work and no eligible staff to do it.");
+            } else {
+                reasons.add("Utilization is " + pct(p.utilizationPercent()) + "%: " + p.remainingMinutes() + " min of work against " + p.capacityMinutes()
+                        + " min of capacity (" + plural(p.eligibleStaff(), "eligible person") + " x " + DepartmentCapacity.STANDARD_SHIFT_MINUTES
+                        + " min), at or above the " + limitText(capacity) + " limit.");
+            }
+        }
         if (p.urgentOrHighTasks() > 0) reasons.add(plural(p.urgentOrHighTasks(), "waiting task") + " with High or Urgent priority.");
         if (p.overdueOrDueSoonTasks() > 0) reasons.add(plural(p.overdueOrDueSoonTasks(), "waiting task") + " overdue or due within a day.");
         if (p.tasksWithoutDuration() > 0) {
@@ -404,11 +527,17 @@ public final class WorkloadRecommendationEngine {
         return reasons;
     }
 
-    private static List<String> suggestionReasons(Stats donor, int freeBefore, Task covers) {
+    private static List<String> suggestionReasons(Stats donor, int freeBefore, Task covers, Stats receiver, Double donorUtilizationAfter,
+                                                  Double receiverUtilizationBefore, Double receiverUtilizationAfter, Boolean stillAtRisk, CapacityInputs capacity) {
         List<String> reasons = new ArrayList<>();
         reasons.add(donor.department.getName() + " has " + freeBefore + " available staff with no active task and "
                 + plural(donor.waitingCount(), "waiting task") + "; lending one leaves " + (freeBefore - 1)
                 + " free, so it keeps a free person in reserve and still covers its own waiting work.");
+        if (capacity.modelled()) {
+            reasons.add(donor.department.getName() + " stays at " + pct(donorUtilizationAfter) + "% of its capacity after lending, below the "
+                    + limitText(capacity) + " limit.");
+            reasons.add(receiverProjection(receiver, receiverUtilizationBefore, receiverUtilizationAfter, stillAtRisk, capacity));
+        }
         reasons.add(couldTakeReason(covers));
         return reasons;
     }
@@ -417,6 +546,9 @@ public final class WorkloadRecommendationEngine {
         String detail = (covers.getPriority() == null ? "" : covers.getPriority() + " priority, ")
                 + (covers.getEstimatedDuration() == null ? "no estimated duration" : covers.getEstimatedDuration() + " min")
                 + (covers.getDueDate() == null ? "" : ", due " + covers.getDueDate());
+        if (covers.getStatus() != com.hotel.workload.task.TaskStatus.PENDING) {
+            return "Could join \"" + covers.getTitle() + "\" (" + detail + "), a task its own staff already hold, if support were arranged.";
+        }
         return "Could take \"" + covers.getTitle() + "\" (" + detail + ") if support were arranged.";
     }
 
@@ -434,5 +566,45 @@ public final class WorkloadRecommendationEngine {
 
     private static String plural(int count, String noun) {
         return count + " " + noun + (count == 1 ? "" : "s");
+    }
+
+    /**
+     * Each department's remaining task minutes and capacity staff (see DepartmentCapacity) plus the risk rule: what the engine needs to judge
+     * departments by capacity. {@link #NONE} means "no capacity model": only the original uncovered-task rule applies.
+     */
+    public record CapacityInputs(boolean modelled, Map<String, Integer> remainingMinutes, Map<String, Integer> eligibleStaff, DepartmentCapacity.Risk risk,
+                                 Map<String, List<Task>> shareable) {
+        public static final CapacityInputs NONE = new CapacityInputs(false, Map.of(), Map.of(), DepartmentCapacity.Risk.OFF, Map.of());
+
+        public CapacityInputs(boolean modelled, Map<String, Integer> remainingMinutes, Map<String, Integer> eligibleStaff, DepartmentCapacity.Risk risk) {
+            this(modelled, remainingMinutes, eligibleStaff, risk, Map.of());
+        }
+
+        /** The same inputs with the tasks (by department code) a helper may join: held by the department's own staff and without a helper yet. */
+        public CapacityInputs withShareable(Map<String, List<Task>> shareable) {
+            return new CapacityInputs(modelled, remainingMinutes, eligibleStaff, risk, shareable == null ? Map.of() : shareable);
+        }
+
+        public static CapacityInputs of(Map<String, Integer> remainingMinutes, Map<String, Integer> eligibleStaff, DepartmentCapacity.Risk risk) {
+            return new CapacityInputs(true, remainingMinutes, eligibleStaff, risk == null ? DepartmentCapacity.Risk.OFF : risk);
+        }
+    }
+
+    // The original signatures: no capacity model, so only the uncovered-task rule applies (unchanged behaviour)
+    public static WorkloadRecommendationsDto recommend(List<Department> departments, List<Staff> staff, List<Task> activeTasks,
+                                                       List<Assignment> activeAssignments, LocalDate today, LocalDateTime now) {
+        return recommend(departments, staff, activeTasks, activeAssignments, today, now, CapacityInputs.NONE);
+    }
+
+    public static WorkloadRecommendationsDto recommendForReceiver(Department receiver, List<Department> departments, List<Staff> staff,
+                                                                  List<Task> receiverWaitingTasks, Map<String, Integer> waitingCountByDepartment,
+                                                                  Set<UUID> busyStaff, LocalDate today, LocalDateTime now) {
+        return recommendForReceiver(receiver, departments, staff, receiverWaitingTasks, waitingCountByDepartment, busyStaff, today, now, CapacityInputs.NONE);
+    }
+
+    public static WorkloadRecommendationsDto recommendForManager(java.util.Collection<Department> managed, List<Department> departments, List<Staff> staff,
+                                                                 Map<String, List<Task>> waitingTasksByManagedDepartment, Map<String, Integer> waitingCountByDepartment,
+                                                                 Set<UUID> busyStaff, LocalDate today, LocalDateTime now) {
+        return recommendForManager(managed, departments, staff, waitingTasksByManagedDepartment, waitingCountByDepartment, busyStaff, today, now, CapacityInputs.NONE);
     }
 }
