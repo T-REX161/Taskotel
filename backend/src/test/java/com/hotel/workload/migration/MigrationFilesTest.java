@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V25 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V27 with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -94,7 +94,9 @@ public class MigrationFilesTest {
                 "V22__manager_view_access.sql",
                 "V23__manager_view_access_full_management.sql",
                 "V24__workload_alert_state.sql",
-                "V25__user_role_management.sql"), names);
+                "V25__user_role_management.sql",
+                "V26__assignment_assigned_by.sql",
+                "V27__task_reminder_log.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -102,7 +104,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25), versions, "Versions must be 1 to 25 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27), versions, "Versions must be 1 to 27 with no gaps or duplicates");
     }
 
     @Test
@@ -234,6 +236,46 @@ public class MigrationFilesTest {
         assertFalse(Pattern.compile("(?i)\\b(DROP|UPDATE|DELETE|INSERT|TRUNCATE)\\b").matcher(executable).find(), "no existing table or row is changed or removed");
         assertTrue(executable.contains("previous_role IN ('ADMIN', 'MANAGER', 'STAFF')") && executable.contains("previous_role <> new_role"));
         assertTrue(file.contains("Not applied automatically") && file.contains("Rollback") && file.contains("psql -1 -v ON_ERROR_STOP=1"));
+    }
+
+    @Test
+    @DisplayName("V26 only adds the nullable assigned_by_user_id column: guarded, lock timeout, no data changed, rollback stated, not applied automatically; its test schema matches")
+    public void testV26AddsAssignedByOnly() throws IOException {
+        String file = read(MIGRATIONS.resolve("V26__assignment_assigned_by.sql"));
+        String executable = withoutLineComments(file);
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertEquals(1, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "exactly one altered table");
+        assertFalse(Pattern.compile("(?i)\\b(CREATE|DROP|UPDATE|DELETE|INSERT|TRUNCATE|NOT\\s+NULL|DEFAULT|REFERENCES)\\b").matcher(executable).find());
+        assertTrue(executable.contains("ALTER TABLE assignments ADD COLUMN assigned_by_user_id UUID;"), "nullable: every existing row stays valid");
+        assertTrue(file.contains("Not applied automatically") && file.contains("Rollback") && file.contains("psql -1 -v ON_ERROR_STOP=1"));
+        assertTrue(withoutLineComments(read(Path.of("src/test/resources/db/h2-assignment-assigned-by.sql"))).contains("assigned_by_user_id UUID"));
+        for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
+            assertTrue(read(Path.of("src/test/java/com/hotel/workload/config").resolve(test)).contains("classpath:db/h2-assignment-assigned-by.sql"), test);
+        }
+    }
+
+    @Test
+    @DisplayName("V27 only adds the task reminder log table: guarded, lock timeout, unique key, cascading foreign key to tasks, CHECKs, rollback stated, not applied automatically; its test schema matches")
+    public void testV27AddsTheReminderLogOnly() throws IOException {
+        String file = read(MIGRATIONS.resolve("V27__task_reminder_log.sql"));
+        String executable = withoutLineComments(file);
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertTrue(executable.indexOf("to_regclass") >= 0 && executable.indexOf("to_regclass") < executable.indexOf("CREATE TABLE"), "it checks before creating anything");
+        assertEquals(1, Pattern.compile("(?i)CREATE TABLE").matcher(executable).results().count(), "exactly one new table");
+        assertEquals(0, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "no existing table is altered");
+        assertFalse(Pattern.compile("(?i)\\b(DROP|UPDATE|DELETE|INSERT|TRUNCATE)\\b").matcher(executable.replace("ON DELETE CASCADE", "")).find(), "no existing table or row is changed or removed");
+        assertTrue(executable.contains("UNIQUE (task_id, recipient_user_id, kind, slot, due_key)"));
+        assertTrue(executable.contains("FOREIGN KEY (task_id) REFERENCES tasks (id) ON DELETE CASCADE"));
+        assertTrue(executable.contains("status IN ('CLAIMED', 'SENT', 'FAILED', 'SKIPPED', 'EXPIRED', 'UNKNOWN')") && executable.contains("kind IN ('DUE_24H', 'DUE_2H', 'DUE_TODAY', 'OVERDUE')"));
+        assertTrue(file.contains("Not applied automatically") && file.contains("Rollback") && file.contains("psql -1 -v ON_ERROR_STOP=1"));
+        String h2 = withoutLineComments(read(Path.of("src/test/resources/db/h2-task-reminder-log.sql")));
+        for (String part : new String[] {"UNIQUE (task_id, recipient_user_id, kind, slot, due_key)", "ON DELETE CASCADE", "status IN ('CLAIMED', 'SENT', 'FAILED', 'SKIPPED', 'EXPIRED', 'UNKNOWN')",
+                "due_key            VARCHAR(32) NOT NULL", "recipient_user_id  UUID        NOT NULL"}) {
+            assertTrue(h2.contains(part) && executable.contains(part), part);
+        }
+        for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
+            assertTrue(read(Path.of("src/test/java/com/hotel/workload/config").resolve(test)).contains("classpath:db/h2-task-reminder-log.sql"), test);
+        }
     }
 
     @Test

@@ -13,6 +13,10 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     long countByStatus(TaskStatus status);
     List<Task> findByStatusIn(Collection<TaskStatus> statuses);
 
+    /** Open tasks (in one of these statuses) with a due date on or before {@code latest}: the candidates for task reminders. */
+    @Query("SELECT t FROM Task t LEFT JOIN FETCH t.department WHERE t.dueDate IS NOT NULL AND t.dueDate <= :latest AND t.status IN :statuses ORDER BY t.id")
+    List<Task> findOpenDueOnOrBefore(@Param("latest") java.time.LocalDate latest, @Param("statuses") Collection<TaskStatus> statuses);
+
     /** Locks these tasks (in id order) until the transaction ends. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT t FROM Task t WHERE t.id IN :ids ORDER BY t.id")

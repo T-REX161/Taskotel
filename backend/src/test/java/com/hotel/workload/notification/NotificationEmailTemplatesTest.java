@@ -102,4 +102,39 @@ public class NotificationEmailTemplatesTest {
         assertFalse(content.text().contains("http") || content.html().contains("href"), "no link when no application address is configured");
         assertFalse(NotificationEmailTemplates.taskStatusChanged(task("T", null), "Pending", "Assigned", null).text().contains("Changed by"));
     }
+
+    @Test
+    @DisplayName("The completion email is its own template: 'Task Completed' subject and heading, status Completed, the task facts and who completed it; no previous/new status; same Taskotel layout as the status email")
+    public void completionTemplate() {
+        EmailContent content = NotificationEmailTemplates.taskCompleted(task("Deep clean 402", null), "Mia Chen (Staff)");
+        assertEquals("Task Completed: Deep clean 402", content.subject());
+        for (String fragment : new String[] {"A task has been completed!", "The following task has been successfully completed in Taskotel.", "Task: Deep clean 402",
+                "Status: Completed", "Priority: HIGH", "Department: Housekeeping", "Due: 2027-01-15 17:30", "Completed by: Mia Chen (Staff)"}) {
+            assertTrue(content.text().contains(fragment), fragment + " in:\n" + content.text());
+        }
+        for (String forbidden : new String[] {"Previous status", "New status", "A task's status was updated", "The status of a task you follow", "Changed by"}) {
+            assertFalse(content.text().contains(forbidden) || content.html().contains(forbidden), forbidden);
+        }
+        assertTrue(content.text().contains("Regards,\nTaskotel Team") && content.html().contains("<table"));
+        assertFalse(content.text().contains("http") || content.html().contains("href"), "no link when no application address is configured");
+
+        // the same branded layout as the ordinary status email: everything before the heading is identical
+        EmailContent status = NotificationEmailTemplates.taskStatusChanged(task("Deep clean 402", null), "Assigned", "In Progress", null);
+        assertEquals(status.html().substring(0, status.html().indexOf(NotificationEmailTemplates.escape("A task's status was updated"))),
+                content.html().substring(0, content.html().indexOf("A task has been completed!")), "same header, typography and spacing");
+        assertTrue(content.html().contains("Taskotel"));
+    }
+
+    @Test
+    @DisplayName("The completion email escapes everything dynamic, keeps its subject on one line, shortens a long title, and leaves out 'Completed by' when nobody is known")
+    public void completionTemplateIsSafe() {
+        EmailContent hostile = NotificationEmailTemplates.taskCompleted(task("<b>Fix</b>\r\nBcc: x@evil.test", null), "Mia <script> (Staff)");
+        assertTrue(hostile.subject().startsWith("Task Completed: "));
+        assertFalse(hostile.subject().contains("\n") || hostile.subject().contains("\r"));
+        assertFalse(hostile.html().contains("<script>") || hostile.html().contains("<b>Fix</b>"));
+        assertTrue(hostile.html().contains("&lt;script&gt;"));
+        assertTrue(NotificationEmailTemplates.taskCompleted(task("T".repeat(300), null), "x").subject().length() < 120, "a very long title is shortened in the subject");
+        assertFalse(NotificationEmailTemplates.taskCompleted(task("T", null), null).text().contains("Completed by"));
+        assertFalse(NotificationEmailTemplates.taskCompleted(task("T", null), "  ").text().contains("Completed by"));
+    }
 }

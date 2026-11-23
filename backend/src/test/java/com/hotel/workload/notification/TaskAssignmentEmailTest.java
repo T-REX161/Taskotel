@@ -179,6 +179,12 @@ public class TaskAssignmentEmailTest {
         }
     }
 
+    private String mgrEmail() { return userRepository.findByUsername("n1_mgr").orElseThrow().getEmail(); }
+
+    private List<String> sorted(String... addresses) { return java.util.Arrays.stream(addresses).sorted().toList(); }
+
+    private List<String> sortedRecipients() { return recipients().stream().sorted().toList(); }
+
     private static String email(Staff staff) {
         return staff.getUser().getEmail();
     }
@@ -192,15 +198,17 @@ public class TaskAssignmentEmailTest {
         MvcResult result = assignAs("n1_admin", "ADMIN", task, s1);
         assertEquals(201, result.getResponse().getStatus(), result.getResponse().getContentAsString());
 
-        assertEquals(List.of(email(s1)), recipients(), "exactly one email, to the assignee");
+        assertEquals(sorted(email(s1), mgrEmail(), admin.getEmail()), sortedRecipients(), "the assignee, the department Manager and the Admin who assigned: one email each");
+        assertEquals(email(s1), recipients().get(0), "the assignee gets the assignee email");
         String[] mail = sent().get(0);
         assertEquals("Taskotel - New task assigned: Deep clean room 402", mail[1]);
         assertTrue(mail[2].contains("Task: Deep clean room 402") && mail[2].contains("Priority: HIGH") && mail[2].contains("Department: " + home.getName()), mail[2]);
         assertTrue(mail[2].contains("Estimated duration: 45 minutes") && mail[2].contains("Regards,\nTaskotel Team"));
         assertTrue(mail[3].contains("Taskotel") && mail[3].contains("Deep clean room 402") && mail[3].contains("<table"), "branded HTML");
-        // no other account is named or emailed: not the Admin, not the department's Manager, not the other department
-        assertFalse(recipients().contains(admin.getEmail()));
+        // nobody unrelated is emailed: not the other department's Staff or Manager
+
         assertFalse(recipients().contains(email(outsider)));
+        assertFalse(recipients().contains(userRepository.findByUsername("n1_mgr_other").orElseThrow().getEmail()));
     }
 
     @Test
@@ -208,7 +216,8 @@ public class TaskAssignmentEmailTest {
     public void managerAssignmentAndStaffRefusal() throws Exception {
         Task task = task("Restock minibar", home);
         assertEquals(201, assignAs("n1_mgr", "MANAGER", task, s1).getResponse().getStatus());
-        assertEquals(List.of(email(s1)), recipients());
+        assertEquals(sorted(email(s1), mgrEmail()), sortedRecipients(), "the assignee, and the assigning Manager (who is also the department Manager) once");
+        assertFalse(recipients().contains(admin.getEmail()), "an Admin who did not assign is not told");
 
         Mockito.clearInvocations(emailService);
         Task second = task("Polish lobby", home);
@@ -234,9 +243,9 @@ public class TaskAssignmentEmailTest {
         MvcResult result = call(post("/api/assignments"), "n1_admin", "ADMIN", body);
         assertTrue(result.getResponse().getStatus() / 100 == 2, result.getResponse().getContentAsString());
         List<String> to = recipients();
-        assertEquals(2, to.size());
-        assertTrue(to.containsAll(List.of(email(s1), email(s2))));
-        assertEquals(2, to.stream().distinct().count(), "no duplicates");
+        assertEquals(4, to.size());
+        assertTrue(to.containsAll(List.of(email(s1), email(s2), mgrEmail(), admin.getEmail())));
+        assertEquals(4, to.stream().distinct().count(), "no duplicates");
     }
 
     // ── preferences ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -248,7 +257,8 @@ public class TaskAssignmentEmailTest {
         setPreference(s1, NotificationCategory.TASK_STATUS, true);
         Task task = task("Quiet task", home);
         assertEquals(201, assignAs("n1_admin", "ADMIN", task, s1).getResponse().getStatus());
-        assertTrue(sent().isEmpty());
+        assertFalse(recipients().contains(email(s1)), "the assignee opted out");
+        assertEquals(sorted(mgrEmail(), admin.getEmail()), sortedRecipients(), "the Manager and the assigning Admin keep their own preference");
     }
 
     @Test
@@ -257,7 +267,7 @@ public class TaskAssignmentEmailTest {
         setPreference(s2, NotificationCategory.TASK_ASSIGNED, false); // someone else's choice
         Task task = task("Default task", home);
         assertEquals(201, assignAs("n1_admin", "ADMIN", task, s1).getResponse().getStatus());
-        assertEquals(List.of(email(s1)), recipients());
+        assertEquals(sorted(email(s1), mgrEmail(), admin.getEmail()), sortedRecipients());
     }
 
     // ── reassignment ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -273,7 +283,8 @@ public class TaskAssignmentEmailTest {
         assertEquals(200, result.getResponse().getStatus(), result.getResponse().getContentAsString());
 
         List<String[]> mails = sent();
-        assertEquals(2, mails.size());
+        assertEquals(3, mails.size(), "new assignee, previous assignee, and the Manager (who is the actor and the department Manager) once");
+        assertTrue(recipients().contains(mgrEmail()) && !recipients().contains(admin.getEmail()), "the Admin did not make this reassignment");
         String[] toNew = mails.stream().filter(m -> m[0].equals(email(s2))).findFirst().orElseThrow();
         String[] toPrevious = mails.stream().filter(m -> m[0].equals(email(s1))).findFirst().orElseThrow();
         assertEquals("Taskotel - New task assigned: Move me", toNew[1]);
@@ -291,7 +302,7 @@ public class TaskAssignmentEmailTest {
         setPreference(s1, NotificationCategory.TASK_ASSIGNED, false); // the previous assignee opted out
         Mockito.clearInvocations(emailService);
         assertEquals(200, call(put("/api/assignments/" + assignmentId), "n1_admin", "ADMIN", "{\"staffId\":\"" + s2.getId() + "\"}").getResponse().getStatus());
-        assertEquals(List.of(email(s2)), recipients(), "only the new assignee");
+        assertEquals(sorted(email(s2), mgrEmail(), admin.getEmail()), sortedRecipients(), "the new assignee, the Manager and the acting Admin; the previous assignee opted out");
 
         // and the other way round: the new assignee opted out, the previous one is still told
         UUID second = assignmentIdOf(assignAs("n1_admin", "ADMIN", task("Pref move 2", home), s3));
@@ -299,7 +310,7 @@ public class TaskAssignmentEmailTest {
         setPreference(s2, NotificationCategory.TASK_ASSIGNED, false);
         Mockito.clearInvocations(emailService);
         assertEquals(200, call(put("/api/assignments/" + second), "n1_admin", "ADMIN", "{\"staffId\":\"" + s1.getId() + "\"}").getResponse().getStatus());
-        assertEquals(List.of(email(s1), email(s3)).stream().sorted().toList(), recipients().stream().sorted().toList());
+        assertEquals(sorted(email(s1), email(s3), mgrEmail(), admin.getEmail()), sortedRecipients());
     }
 
     @Test
@@ -352,7 +363,7 @@ public class TaskAssignmentEmailTest {
         account.setEmail("");
         userRepository.saveAndFlush(account);
         assertEquals(201, assignAs("n1_admin", "ADMIN", task("No address", home), s1).getResponse().getStatus());
-        assertTrue(sent().isEmpty());
+        assertEquals(sorted(mgrEmail(), admin.getEmail()), sortedRecipients(), "only the assignee is skipped");
     }
 
     @Test
@@ -362,6 +373,6 @@ public class TaskAssignmentEmailTest {
         account.setEmailVerified(false);
         userRepository.saveAndFlush(account);
         assertEquals(201, assignAs("n1_admin", "ADMIN", task("Unverified assignee", home), s1).getResponse().getStatus());
-        assertTrue(sent().isEmpty());
+        assertEquals(sorted(mgrEmail(), admin.getEmail()), sortedRecipients(), "only the assignee is skipped");
     }
 }

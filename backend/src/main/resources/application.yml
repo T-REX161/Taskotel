@@ -87,6 +87,12 @@ taskotel:
   notifications:
     async: ${NOTIFICATIONS_ASYNC:true}
     queue-capacity: ${NOTIFICATIONS_QUEUE_CAPACITY:1000}
+  # Task reminder emails (see docs/TASK_REMINDERS.md). OFF by default: with false no scheduler exists and nothing is ever sent. Turn it on only
+  # after migration V27 has been applied. Every reminder calculation uses Asia/Kolkata. A reminder is sent only while its moment is at most
+  # grace-minutes in the past (default 30, two scheduler runs); older ones are dropped, never sent late.
+  reminders:
+    enabled: ${TASKOTEL_REMINDERS_ENABLED:false}
+    grace-minutes: ${TASKOTEL_REMINDERS_GRACE_MINUTES:30}
 
 auth:
   # How long the temporary password given to a new account stays valid, in hours (0 = no limit). After that the user signs in through
