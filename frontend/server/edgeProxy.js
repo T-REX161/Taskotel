@@ -27,11 +27,14 @@ export function sign(secret, seconds, address) {
 
 /**
  * The visitor's address as Vercel reports it: the LAST X-Forwarded-For entry (Vercel overwrites the header with the visitor's address; if an
- * entry were ever appended instead, the last one is the one Vercel's own edge wrote), else X-Real-IP. Null when neither is a valid address.
+ * entry were ever appended instead, the last one is the one Vercel's own edge wrote). Null when the header is missing or that entry is not a
+ * valid address; the request is then forwarded unsigned. No other header is ever consulted: X-Real-IP, True-Client-IP and the like can be
+ * sent by a visitor, so they must never establish an identity.
  */
 export function visitorAddress(headers) {
   const forwarded = String(headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-  const candidate = forwarded.length > 0 ? forwarded[forwarded.length - 1] : String(headers['x-real-ip'] ?? '').trim();
+  if (forwarded.length === 0) return null;
+  const candidate = forwarded[forwarded.length - 1];
   return net.isIP(candidate) !== 0 ? candidate : null;
 }
 

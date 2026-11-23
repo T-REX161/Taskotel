@@ -51,9 +51,17 @@ describe('visitor address', () => {
     assert.equal(visitorAddress({ 'x-forwarded-for': '2001:db8::1' }), '2001:db8::1');
   });
 
-  it('falls back to X-Real-IP only when there is no X-Forwarded-For', () => {
-    assert.equal(visitorAddress({ 'x-real-ip': '203.0.113.9' }), '203.0.113.9');
-    assert.equal(visitorAddress({ 'x-forwarded-for': '198.51.100.1', 'x-real-ip': '203.0.113.9' }), '198.51.100.1');
+  it('never uses X-Real-IP or any other header: without X-Forwarded-For there is no visitor address', () => {
+    assert.equal(visitorAddress({ 'x-real-ip': '203.0.113.9' }), null);
+    assert.equal(visitorAddress({ 'true-client-ip': '203.0.113.9', 'cf-connecting-ip': '203.0.113.9', forwarded: 'for=203.0.113.9' }), null);
+    assert.equal(visitorAddress({ 'x-forwarded-for': '', 'x-real-ip': '203.0.113.9' }), null);
+    assert.equal(visitorAddress({ 'x-forwarded-for': ' , ', 'x-real-ip': '203.0.113.9' }), null);
+  });
+
+  it('a spoofed X-Real-IP cannot override a valid X-Forwarded-For, nor stand in for an invalid one', () => {
+    assert.equal(visitorAddress({ 'x-forwarded-for': '198.51.100.1', 'x-real-ip': '6.6.6.6' }), '198.51.100.1');
+    assert.equal(visitorAddress({ 'x-forwarded-for': 'not-an-address', 'x-real-ip': '6.6.6.6' }), null);
+    assert.equal(visitorAddress({ 'x-forwarded-for': '6.6.6.6, bad', 'x-real-ip': '198.51.100.1' }), null);
   });
 
   it('refuses anything that is not an address', () => {
@@ -117,6 +125,26 @@ describe('the edge handler', () => {
   it('sends no assertion when no valid visitor address is available', async () => {
     const { sent } = await call({}, { headers: { 'x-forwarded-for': 'not-an-address' }, body: {} });
     assert.equal(sent[0].init.headers[ASSERTION_HEADER], undefined);
+  });
+
+  it('a missing X-Forwarded-For produces no signed assertion, but the request is still forwarded (unsigned)', async () => {
+    const { res, sent } = await call({}, { headers: { 'content-type': 'application/json' }, body: { username: 'u', password: 'p' } });
+    assert.equal(res.statusCode, 200);
+    assert.equal(sent.length, 1);
+    assert.equal(sent[0].init.headers[ASSERTION_HEADER], undefined);
+  });
+
+  it('X-Real-IP alone cannot establish the client identity, and is not forwarded either', async () => {
+    const { res, sent } = await call({}, { headers: { 'x-real-ip': '198.51.100.7', 'true-client-ip': '198.51.100.7' }, body: {} });
+    assert.equal(res.statusCode, 200);
+    assert.equal(sent[0].init.headers[ASSERTION_HEADER], undefined);
+    assert.equal(sent[0].init.headers['x-real-ip'], undefined);
+  });
+
+  it('a spoofed X-Real-IP cannot override a valid X-Forwarded-For: the signed address is the X-Forwarded-For one', async () => {
+    const { sent } = await call({}, { headers: { 'x-forwarded-for': '198.51.100.7', 'x-real-ip': '6.6.6.6' }, body: {} });
+    assert.equal(sent[0].init.headers[ASSERTION_HEADER], buildAssertion(SECRET, '198.51.100.7', NOW));
+    assert.doesNotMatch(sent[0].init.headers[ASSERTION_HEADER], /6\.6\.6\.6/);
   });
 
   it('refuses other methods without calling the backend', async () => {
