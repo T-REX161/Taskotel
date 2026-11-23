@@ -423,9 +423,12 @@ public class TaskStatusEmailTest {
         Task task = task("To assign", home, TaskStatus.PENDING);
         MvcResult result = call(post("/api/assignments"), "n2_admin", "ADMIN", "{\"taskId\":\"" + task.getId() + "\",\"staffId\":\"" + s1.getId() + "\"}");
         assertEquals(201, result.getResponse().getStatus(), result.getResponse().getContentAsString());
-        assertEquals(mails("n2_s1"), recipients());
-        assertEquals(1, sent().size());
-        assertTrue(sent().get(0)[1].startsWith("Taskotel - New task assigned"), sent().get(0)[1]);
+        // The assignee, the department's Managers and the Admin who assigned are told about the ASSIGNMENT; none of it is a status email
+        assertEquals(mails("n2_s1", "n2_mgr_home", "n2_mgr_grant", "n2_admin"), recipients());
+        assertEquals(4, sent().size());
+        assertTrue(sent().stream().allMatch(m -> m[1].startsWith("Taskotel - New task assigned") || m[1].startsWith("Taskotel - Task assigned")),
+                "no status email");
+        assertTrue(sent().stream().noneMatch(m -> m[1].contains("status updated")));
     }
 
     @Test
@@ -452,6 +455,113 @@ public class TaskStatusEmailTest {
         Task task = task("Unverified", home, TaskStatus.ASSIGNED, s1);
         assertEquals(200, edit("n2_admin", "ADMIN", task, TaskStatus.IN_PROGRESS).getResponse().getStatus());
         assertEquals(mails("n2_mgr_home", "n2_mgr_grant"), recipients());
+    }
+
+    // ── the completion email ─────────────────────────────────────────────────────────────────────────────────────
+
+    private void displayName(String username, String name) {
+        User account = userRepository.findByUsername(username).orElseThrow();
+        account.setDisplayName(name);
+        userRepository.saveAndFlush(account);
+    }
+
+    private static void assertIsCompletionEmail(String[] m, String title) {
+        assertEquals("Task Completed: " + title, m[1]);
+        for (String fragment : new String[] {"A task has been completed!", "The following task has been successfully completed in Taskotel.",
+                "Task: " + title, "Status: Completed", "Priority: HIGH", "Due: 2027-01-15"}) {
+            assertTrue(m[2].contains(fragment), fragment + " in:\n" + m[2]);
+        }
+        for (String forbidden : new String[] {"Previous status", "New status", "A task's status was updated", "Changed by"}) {
+            assertFalse(m[2].contains(forbidden) || m[3].contains(forbidden), forbidden + " must not appear in a completion email");
+        }
+        assertTrue(m[3].contains("Taskotel") && m[3].contains("<table"), "the usual Taskotel layout");
+    }
+
+    @Test
+    @DisplayName("Ordinary status updates keep the status email; completing the task sends the dedicated completion email instead, to the same people")
+    public void completionIsDifferentFromOrdinaryUpdates() throws Exception {
+        Task task = task("Walk to done", home, TaskStatus.ASSIGNED, s1);
+        assertEquals(200, staffMoves("n2_s1", task, TaskStatus.IN_PROGRESS).getResponse().getStatus());
+        assertEquals(mails("n2_mgr_home", "n2_mgr_grant"), recipients());
+        for (String[] m : sent()) {
+            assertEquals("Taskotel - Task status updated: Walk to done is now In Progress", m[1]);
+            assertTrue(m[2].contains("A task's status was updated") && m[2].contains("Previous status: Assigned") && m[2].contains("New status: In Progress"), m[2]);
+            assertFalse(m[2].contains("A task has been completed!"));
+        }
+
+        Mockito.clearInvocations(emailService);
+        assertEquals(200, staffMoves("n2_s1", task, TaskStatus.COMPLETED).getResponse().getStatus());
+        assertEquals(mails("n2_mgr_home", "n2_mgr_grant"), recipients(), "the same recipients as any status change; the person who completed it is not emailed");
+        for (String[] m : sent()) {
+            assertIsCompletionEmail(m, "Walk to done");
+            assertTrue(m[2].contains("Department: " + home.getName()));
+            assertTrue(m[2].contains("Completed by: " + s1.getName() + " (Staff)"), m[2]);
+        }
+    }
+
+    @Test
+    @DisplayName("Other transitions (cancelling) are still ordinary status updates, not completion emails")
+    public void cancellingIsNotACompletion() throws Exception {
+        Task task = task("Called off", home, TaskStatus.ASSIGNED, s1);
+        assertEquals(200, edit("n2_admin", "ADMIN", task, TaskStatus.CANCELLED).getResponse().getStatus());
+        assertEquals(mails("n2_s1", "n2_mgr_home", "n2_mgr_grant"), recipients());
+        for (String[] m : sent()) {
+            assertEquals("Taskotel - Task status updated: Called off is now Cancelled", m[1]);
+            assertTrue(m[2].contains("Previous status: Assigned") && m[2].contains("New status: Cancelled"));
+            assertFalse(m[2].contains("A task has been completed!") || m[1].startsWith("Task Completed"));
+        }
+    }
+
+    @Test
+    @DisplayName("Completed by an Admin: shown by display name and role ('Dana Admin (Admin)'); with no display name just 'Admin'; the sign-in username is never shown")
+    public void completedByAnAdmin() throws Exception {
+        displayName("n2_admin", "Dana Admin");
+        Task task = task("Admin closes it", home, TaskStatus.IN_PROGRESS, s1);
+        assertEquals(200, edit("n2_admin", "ADMIN", task, TaskStatus.COMPLETED).getResponse().getStatus());
+        assertEquals(mails("n2_s1", "n2_mgr_home", "n2_mgr_grant"), recipients());
+        for (String[] m : sent()) {
+            assertIsCompletionEmail(m, "Admin closes it");
+            assertTrue(m[2].contains("Completed by: Dana Admin (Admin)"), m[2]);
+            assertFalse(m[2].contains("n2_admin") || m[3].contains("n2_admin"), "no account name");
+        }
+
+        displayName("n2_admin", null);
+        Mockito.clearInvocations(emailService);
+        Task second = task("Admin closes another", home, TaskStatus.IN_PROGRESS, s1);
+        assertEquals(200, edit("n2_admin", "ADMIN", second, TaskStatus.COMPLETED).getResponse().getStatus());
+        for (String[] m : sent()) assertTrue(m[2].contains("Completed by: Admin") && !m[2].contains("Admin ("), m[2]);
+    }
+
+    @Test
+    @DisplayName("Completed by a Manager: the profile display name wins over the Staff record name, and the role is shown")
+    public void completedByAManager() throws Exception {
+        String recordName = staffRepository.findByUserUsername("n2_mgr_home").orElseThrow().getName();
+        Task task = task("Manager closes it", home, TaskStatus.IN_PROGRESS, s1);
+        assertEquals(200, edit("n2_mgr_home", "MANAGER", task, TaskStatus.COMPLETED).getResponse().getStatus());
+        assertEquals(mails("n2_s1", "n2_mgr_grant"), recipients(), "the Manager who made the change is not emailed");
+        for (String[] m : sent()) assertTrue(m[2].contains("Completed by: " + recordName + " (Manager)"), m[2]);
+
+        displayName("n2_mgr_home", "Pat Manager");
+        Mockito.clearInvocations(emailService);
+        Task second = task("Manager closes another", home, TaskStatus.IN_PROGRESS, s1);
+        assertEquals(200, edit("n2_mgr_home", "MANAGER", second, TaskStatus.COMPLETED).getResponse().getStatus());
+        for (String[] m : sent()) assertTrue(m[2].contains("Completed by: Pat Manager (Manager)"), m[2]);
+    }
+
+    @Test
+    @DisplayName("Completion honours each recipient's TASK_STATUS preference; nobody gets two completion emails, and completing again sends nothing")
+    public void completionRespectsPreferencesAndSendsOnce() throws Exception {
+        enable("n2_mgr_home", false);
+        Task task = task("Pref and once", home, TaskStatus.IN_PROGRESS, s1);
+        assertEquals(200, staffMoves("n2_s1", task, TaskStatus.COMPLETED).getResponse().getStatus());
+        assertEquals(mails("n2_mgr_grant"), recipients(), "the Manager who switched TASK_STATUS off is not emailed");
+        assertEquals(1, sent().size());
+        assertIsCompletionEmail(sent().get(0), "Pref and once");
+
+        Mockito.clearInvocations(emailService);
+        assertEquals(409, staffMoves("n2_s1", task, TaskStatus.COMPLETED).getResponse().getStatus(), "a finished task cannot be completed again");
+        assertEquals(200, edit("n2_admin", "ADMIN", task, TaskStatus.COMPLETED).getResponse().getStatus(), "an edit that leaves the status as it is");
+        assertTrue(sent().isEmpty(), "no duplicate completion email");
     }
 
     private void verified(String username, boolean value) {

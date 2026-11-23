@@ -67,6 +67,14 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         this.workloadAlerts = workloadAlerts;
     }
 
+    /** Tells the helpers, the department Manager(s) and the confirming Admin by email (after commit). Optional, like the workload alerts. */
+    private com.hotel.workload.notification.TaskEmailNotifier taskEmails;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setTaskEmailNotifier(com.hotel.workload.notification.TaskEmailNotifier taskEmails) {
+        this.taskEmails = taskEmails;
+    }
+
     public SupportAssignmentServiceImpl(DepartmentRepository departmentRepository,
                                         StaffRepository staffRepository,
                                         TaskRepository taskRepository,
@@ -869,6 +877,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                 Assignment assignment = new Assignment();
                 assignment.setTask(pair.task());
                 assignment.setStaff(pair.staff());
+                assignment.setAssignedByUserId(approverId); // the Admin who confirmed the plan is the original assigner
                 assignment = assignmentRepository.save(assignment);
 
                 // A waiting task becomes assigned; a task its own staff already hold keeps its status and owner
@@ -896,6 +905,14 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             // A competing request got there first; the database refused, so nothing from this plan is kept
             throw new SupportPlanException(HttpStatus.CONFLICT, "A task in this plan was assigned by someone else. Review it again.",
                     List.of(new Problem("TASK_ALREADY_ASSIGNED", "A task in this plan was assigned by someone else.", null, null)));
+        }
+        if (taskEmails != null) {
+            // The helpers who just took each task, the Manager(s) of the task's own department and this Admin are told (once each, after commit)
+            Map<UUID, List<Pair>> byTask = new java.util.LinkedHashMap<>();
+            for (Pair pair : resolved.pairs) byTask.computeIfAbsent(pair.task().getId(), k -> new ArrayList<>()).add(pair);
+            for (List<Pair> pairs : byTask.values()) {
+                taskEmails.taskAssigned(pairs.get(0).task(), pairs.stream().map(Pair::staff).toList(), username);
+            }
         }
         if (!resolved.overriddenDonors.isEmpty()) {
             // The override is reported in the response and logged; storing it would need a schema change (proposed separately)

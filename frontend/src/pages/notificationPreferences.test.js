@@ -61,8 +61,8 @@ function fakeServer() {
 describe('categories and defaults', () => {
   it('has exactly the five categories, in order, with the specified titles and descriptions', () => {
     assert.deepEqual(NOTIFICATION_CATEGORIES.map((c) => [c.key, c.title, c.description]), [
-      ['TASK_ASSIGNED', 'Task Assigned / Reassigned', 'Get notified when a task is assigned or reassigned to you.'],
-      ['TASK_STATUS', 'Task Status Updates', "Get notified when an assigned task's status changes."],
+      ['TASK_ASSIGNED', 'Task Assigned / Reassigned', 'Get notified when a task is assigned or reassigned to you or in your department.'],
+      ['TASK_STATUS', 'Task Status Updates', "Get notified when a task you follow changes status, including when it is completed."],
       ['WORKLOAD_ALERT', 'Workload Alerts', 'Get notified when your workload reaches HIGH or AT_RISK.'],
       ['TASK_REMINDER', 'Task Reminders', 'Receive reminders about pending or overdue tasks.'],
       ['SECURITY', 'Security Alerts', 'Receive important account and login security notifications.'],

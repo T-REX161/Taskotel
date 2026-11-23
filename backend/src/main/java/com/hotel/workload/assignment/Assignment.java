@@ -29,6 +29,15 @@ public class Assignment {
     @Column(nullable = false)
     private LocalDateTime assignedAt;
 
+    /**
+     * The account (Admin or Manager) that created this assignment; null when unknown (rows from before V26). A Staff member accepting a task
+     * THEMSELVES is not an assignment by anyone: it must never be written here (that history belongs in its own, separate field), so the
+     * department Manager still receives the completion notice when this is null. Set once, when the assignment
+     * is made, and never changed by a later reassignment: it is the original assigner, kept as history.
+     */
+    @Column(name = "assigned_by_user_id")
+    private UUID assignedByUserId;
+
     @PrePersist
     protected void onCreate() {
         assignedAt = LocalDateTime.now();
@@ -41,6 +50,8 @@ public class Assignment {
     public void setTask(Task task) { this.task = task; }
     public Staff getStaff() { return staff; }
     public void setStaff(Staff staff) { this.staff = staff; }
+    public UUID getAssignedByUserId() { return assignedByUserId; }
+    public void setAssignedByUserId(UUID assignedByUserId) { this.assignedByUserId = assignedByUserId; }
     public LocalDateTime getAssignedAt() { return assignedAt; }
     public void setAssignedAt(LocalDateTime assignedAt) { this.assignedAt = assignedAt; }
 }

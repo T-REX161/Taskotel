@@ -9,8 +9,8 @@
 import { getNotificationPreferences, updateNotificationPreferences } from '../services/api.js';
 
 export const NOTIFICATION_CATEGORIES = [
-  { key: 'TASK_ASSIGNED', title: 'Task Assigned / Reassigned', description: 'Get notified when a task is assigned or reassigned to you.', defaults: { email: true } },
-  { key: 'TASK_STATUS', title: 'Task Status Updates', description: "Get notified when an assigned task's status changes.", defaults: { email: true } },
+  { key: 'TASK_ASSIGNED', title: 'Task Assigned / Reassigned', description: 'Get notified when a task is assigned or reassigned to you or in your department.', defaults: { email: true } },
+  { key: 'TASK_STATUS', title: 'Task Status Updates', description: "Get notified when a task you follow changes status, including when it is completed.", defaults: { email: true } },
   { key: 'WORKLOAD_ALERT', title: 'Workload Alerts', description: 'Get notified when your workload reaches HIGH or AT_RISK.', defaults: { email: true } },
   { key: 'TASK_REMINDER', title: 'Task Reminders', description: 'Receive reminders about pending or overdue tasks.', defaults: { email: true } },
   { key: 'SECURITY', title: 'Security Alerts', description: 'Receive important account and login security notifications.', defaults: { email: true }, locked: true },

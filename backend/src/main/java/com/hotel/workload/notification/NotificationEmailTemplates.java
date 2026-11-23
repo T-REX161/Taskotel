@@ -29,6 +29,51 @@ public final class NotificationEmailTemplates {
                 taskFacts(task));
     }
 
+    /**
+     * To the Manager of the task's department, and to the Admin who made the assignment: who the task went to and who assigned it. Same
+     * preference (TASK_ASSIGNED) as the email to the assignee.
+     */
+    public static EmailContent taskAssignedOverview(TaskInfo task, String assignedTo, String assignedBy) {
+        List<Fact> facts = new ArrayList<>();
+        facts.add(new Fact("Task", task.title()));
+        if (present(assignedTo)) facts.add(new Fact("Assigned to", assignedTo));
+        if (present(assignedBy)) facts.add(new Fact("Assigned by", assignedBy));
+        facts.addAll(taskFacts(task).subList(1, taskFacts(task).size()));
+        return compose("Taskotel - Task assigned: " + shorten(task.title()),
+                "A task was assigned",
+                "A task has been assigned in Taskotel.",
+                facts);
+    }
+
+    /** One task in a reminder email: what it is, when it is due and why the reader is being reminded. */
+    public record ReminderLine(String title, String departmentName, String when, String dueText, String note) {}
+
+    /**
+     * The task reminder email: one email per recipient per scheduler run. A single task gets its own subject; several are listed in one
+     * email (one line per task), so nobody receives a burst. The wording states the task, the due moment (in IST) and, for a Manager,
+     * whether it still needs someone assigned.
+     */
+    public static EmailContent taskReminders(List<ReminderLine> lines) {
+        List<Fact> facts = new ArrayList<>();
+        for (ReminderLine line : lines) {
+            StringBuilder value = new StringBuilder(line.when()).append(" - due ").append(line.dueText());
+            if (present(line.departmentName())) value.append(" - ").append(line.departmentName());
+            if (present(line.note())) value.append(" - ").append(line.note());
+            facts.add(new Fact(line.title(), value.toString()));
+        }
+        if (lines.size() == 1) {
+            ReminderLine only = lines.get(0);
+            return compose("Taskotel - Reminder: " + shorten(only.title()) + " - " + oneLine(only.when()),
+                    "A task needs your attention",
+                    "This is a reminder about a task in Taskotel.",
+                    facts);
+        }
+        return compose("Taskotel - Reminder: " + lines.size() + " tasks need your attention",
+                "Tasks need your attention",
+                "These are reminders about tasks in Taskotel.",
+                facts);
+    }
+
     public static EmailContent taskUnassigned(TaskInfo task) {
         return compose("Taskotel - Task reassigned: " + shorten(task.title()),
                 "A task is no longer assigned to you",
@@ -49,6 +94,27 @@ public final class NotificationEmailTemplates {
         return compose("Taskotel - Task status updated: " + shorten(task.title()) + " is now " + oneLine(newStatus),
                 "A task's status was updated",
                 "The status of a task you follow in Taskotel has changed.",
+                facts);
+    }
+
+    /**
+     * A task was COMPLETED. Its own email, not the generic status update: no "previous" and "new" status, just what finished, its facts and who
+     * completed it. Sent to the same people as any status change of that task (assignees, the department's Managers) plus the original
+     * assigner, each by their own TASK_STATUS preference. Same Taskotel layout as every other notification; no link.
+     *
+     * @param completedBy who completed it, already formatted as "Name (Role)" (or just the role when no name is known); omitted when null
+     */
+    public static EmailContent taskCompleted(TaskInfo task, String completedBy) {
+        List<Fact> facts = new ArrayList<>();
+        facts.add(new Fact("Task", task.title()));
+        facts.add(new Fact("Status", "Completed"));
+        if (present(task.priority())) facts.add(new Fact("Priority", task.priority()));
+        if (present(task.departmentName())) facts.add(new Fact("Department", task.departmentName()));
+        if (present(task.dueDate())) facts.add(new Fact("Due", task.dueDate() + (present(task.deadlineTime()) ? " " + task.deadlineTime() : "")));
+        if (present(completedBy)) facts.add(new Fact("Completed by", completedBy));
+        return compose("Task Completed: " + shorten(task.title()),
+                "A task has been completed!",
+                "The following task has been successfully completed in Taskotel.",
                 facts);
     }
 

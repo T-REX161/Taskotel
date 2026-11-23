@@ -65,6 +65,28 @@ public class AssignmentServiceImpl implements AssignmentService {
         this.taskEmails = taskEmails;
     }
 
+    /** Finds the signed-in account to record as the assigner. Optional: a service built by hand in a unit test records nobody. */
+    private com.hotel.workload.security.UserRepository userRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setUserRepository(com.hotel.workload.security.UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    /** The signed-in account's name, or null when there is none to read (never throws: it must not be able to break an assignment). */
+    private String actorUsername() {
+        try {
+            return scopeResolver.currentUsername();
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private UUID actorId(String username) {
+        if (userRepository == null || username == null) return null;
+        return userRepository.findByUsername(username).map(com.hotel.workload.security.User::getId).orElse(null);
+    }
+
     /**
      * The scope for creating or reassigning: ALL (Admin) or one department (a valid Manager). Anyone else (Staff) is refused with 403
      * before any repository is read; a refused Manager or a missing sign-in is refused by the resolver (403, 401).
@@ -220,10 +242,13 @@ public class AssignmentServiceImpl implements AssignmentService {
         if (workloadAlerts != null) workloadAlerts.track(requestedIds); // workload alert emails: before anything changes
         // Everything passed: one assignment per person (returned in the order they were sent), and the task becomes ASSIGNED once
         List<Assignment> created = new java.util.ArrayList<>();
+        String actorUsername = actorUsername();
+        UUID assignerId = actorId(actorUsername);
         for (UUID id : requestedIds) {
             Assignment assignment = new Assignment();
             assignment.setTask(task);
             assignment.setStaff(byId.get(id));
+            assignment.setAssignedByUserId(assignerId); // the original assigner, kept as history
             created.add(assignmentRepository.save(assignment));
         }
         task.setStatus(TaskStatus.ASSIGNED);
@@ -235,7 +260,7 @@ public class AssignmentServiceImpl implements AssignmentService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Task already has an active assignment");
         }
         // Each new assignee is told once, after this transaction commits (nothing is sent if anything above failed)
-        if (taskEmails != null) taskEmails.taskAssigned(task, requestedIds.stream().map(byId::get).toList());
+        if (taskEmails != null) taskEmails.taskAssigned(task, requestedIds.stream().map(byId::get).toList(), actorUsername);
         return created;
     }
 
@@ -351,7 +376,7 @@ public class AssignmentServiceImpl implements AssignmentService {
         // If this task was being supported from another department, that support ends: someone else holds it now
         if (task != null) supportLifecycle.onTaskReassigned(task.getId(), targetStaff.getId());
         // The new assignee is told it is theirs and the previous one that it no longer is, after commit
-        if (taskEmails != null && task != null) taskEmails.taskReassigned(task, previousHolder, targetStaff);
+        if (taskEmails != null && task != null) taskEmails.taskReassigned(task, previousHolder, targetStaff, actorUsername());
 
         return AssignmentDto.fromEntity(assignment);
     }
@@ -400,6 +425,6 @@ public class AssignmentServiceImpl implements AssignmentService {
         }
         // Support of this task (staff lent from another department) ends unless the supported person still holds it
         supportLifecycle.onTaskReassigned(task.getId(), null);
-        if (taskEmails != null && holder != null) taskEmails.taskReassigned(task, holder, null);
+        if (taskEmails != null && holder != null) taskEmails.taskReassigned(task, holder, null, actorUsername());
     }
 }
