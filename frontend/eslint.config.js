@@ -27,8 +27,8 @@ export default [
     },
   },
   {
-    // Tests, build scripts and tool configs run in Node, not in the browser
-    files: ['**/*.test.{js,jsx}', 'scripts/**', '*.config.{js,cjs,mjs}'],
+    // Tests, build scripts, tool configs and the Vercel functions (api/, server/) run in Node, not in the browser
+    files: ['**/*.test.{js,jsx}', 'scripts/**', '*.config.{js,cjs,mjs}', 'api/**', 'server/**'],
     languageOptions: { globals: { ...globals.node } },
   },
   { files: ['**/*.cjs'], languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } } },

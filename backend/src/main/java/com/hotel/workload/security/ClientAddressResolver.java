@@ -6,6 +6,12 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.net.InetAddress;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.time.Clock;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -37,6 +43,15 @@ import java.util.regex.Pattern;
  * client's own entries on the left are never used while the proxy appends; but a trusted range that other hosts can send from lets those
  * hosts choose the identity, and a proxy that forwards a client-supplied header unchanged as the last hop defeats the protection.
  *
+ * <p><b>Optional: signed client assertion (Vercel to Render).</b> {@code auth.client-address.edge-secrets} (comma-separated, 32 to 256
+ * characters each, current first; off when empty) names the shared secret used by the Vercel function that fronts the public
+ * authentication endpoints. That function puts the visitor's address, which Vercel itself supplies, in {@value #CLIENT_ASSERTION_HEADER}
+ * as {@code <unix seconds>;<address>;<hex HMAC-SHA256>}. The signature covers the time and the address, so the address cannot be changed,
+ * the header cannot be made up without the secret, and a copy stops working after {@value #MAX_SKEW_SECONDS} seconds. Only a request that
+ * carries exactly one valid assertion is identified by its address; every other request, whatever headers it sends (including a direct
+ * call to Render), is identified by the peer address exactly as before. No forwarded header is read for this. When an assertion is valid
+ * it is used before the trusted-proxy rules above.
+ *
  * <p>Spring's own forwarded-header handling ({@code server.forward-headers-strategy}) is deliberately not enabled.
  */
 @Component
@@ -47,11 +62,34 @@ public class ClientAddressResolver {
     private static final int MAX_LENGTH = 64;
     private static final Pattern IPV4 = Pattern.compile("(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})");
 
+    /** The header the Vercel function sets: {@code <unix seconds>;<address>;<hex HMAC-SHA256 of the context, time and address>}. */
+    public static final String CLIENT_ASSERTION_HEADER = "X-Taskotel-Client";
+    /** Domain separation: the signed text starts with this line, so the secret is never used to sign anything else the same way. */
+    static final String ASSERTION_CONTEXT = "taskotel-client-v1";
+    static final long MAX_SKEW_SECONDS = 120;
+    private static final int MIN_SECRET_LENGTH = 32;
+    private static final int MAX_SECRET_LENGTH = 256;
+    private static final int MAX_ASSERTION_LENGTH = 200;
+
     private final List<Range> trusted;
+    /** The accepted secrets (current and, during a rotation, the previous one). Empty = signed assertions are not accepted at all. */
+    private final List<byte[]> edgeSecrets;
+    private final Clock clock;
 
     @Autowired
-    public ClientAddressResolver(@Value("${auth.client-address.trusted-proxies:}") String trustedProxies) {
+    public ClientAddressResolver(@Value("${auth.client-address.trusted-proxies:}") String trustedProxies,
+                                 @Value("${auth.client-address.edge-secrets:}") String edgeSecrets) {
+        this(trustedProxies, edgeSecrets, Clock.systemUTC());
+    }
+
+    ClientAddressResolver(String trustedProxies, String edgeSecrets, Clock clock) {
         this.trusted = parseRanges(trustedProxies);
+        this.edgeSecrets = parseSecrets(edgeSecrets);
+        this.clock = clock;
+    }
+
+    public ClientAddressResolver(String trustedProxies) {
+        this(trustedProxies, "", Clock.systemUTC());
     }
 
     /** No trusted proxy: the direct remote address only. */
@@ -65,6 +103,10 @@ public class ClientAddressResolver {
         String remote = request.getRemoteAddr();
         InetAddress peer = parseLiteral(remote);
         String peerIdentity = identity(peer, remote);
+        if (!edgeSecrets.isEmpty()) {
+            String asserted = assertedClient(request);
+            if (asserted != null) return asserted;
+        }
         if (trusted.isEmpty() || peer == null || !isTrusted(peer)) return peerIdentity;
 
         String chain = joinedForwardedFor(request);
@@ -81,6 +123,76 @@ public class ClientAddressResolver {
             if (!isTrusted(parsed.get(i))) return parsed.get(i).getHostAddress();
         }
         return parsed.get(0).getHostAddress();
+    }
+
+    /**
+     * The address named by a valid signed assertion, or null (the caller then uses the peer address). Null for: no header, more than one
+     * header line, a different shape, a time more than {@value #MAX_SKEW_SECONDS} seconds from now in either direction, an address that
+     * is unreadable or not a public one, or a signature that no accepted secret produces.
+     */
+    private String assertedClient(HttpServletRequest request) {
+        Enumeration<String> lines = request.getHeaders(CLIENT_ASSERTION_HEADER);
+        if (lines == null) return null;
+        List<String> values = Collections.list(lines);
+        if (values.size() != 1 || values.get(0) == null || values.get(0).length() > MAX_ASSERTION_LENGTH) return null;
+        String[] parts = values.get(0).split(";", -1);
+        if (parts.length != 3) return null;
+        String seconds = parts[0];
+        String address = parts[1];
+        byte[] presented = fromHex(parts[2]);
+        if (presented == null || seconds.isEmpty() || seconds.length() > 12 || !seconds.chars().allMatch(c -> c >= '0' && c <= '9')) return null;
+        long issuedAt = Long.parseLong(seconds);
+        if (Math.abs(clock.millis() / 1000 - issuedAt) > MAX_SKEW_SECONDS) return null;
+        InetAddress client = parseLiteral(address);
+        if (client == null || client.isAnyLocalAddress() || client.isLoopbackAddress() || client.isLinkLocalAddress() || client.isSiteLocalAddress()) return null;
+        boolean valid = false;
+        for (byte[] secret : edgeSecrets) {
+            valid |= MessageDigest.isEqual(sign(secret, seconds, address), presented); // no early exit: no timing signal about which secret matched
+        }
+        return valid ? client.getHostAddress() : null;
+    }
+
+    /** The signature the Vercel function must produce: HMAC-SHA256 over the context line, the seconds and the address (one per line). */
+    static byte[] sign(byte[] secret, String seconds, String address) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA256");
+            mac.init(new SecretKeySpec(secret, "HmacSHA256"));
+            return mac.doFinal((ASSERTION_CONTEXT + "\n" + seconds + "\n" + address).getBytes(StandardCharsets.UTF_8));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** Lower-case hex of exactly 32 bytes (64 characters), or null: nothing else is accepted as a signature. */
+    private static byte[] fromHex(String hex) {
+        if (hex == null || hex.length() != 64) return null;
+        byte[] out = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            char a = hex.charAt(2 * i);
+            char b = hex.charAt(2 * i + 1);
+            if (!isLowerHex(a) || !isLowerHex(b)) return null;
+            out[i] = (byte) (Character.digit(a, 16) * 16 + Character.digit(b, 16));
+        }
+        return out;
+    }
+
+    private static boolean isLowerHex(char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+    }
+
+    /** Comma-separated secrets (current first). Each must be 32 to 256 characters; a secret is never put in a message. */
+    private static List<byte[]> parseSecrets(String configured) {
+        List<byte[]> secrets = new ArrayList<>();
+        if (configured == null || configured.isBlank()) return secrets;
+        for (String entry : configured.split(",")) {
+            String secret = entry.trim();
+            if (secret.isEmpty()) continue;
+            if (secret.length() < MIN_SECRET_LENGTH || secret.length() > MAX_SECRET_LENGTH) {
+                throw new IllegalArgumentException("auth.client-address.edge-secrets: every secret must be " + MIN_SECRET_LENGTH + " to " + MAX_SECRET_LENGTH + " characters");
+            }
+            secrets.add(secret.getBytes(StandardCharsets.UTF_8));
+        }
+        return List.copyOf(secrets);
     }
 
     private static String identity(InetAddress parsed, String raw) {

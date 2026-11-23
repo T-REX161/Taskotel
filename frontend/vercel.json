@@ -1,6 +1,12 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    { "source": "/api/auth/login", "destination": "/api/edge-auth-login" },
+    { "source": "/api/auth/credentials/setup", "destination": "/api/edge-auth-credentials-setup" },
+    { "source": "/api/auth/password-reset/request", "destination": "/api/edge-auth-password-reset-request" },
+    { "source": "/api/auth/password-reset/confirm", "destination": "/api/edge-auth-password-reset-confirm" },
+    { "source": "/api/auth/email-verification/send", "destination": "/api/edge-auth-email-verification-send" },
+    { "source": "/api/auth/email-verification/verify", "destination": "/api/edge-auth-email-verification-verify" },
     { "source": "/api/:path*", "destination": "https://taskotel.onrender.com/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ],
