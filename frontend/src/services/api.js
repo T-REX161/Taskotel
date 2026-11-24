@@ -212,6 +212,22 @@ export const updateMyTaskStatus = (id, status) => {
 };
 
 /**
+ * Staff self-service: the unassigned, pending tasks of the caller's own department. Answers { canClaim, reason, tasks }.
+ */
+export const getAvailableTasks = async () => {
+  const data = await apiFetch('/api/tasks/available');
+  registerDepartmentNames(Array.isArray(data?.tasks) ? data.tasks : []);
+  return data;
+};
+
+/**
+ * Staff self-service: accept one available task. The first successful claim wins; everyone else gets a 409 (error.status === 409).
+ */
+export const claimTask = (id) => {
+  return apiFetch(`/api/tasks/${id}/claim`, { method: 'POST' });
+};
+
+/**
  * Delete a task.
  */
 export const deleteTask = (id) => {

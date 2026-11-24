@@ -163,6 +163,58 @@ public class SharedTaskSupportTest {
     }
 
     @Test
+    @DisplayName("Option A: a task a Staff member accepted themselves takes no helper (not offered, and a plan naming it is refused); the same task assigned by a Manager still can")
+    void selfClaimedTaskTakesNoHelper() {
+        World w = world(500);
+        assertEquals(1, service.getOptions(w.receiving.getCode()).tasks().size(), "assigned by a Manager: offered, as before");
+
+        Assignment owned = assignmentRepository.findAllByTaskId(w.held.getId()).get(0);
+        owned.setSelfClaimed(true);
+        assignmentRepository.saveAndFlush(owned);
+
+        assertTrue(service.getOptions(w.receiving.getCode()).tasks().isEmpty(), "a self-claimed task is never offered for a helper");
+        SupportPlanException refused = assertThrows(SupportPlanException.class, () -> service.confirm(fx.plan(w.receiving, w.donors.get(0), w.held)));
+        assertTrue(refused.getMessage().contains("belongs to them alone"), refused.getMessage());
+        assertEquals(1, assignmentRepository.findAllByTaskId(w.held.getId()).size(), "nobody was added");
+        assertTrue(supportRepository.findByTaskIdAndStatus(w.held.getId(), SupportStatus.ACTIVE).isEmpty());
+    }
+
+    @Test
+    @DisplayName("Option A: a Manager of the receiving department (the narrowed load) is not offered a self-claimed task either, and is offered the same task when a Manager assigned it")
+    void selfClaimedTaskIsNotOfferedToAManager() {
+        World w = world(500);
+        scope.manager("share_manager_opt", w.receiving);
+        SupportTestFixture.signInAs("share_manager_opt", "MANAGER");
+        assertEquals(1, service.getOptions(w.receiving.getCode()).tasks().size(), "assigned by a Manager: offered, as before");
+
+        SupportTestFixture.signInAs("share_admin", "ADMIN");
+        Assignment owned = assignmentRepository.findAllByTaskId(w.held.getId()).get(0);
+        owned.setSelfClaimed(true);
+        assignmentRepository.saveAndFlush(owned);
+        entityManager.clear();
+
+        SupportTestFixture.signInAs("share_manager_opt", "MANAGER");
+        assertTrue(service.getOptions(w.receiving.getCode()).tasks().isEmpty(), "self-claimed: never offered for a helper");
+    }
+
+    @Test
+    @DisplayName("Option A: the workload recommendations never suggest a helper for a self-claimed task, while the same task assigned by a Manager is still suggested")
+    void recommendationsNeverSuggestASelfClaimedTask() {
+        World w = world(500);
+        java.util.function.Supplier<Boolean> suggested = () -> recommendations.getRecommendations().recommendations().stream()
+                .filter(r -> r.departmentCode().equals(w.receiving.getCode()))
+                .flatMap(r -> r.suggestions().stream())
+                .anyMatch(s -> w.held.getTitle().equals(s.coversTaskTitle()));
+        assertTrue(suggested.get(), "assigned by a Manager: suggested, as before");
+
+        Assignment owned = assignmentRepository.findAllByTaskId(w.held.getId()).get(0);
+        owned.setSelfClaimed(true);
+        assignmentRepository.saveAndFlush(owned);
+        entityManager.clear();
+        assertFalse(suggested.get(), "self-claimed: belongs to its owner alone");
+    }
+
+    @Test
     @DisplayName("A task takes one helper: a second plan for the same task is refused")
     void oneHelperPerTask() {
         World w = world(900);

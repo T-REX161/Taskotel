@@ -12,6 +12,13 @@ import java.util.UUID;
 
 public interface AssignmentRepository extends JpaRepository<Assignment, UUID> {
     boolean existsByTaskId(UUID taskId);
+
+    /** The ids of the active tasks (in one of these statuses) that a Staff member accepted themselves: exclusively theirs, never offered for a helper. */
+    @Query("SELECT DISTINCT a.task.id FROM Assignment a WHERE a.selfClaimed = true AND a.task.status IN :statuses")
+    List<UUID> findSelfClaimedTaskIds(@Param("statuses") List<TaskStatus> statuses);
+
+    /** Whether a Staff member accepted this task themselves (see {@link Assignment#isSelfClaimed()}): such a task is exclusively theirs. */
+    boolean existsByTaskIdAndSelfClaimedTrue(UUID taskId);
     Optional<Assignment> findByTaskId(UUID taskId);
     List<Assignment> findAllByTaskId(UUID taskId);
 

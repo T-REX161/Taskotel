@@ -52,11 +52,11 @@ describe('each skeleton follows its loaded page: same containers, columns and wi
     const cards = read('components/tasks/TaskSummaryCards.jsx');
     const filters = read('components/tasks/TaskFilters.jsx');
     const table = read('components/tasks/TasksTable.jsx');
-    assert.ok(cards.includes('"grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 w-full"') && html.includes('class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 w-full"'));
-    assert.equal(count(html, /class="bg-white rounded-xl p-5 sm:p-6 shadow-sm border border-gray-100 flex items-center space-x-4"/g), 5);
-    assert.ok(cards.includes('className="bg-white rounded-xl p-5 sm:p-6 shadow-sm border border-gray-100 flex items-center space-x-4"'));
-    assert.ok(filters.includes('className="flex flex-col md:flex-row items-center gap-3 w-full"'));
-    for (const width of ['md:w-44', 'md:w-48']) assert.ok(filters.includes(`"relative w-full ${width}"`) && html.includes(width));
+    assert.ok(cards.includes('"grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 w-full"') && html.includes('class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 w-full"'));
+    assert.equal(count(html, /class="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-100 flex items-center gap-3"/g), 5);
+    assert.ok(cards.includes('className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-100 flex items-center gap-3"'));
+    assert.ok(filters.includes('className="grid grid-cols-1 sm:grid-cols-3 gap-2 lg:flex lg:items-center w-full"'));
+    for (const width of ['lg:w-40', 'lg:w-44']) assert.ok(filters.includes(`"relative w-full ${width}"`) && html.includes(width));
     assert.ok(read('pages/TasksPage.jsx').includes('className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full"'));
     const ths = headings(html);
     assert.equal(ths.length, 8);

@@ -60,7 +60,7 @@ public class MigrationFilesTest {
     }
 
     @Test
-    @DisplayName("The migration folder holds only V1 to V27 with valid, unique Flyway names")
+    @DisplayName("The migration folder holds only V1 to V27 and V29 (V28 is intentionally unused) with valid, unique Flyway names")
     public void testMigrationFolderContents() throws IOException {
         List<String> names;
         try (Stream<Path> files = Files.list(MIGRATIONS)) {
@@ -96,7 +96,8 @@ public class MigrationFilesTest {
                 "V24__workload_alert_state.sql",
                 "V25__user_role_management.sql",
                 "V26__assignment_assigned_by.sql",
-                "V27__task_reminder_log.sql"), names);
+                "V27__task_reminder_log.sql",
+                "V29__assignment_self_claimed.sql"), names);
 
         Pattern flywayName = Pattern.compile("^V(\\d+)__[a-z0-9_]+\\.sql$");
         List<Integer> versions = names.stream().map(name -> {
@@ -104,7 +105,7 @@ public class MigrationFilesTest {
             assertTrue(m.matches(), "Not a valid versioned Flyway file name: " + name);
             return Integer.parseInt(m.group(1));
         }).toList();
-        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27), versions, "Versions must be 1 to 27 with no gaps or duplicates");
+        assertEquals(List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29), versions, "Versions must be 1 to 27 and 29 (28 is intentionally unused) with no duplicates");
     }
 
     @Test
@@ -251,6 +252,22 @@ public class MigrationFilesTest {
         assertTrue(withoutLineComments(read(Path.of("src/test/resources/db/h2-assignment-assigned-by.sql"))).contains("assigned_by_user_id UUID"));
         for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
             assertTrue(read(Path.of("src/test/java/com/hotel/workload/config").resolve(test)).contains("classpath:db/h2-assignment-assigned-by.sql"), test);
+        }
+    }
+
+    @Test
+    @DisplayName("V29 only adds the self_claimed column: guarded, lock timeout, NOT NULL DEFAULT FALSE so every existing row is unchanged, rollback stated, not applied automatically; its test schema matches")
+    public void testV29AddsSelfClaimedOnly() throws IOException {
+        String file = read(MIGRATIONS.resolve("V29__assignment_self_claimed.sql"));
+        String executable = withoutLineComments(file);
+        assertTrue(executable.contains("SET LOCAL lock_timeout"));
+        assertEquals(1, Pattern.compile("(?i)ALTER TABLE").matcher(executable).results().count(), "exactly one altered table");
+        assertFalse(Pattern.compile("(?i)\b(CREATE|DROP|UPDATE|DELETE|INSERT|TRUNCATE|REFERENCES)\b").matcher(executable).find());
+        assertTrue(executable.contains("ALTER TABLE assignments ADD COLUMN self_claimed BOOLEAN NOT NULL DEFAULT FALSE;"), "existing rows become FALSE: nothing changes for them");
+        assertTrue(file.contains("Not applied automatically") && file.contains("Rollback") && file.contains("psql -1 -v ON_ERROR_STOP=1"));
+        assertTrue(withoutLineComments(read(Path.of("src/test/resources/db/h2-assignment-self-claimed.sql"))).contains("self_claimed BOOLEAN NOT NULL DEFAULT FALSE"));
+        for (String test : List.of("ProductionEndToEndIntegrationTest.java", "ProductionAliasEndToEndIntegrationTest.java")) {
+            assertTrue(read(Path.of("src/test/java/com/hotel/workload/config").resolve(test)).contains("classpath:db/h2-assignment-self-claimed.sql"), test);
         }
     }
 

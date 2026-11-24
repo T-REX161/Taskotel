@@ -99,6 +99,8 @@ public class AssignmentServiceImpl implements AssignmentService {
         return scope;
     }
 
+    static final String SELF_CLAIMED_MESSAGE = "This task was accepted by a staff member and belongs to them alone. Reassign or unassign it instead of adding someone.";
+
     /** The most staff members one request may assign (a sanity limit on how many rows are locked at once). */
     static final int MAX_STAFF_PER_REQUEST = 50;
 
@@ -228,6 +230,10 @@ public class AssignmentServiceImpl implements AssignmentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot assign a cancelled task");
         }
 
+        if (assignmentRepository.existsByTaskIdAndSelfClaimedTrue(task.getId())) {
+            // Option A: a task a Staff member accepted themselves belongs to them alone; nobody is added to it here (reassign or unassign it instead)
+            throw new ResponseStatusException(HttpStatus.CONFLICT, SELF_CLAIMED_MESSAGE);
+        }
         if (assignmentRepository.existsByTaskId(task.getId()) || task.getStatus() == TaskStatus.ASSIGNED || task.getStatus() == TaskStatus.IN_PROGRESS) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Task already has an active assignment");
         }
@@ -371,6 +377,7 @@ public class AssignmentServiceImpl implements AssignmentService {
             workloadAlerts.track(previousHolder == null ? List.of(targetStaff.getId()) : List.of(previousHolder.getId(), targetStaff.getId()));
         }
         assignment.setStaff(targetStaff);
+        assignment.setSelfClaimed(false); // a Manager or Admin chose the holder now: an ordinary assignment, whoever held it before
         assignment.setAssignedAt(LocalDateTime.now());
         assignment = assignmentRepository.saveAndFlush(assignment);
         // If this task was being supported from another department, that support ends: someone else holds it now

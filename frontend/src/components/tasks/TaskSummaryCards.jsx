@@ -18,51 +18,51 @@ export default function TaskSummaryCards({ tasks = [] }) {
       title: 'Total Tasks',
       value: counts.total,
       note: counts.cancelled > 0 ? `incl. ${counts.cancelled} cancelled` : null,
-      icon: <TasksIcon className="w-6 h-6 text-emerald-600" />,
+      icon: <TasksIcon className="w-5 h-5 text-emerald-600" />,
       bg: 'bg-emerald-50',
     },
     {
       title: 'Pending',
       value: counts.pending,
-      icon: <TasksIcon className="w-6 h-6 text-yellow-600" />,
+      icon: <TasksIcon className="w-5 h-5 text-yellow-600" />,
       bg: 'bg-yellow-50',
     },
     {
       title: 'Assigned',
       value: counts.assigned,
-      icon: <TasksIcon className="w-6 h-6 text-blue-600" />,
+      icon: <TasksIcon className="w-5 h-5 text-blue-600" />,
       bg: 'bg-blue-50',
     },
     {
       title: 'In Progress',
       value: counts.inProgress,
-      icon: <TasksIcon className="w-6 h-6 text-purple-600" />,
+      icon: <TasksIcon className="w-5 h-5 text-purple-600" />,
       bg: 'bg-purple-50',
     },
     {
       title: 'Completed',
       value: counts.completed,
-      icon: <TasksIcon className="w-6 h-6 text-emerald-600" />,
+      icon: <TasksIcon className="w-5 h-5 text-emerald-600" />,
       bg: 'bg-emerald-50',
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 w-full">
+    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 w-full">
       {cards.map((card) => (
         <div
           key={card.title}
-          className="bg-white rounded-xl p-5 sm:p-6 shadow-sm border border-gray-100 flex items-center space-x-4"
+          className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-100 flex items-center gap-3"
         >
-          <div className={`p-3 rounded-lg ${card.bg}`}>{card.icon}</div>
-          <div>
-            <p className="text-xs sm:text-sm font-medium text-gray-500">
+          <div className={`p-2 rounded-lg shrink-0 ${card.bg}`}>{card.icon}</div>
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-gray-500 truncate">
               {card.title}
             </p>
-            <h3 className="text-xl sm:text-2xl font-bold text-gray-900">
+            <h3 className="text-xl font-bold text-gray-900 leading-tight">
               {card.value}
             </h3>
-            {card.note && <p className="text-xs text-gray-400">{card.note}</p>}
+            {card.note && <p className="text-[11px] leading-tight text-gray-400">{card.note}</p>}
           </div>
         </div>
       ))}

@@ -22,6 +22,27 @@ public class TaskDto {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    /** The task as the API shows it (department code and name, no creator). */
+    public static TaskDto fromEntity(Task task) {
+        TaskDto dto = new TaskDto();
+        dto.setId(task.getId());
+        dto.setTitle(task.getTitle());
+        dto.setDescription(task.getDescription());
+        dto.setCategory(task.getCategory());
+        dto.setPriority(task.getPriority());
+        dto.setStatus(task.getStatus());
+        dto.setEstimatedDuration(task.getEstimatedDuration());
+        dto.setDueDate(task.getDueDate());
+        dto.setDeadlineTime(task.getDeadlineTime());
+        if (task.getDepartment() != null) {
+            dto.setDepartment(task.getDepartment().getCode());
+            dto.setDepartmentName(task.getDepartment().getName());
+        }
+        dto.setCreatedAt(task.getCreatedAt());
+        dto.setUpdatedAt(task.getUpdatedAt());
+        return dto;
+    }
+
     // Getters and Setters
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
