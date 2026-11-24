@@ -422,7 +422,7 @@ public class MultiDepartmentManagerDashboardAndAssistanceTest {
     }
 
     @Test
-    @DisplayName("Assistance options: donor figures for a donor the Manager manages (equal to what an Admin sees), none for any other donor")
+    @DisplayName("Assistance options: donor figures for a donor the Manager manages (equal to what an Admin sees); any other donor is not offered")
     void optionsShowFiguresForManagedDonorsOnly() throws Exception {
         grant(g2);
         JsonNode managerOptions = get("/api/support/options?receivingDepartment=" + home.getCode(), mgr);
@@ -443,14 +443,10 @@ public class MultiDepartmentManagerDashboardAndAssistanceTest {
         }
         assertEquals(adminSame.get("staff").toString(), managed.get("staff").toString(), "the person list matches an Admin's");
 
-        JsonNode unauthorized = donorEntry(managerOptions.get("donors"), donor);
-        for (String figure : List.of("freeStaff", "availableStaff", "waitingTasks", "maxLendable", "overrideLendable", "canLend", "note")) {
-            assertTrue(unauthorized.get(figure).isNull(), "an unauthorized donor's " + figure + " stays hidden");
+        for (JsonNode offered : managerOptions.get("donors")) {
+            assertFalse(offered.get("code").asText().equals(donor.getCode()), "an unauthorized donor department is not offered to a Manager");
         }
-        for (JsonNode person : unauthorized.get("staff")) {
-            assertTrue(person.get("activeTaskCount").isNull() && person.get("totalEstimatedDuration").isNull() && person.get("workloadStatus").isNull());
-        }
-        assertTrue(donorEntry(adminOptions.get("donors"), donor).get("freeStaff").asInt() > 0, "an Admin sees it, so the hiding is the Manager's rule");
+        assertTrue(donorEntry(adminOptions.get("donors"), donor).get("freeStaff").asInt() > 0, "an Admin sees it, so leaving it out is the Manager's rule");
     }
 
     @Test
@@ -465,8 +461,10 @@ public class MultiDepartmentManagerDashboardAndAssistanceTest {
         // Revoked: the very next request
         grant();
         assertEquals(404, status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + g2.getCode(), mgr, null));
-        // The donor figures go with the grant
-        assertTrue(donorEntry(get("/api/support/options?receivingDepartment=" + home.getCode(), mgr).get("donors"), g2).get("freeStaff").isNull());
+        // The donor goes with the grant
+        for (JsonNode offered : get("/api/support/options?receivingDepartment=" + home.getCode(), mgr).get("donors")) {
+            assertFalse(offered.get("code").asText().equals(g2.getCode()));
+        }
     }
 
     @Test
@@ -489,14 +487,15 @@ public class MultiDepartmentManagerDashboardAndAssistanceTest {
         Map<String, Object> otherPlan = Map.of("receivingDepartment", home.getCode(),
                 "items", List.of(Map.of("staffId", fromOther.getId().toString(), "taskId", hP1.getId().toString())));
         JsonNode otherManager = post("/api/support/preview", mgr, otherPlan);
-        assertTrue(otherManager.get("valid").asBoolean());
+        assertFalse(otherManager.get("valid").asBoolean(), "a donor the Manager does not manage cannot be used");
+        assertEquals("DONOR_NOT_AUTHORIZED", otherManager.get("problems").get(0).get("code").asText());
         assertEquals(0, otherManager.get("donors").size(), "no figures for a donor the Manager does not manage");
         assertEquals(1, post("/api/support/preview", admin, otherPlan).get("donors").size(), "an Admin still sees it");
         assertEquals(adminPreview.get("receiving"), managerPreview.get("receiving"), "the receiving department's impact is unchanged");
     }
 
     @Test
-    @DisplayName("Assistance preview: a reserve problem is explained in full only for a managed donor; an unmanaged donor's stays generic")
+    @DisplayName("Assistance preview: a reserve problem is explained in full only for a managed donor; an unmanaged donor is refused outright")
     void previewReserveProblemsFollowTheManagedSet() throws Exception {
         Department tight = fx.department("T_TIGHT");
         Department tightOther = fx.department("T_TIGHTO");
@@ -515,7 +514,7 @@ public class MultiDepartmentManagerDashboardAndAssistanceTest {
         JsonNode unmanaged = post("/api/support/preview", mgr, Map.of("receivingDepartment", home.getCode(),
                 "items", List.of(Map.of("staffId", onlyOther.getId().toString(), "taskId", hP1.getId().toString()))));
         assertFalse(unmanaged.get("valid").asBoolean());
-        assertEquals("The lending department cannot spare this person right now.", unmanaged.get("problems").get(0).get("message").asText());
+        assertEquals("DONOR_NOT_AUTHORIZED", unmanaged.get("problems").get(0).get("code").asText());
         assertFalse(unmanaged.get("canOverrideReserve").asBoolean(), "no hint for an unmanaged donor");
         assertFalse(unmanaged.get("problems").toString().contains(tightOther.getName()), "the explanation does not name the unmanaged donor or give its figures");
         assertFalse(unmanaged.get("problems").toString().contains("free staff"));
@@ -546,25 +545,26 @@ public class MultiDepartmentManagerDashboardAndAssistanceTest {
         Map<String, Object> otherPlan = Map.of("receivingDepartment", home.getCode(), "acknowledgeReserveOverride", true,
                 "items", List.of(Map.of("staffId", onlyOther.getId().toString(), "taskId", hP1.getId().toString())));
         JsonNode unmanaged = post("/api/support/preview", mgr, otherPlan);
-        assertTrue(unmanaged.get("valid").asBoolean());
-        assertEquals("The lending department's staffing is tight.", unmanaged.get("warnings").get(0).get("message").asText());
+        assertFalse(unmanaged.get("valid").asBoolean(), "an unmanaged donor is refused outright");
+        assertEquals("DONOR_NOT_AUTHORIZED", unmanaged.get("problems").get(0).get("code").asText());
         assertEquals(0, unmanaged.get("donors").size());
         assertTrue(post("/api/support/preview", admin, otherPlan).get("warnings").get(0).get("message").asText()
                 .startsWith(tightOther.getName() + " will be left with 0 free staff"), "an Admin still gets the full warning");
     }
 
     @Test
-    @DisplayName("Assistance: confirming stays Admin-only, planning follows the hotel-wide switch, and nothing is stored by a Manager's planning")
+    @DisplayName("Assistance: a Manager confirms only for departments they manage, planning follows the hotel-wide switch, and nothing is stored by a Manager's planning")
     void confirmationAndSwitchAreUnchanged() throws Exception {
         grant(g2);
         Staff fromManaged = staffRepository.findByDepartmentAndUserRole(g2, Role.STAFF).get(0);
         Map<String, Object> plan = Map.of("receivingDepartment", home.getCode(),
                 "items", List.of(Map.of("staffId", fromManaged.getId().toString(), "taskId", hP1.getId().toString())));
         long recordsBefore = supportRepository.count();
-        assertEquals(403, status(HttpMethod.POST, "/api/support/assignments", mgr, plan), "a Manager can never confirm, even for departments they manage");
         assertEquals(403, status(HttpMethod.POST, "/api/support/assignments", staffToken, plan));
         post("/api/support/preview", mgr, plan);
         assertEquals(recordsBefore, supportRepository.count(), "planning stores nothing");
+        assertEquals(201, status(HttpMethod.POST, "/api/support/assignments", mgr, plan), "a Manager confirms between departments they manage");
+        assertEquals(recordsBefore + 1, supportRepository.count());
 
         switchAssistanceOff();
         assertTrue(status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + home.getCode(), mgr, null) >= 400, "planning is off for everyone");

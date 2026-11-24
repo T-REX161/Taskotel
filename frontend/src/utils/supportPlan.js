@@ -37,18 +37,30 @@ export function nextFreeTaskId(tasks, plan) {
 // The backend is the authority for every rule below; these only decide what the screen offers. Frontend visibility is not a
 // security boundary.
 
-/** What the support panel offers to a role. Only an Admin confirms; Admin and Manager plan, preview, end and archive. */
+/** What the support panel offers to a role. Admin and Manager plan, preview, confirm, end and archive; a Manager is limited to departments they manage (the server enforces it). */
 export function supportPermissions(role) {
   const admin = role === 'ADMIN';
   const manager = role === 'MANAGER';
-  return { canView: admin || manager, canPlan: admin || manager, canConfirm: admin, canEnd: admin || manager, canArchive: admin || manager };
+  return { canView: admin || manager, canPlan: admin || manager, canConfirm: admin || manager, canEnd: admin || manager, canArchive: admin || manager };
 }
 
 /** Shown wherever a figure or detail is withheld from the viewer's role on purpose. */
 export const RESTRICTED_LABEL = 'Not available to your role';
 
-/** Why a Manager sees no confirm action. */
-export const CONFIRM_ADMIN_ONLY = 'Only an Admin can confirm cross-department support. You can build and preview this plan; ask an Admin to confirm it.';
+/** Why a viewer sees no confirm action (neither Admin nor Manager). */
+export const CONFIRM_ADMIN_ONLY = 'You do not have permission to confirm cross-department support.';
+
+/** Shown to a Manager: where they may balance workload. */
+export const MANAGER_SCOPE_NOTICE = 'You can balance workload only between departments you manage (your own and any an Admin granted you). Other departments are not offered, and the server refuses them.';
+
+/**
+ * The options a role may act on. An Admin gets everything. A Manager is offered only lending departments they manage: the server sends
+ * the figures of those departments only, so a donor without figures is not authorized and is dropped here too (the server is the authority).
+ */
+export function scopeOptionsToRole(options, role) {
+  if (role !== 'MANAGER' || !options || !Array.isArray(options.donors)) return options;
+  return { ...options, donors: options.donors.filter((donor) => hasDonorFigures(donor)) };
+}
 
 /**
  * Which projection of a support record the server sent, decided from the viewer's role and the record itself:

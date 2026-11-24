@@ -262,8 +262,9 @@ public class SupportAssignmentServiceImplScopeTest {
     @DisplayName("Confirm by a Manager, Staff or a refused scope is stopped before any repository is read; the scope is resolved once")
     public void confirmIsAdminOnly() {
         SupportPlanRequest request = planFor("ALPHA");
+        // a Manager of ALPHA confirming a plan for another receiving department is refused before anything is read
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.department(alpha));
-        assertEquals(HttpStatus.FORBIDDEN, assertThrows(ResponseStatusException.class, () -> service.confirm(request)).getStatusCode());
+        assertEquals(HttpStatus.FORBIDDEN, assertThrows(ResponseStatusException.class, () -> service.confirm(planFor("BETA"))).getStatusCode());
         verify(scopeResolver, times(1)).resolve();
 
         when(scopeResolver.resolve()).thenReturn(DepartmentScope.own());

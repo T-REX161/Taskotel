@@ -456,9 +456,9 @@ public class DepartmentCapacitySupportTest {
         ResponseStatusException cannotConfirm = assertThrows(ResponseStatusException.class, () -> service.confirm(fx.plan(w.receiving, w.donors.get(0), w.waiting.get(0))));
         assertEquals(403, cannotConfirm.getStatusCode().value());
         Preview managerPreview = service.preview(fx.plan(w.receiving, w.donors.get(0), w.waiting.get(0)));
-        assertTrue(managerPreview.valid(), "a Manager can still preview for their own department");
+        assertFalse(managerPreview.valid(), "a Manager can preview for their own department");
         assertEquals(150.0, managerPreview.receiving().before().utilizationPercent());
-        assertEquals(100.0, managerPreview.receiving().after().utilizationPercent());
+        assertEquals("DONOR_NOT_AUTHORIZED", managerPreview.problems().get(0).code(), "the donor's department is not one this Manager manages");
         assertTrue(managerPreview.donors().isEmpty(), "the donor's figures are not shown to a Manager who does not manage it");
 
         Staff plain = w.receivingStaff.get(0);

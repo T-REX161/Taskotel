@@ -173,6 +173,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
          * minutes, like the receiving department), so their figures can be shown. Every other donor stays counts-only.
          */
         final Set<String> managedDonors = new HashSet<>();
+        /** A Manager's managed department codes (receiver and every donor must be in it); null means unrestricted (Admin). */
+        Set<String> allowedCodes;
         final LocalDate today = LocalDate.now();
         final Map<String, Stats> byCode = new LinkedHashMap<>();
         final Map<UUID, Staff> staffById = new HashMap<>();
@@ -489,9 +491,8 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
      * person's task count, minutes and workload status, exactly as an Admin sees them). For every other donor none of that is shown.
      */
     private static Options redactOptionsForManager(Options options, List<String> managedCodes) {
-        List<DonorDepartment> donors = options.donors().stream().map(d -> managedCodes.contains(d.code()) ? d : new DonorDepartment(d.code(), d.name(), null, null, null, null, null, null, null,
-                d.staff().stream().map(s -> new DonorStaff(s.staffId(), s.name(), s.availability(), null, null, null, s.profileImageUrl())).toList(),
-                null, null, null)).toList();
+        // A Manager may only lend between departments they manage: a donor department outside that set is not offered at all
+        List<DonorDepartment> donors = options.donors().stream().filter(d -> managedCodes.contains(d.code())).toList();
         return new Options(options.receiving(), options.tasks(), options.maxHelpers(), donors, options.limitations());
     }
 
@@ -636,6 +637,10 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             resolved.problems.add(new Problem("SAME_DEPARTMENT", name + " already belongs to " + receiving.department.getName() + ". Assign them to its tasks normally.", staff.getId(), item.getTaskId()));
             return false;
         }
+        if (home != null && state.allowedCodes != null && !state.allowedCodes.contains(home)) {
+            resolved.problems.add(new Problem("DONOR_NOT_AUTHORIZED", "A selected staff member does not belong to a department you manage, so they cannot be lent.", staff.getId(), item.getTaskId()));
+            return false;
+        }
         if (home == null) {
             // A Staff member with no department has no home department to lend from: never a support candidate
             resolved.problems.add(new Problem("STAFF_NO_DEPARTMENT", name + " has no department, so they cannot be lent to another department.", staff.getId(), item.getTaskId()));
@@ -710,6 +715,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         }
         State state = managerCodes == null ? load()
                 : loadForReceiver(requested, request.getItems().stream().map(SupportPlanRequest.Item::getStaffId).filter(java.util.Objects::nonNull).toList(), managerCodes);
+        if (managerCodes != null) state.allowedCodes = new HashSet<>(managerCodes);
         Resolved resolved = resolve(request, state);
         Preview preview = buildPreview(state, resolved);
         return managerCodes == null ? preview : redactPreviewForManager(preview, state, requested, managerCodes, resolved);
@@ -836,10 +842,16 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
     @Override
     @Transactional
     public List<SupportAssignmentDto> confirm(SupportPlanRequest request) {
-        // Confirmation is Admin-only, decided from the database before anything is locked or read. A Manager (valid or not), Staff and an
-        // unauthenticated caller are refused by the resolver or here, whatever the HTTP rules say.
-        if (readerManagedCodes() != null) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have permission to perform this action.");
+        // Admin: any departments. Manager: only between departments they manage (primary + active Admin grants), decided from the database
+        // before anything is locked. Staff, an invalid Manager and an unauthenticated caller are refused by the resolver, whatever the HTTP rules say.
+        List<String> managerCodes = readerManagedCodes();
+        Set<String> allowedCodes = managerCodes == null ? null : new HashSet<>(managerCodes);
+        String receivingCode = request.getReceivingDepartment() == null ? "" : request.getReceivingDepartment().trim();
+        if (allowedCodes != null) {
+            Set<UUID> requestedStaff = request.getItems().stream().map(SupportPlanRequest.Item::getStaffId).collect(Collectors.toSet());
+            if (!allowedCodes.contains(receivingCode) || !allowedCodes.containsAll(staffRepository.departmentCodesOf(requestedStaff))) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only balance workload between departments you manage.");
+            }
         }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || auth.getName() == null) {
@@ -859,6 +871,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
 
         // Everything is checked again on the data as it is now
         State state = load();
+        state.allowedCodes = allowedCodes; // re-checked on the locked data: every donor department must still be managed
         Resolved resolved = resolve(request, state);
         if (request.getFingerprint() != null && resolved.receiving != null
                 && !request.getFingerprint().equals(fingerprint(state, resolved))) {
@@ -883,7 +896,7 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
                 Assignment assignment = new Assignment();
                 assignment.setTask(pair.task());
                 assignment.setStaff(pair.staff());
-                assignment.setAssignedByUserId(approverId); // the Admin who confirmed the plan is the original assigner
+                assignment.setAssignedByUserId(approverId); // whoever confirmed the plan (Admin or authorized Manager) is the original assigner
                 assignment = assignmentRepository.save(assignment);
 
                 // A waiting task becomes assigned; a task its own staff already hold keeps its status and owner

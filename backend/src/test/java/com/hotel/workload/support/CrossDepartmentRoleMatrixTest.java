@@ -141,13 +141,13 @@ public class CrossDepartmentRoleMatrixTest {
     }
 
     @Test
-    @DisplayName("Manager: OFF refuses options and preview and empties the suggestions; confirming stays Admin-only (403) either way; ON restores the rest")
+    @DisplayName("Manager: OFF refuses options and preview and empties the suggestions; a Manager confirm is checked like an Admin one for managed departments; ON restores the rest")
     void managerOffThenOn() throws Exception {
         crossDepartment(false);
         call(HttpMethod.GET, "/api/support/cross-department-status", manager, null).andExpect(status().isOk()).andExpect(jsonPath("$.crossDepartmentAssistanceEnabled").value(false));
         call(HttpMethod.GET, OPTIONS, manager, null).andExpect(status().isConflict()).andExpect(jsonPath("$.problems[0].code").value(DISABLED));
         call(HttpMethod.POST, "/api/support/preview", manager, plan()).andExpect(status().isConflict()).andExpect(jsonPath("$.problems[0].code").value(DISABLED));
-        call(HttpMethod.POST, "/api/support/assignments", manager, plan()).andExpect(status().isForbidden());
+        call(HttpMethod.POST, "/api/support/assignments", manager, plan()).andExpect(status().isConflict()).andExpect(jsonPath("$.problems[0].code").value(DISABLED));
         call(HttpMethod.GET, "/api/workload/recommendations", manager, null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.recommendations").isEmpty()).andExpect(jsonPath("$.limitations[0]").value(org.hamcrest.Matchers.startsWith(OFF_NOTE)));
         call(HttpMethod.GET, "/api/support/assignments", manager, null).andExpect(status().isOk());
@@ -155,7 +155,7 @@ public class CrossDepartmentRoleMatrixTest {
         crossDepartment(true);
         call(HttpMethod.GET, OPTIONS, manager, null).andExpect(status().isOk());
         call(HttpMethod.POST, "/api/support/preview", manager, plan()).andExpect(status().isOk());
-        call(HttpMethod.POST, "/api/support/assignments", manager, plan()).andExpect(status().isForbidden());
+        call(HttpMethod.POST, "/api/support/assignments", manager, plan()).andExpect(status().isConflict()); // an invalid plan, no longer a role refusal
         call(HttpMethod.GET, "/api/workload/recommendations", manager, null).andExpect(status().isOk())
                 .andExpect(jsonPath("$.limitations[*]", not(hasItem(org.hamcrest.Matchers.startsWith(OFF_NOTE)))));
     }

@@ -202,11 +202,11 @@ public class SupportWriteDepartmentIsolationTest {
                 "items", List.of(Map.of("staffId", scenario.donors.get(0).getId().toString(), "taskId", scenario.tasks.get(0).getId().toString())));
     }
 
-    // ── confirm: Admin only ──────────────────────────────────────────────────
+    // ── confirm: Admin anywhere; a Manager only within managed departments ──────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Confirm: the Admin confirms a plan; a Manager (receiver, donor or any other) gets 403 and nothing is created")
-    void confirmIsAdminOnly() throws Exception {
+    @DisplayName("Confirm: the Admin confirms a plan; a Manager of only the receiver, only the donor or neither gets 403 and nothing is created")
+    void confirmNeedsBothDepartments() throws Exception {
         var scenario = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository).overloaded(2, 3);
         ScopeFixtures sf = new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder);
         sf.manager("sw_cm_recv", scenario.receiving);
@@ -214,7 +214,7 @@ public class SupportWriteDepartmentIsolationTest {
         Map<String, Object> plan = planFor(scenario);
         long before = supportRepository.count();
 
-        for (String manager : List.of("sw_cm_recv", "sw_cm_donor", "sw_mx")) {
+        for (String manager : List.of("sw_cm_recv", "sw_cm_donor", "sw_mx")) { // none of them manages BOTH departments
             assertEquals(403, confirm(plan, manager, "MANAGER").getResponse().getStatus(), manager);
         }
         assertEquals(before, supportRepository.count(), "a refused confirmation creates nothing");
@@ -225,7 +225,7 @@ public class SupportWriteDepartmentIsolationTest {
     }
 
     @Test
-    @DisplayName("Confirm: a direct service call by a Manager, invalid Manager, Staff or an anonymous caller is refused before anything is locked or created")
+    @DisplayName("Confirm: a direct service call by a one-sided Manager, invalid Manager, Staff or an anonymous caller is refused before anything is locked or created")
     void confirmDirectServiceCalls() {
         var scenario = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository).overloaded(2, 3);
         new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).manager("sw_cm_direct", scenario.receiving);

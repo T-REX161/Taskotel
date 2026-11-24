@@ -64,6 +64,18 @@ public class SupportAuthorizationTest {
     }
 
     /** A valid Manager of the department (active account, active Staff record in it): the read endpoints resolve a Manager's department. */
+    @Autowired private com.hotel.workload.staff.ManagerViewGrantRepository grantRepository;
+
+    /** The Admin granted this Manager an additional department. */
+    private void grantTo(String name, com.hotel.workload.staff.Department department) {
+        com.hotel.workload.staff.ManagerViewGrant grant = new com.hotel.workload.staff.ManagerViewGrant();
+        grant.setManager(users.findByUsername(name + fx.tag.toLowerCase()).orElseThrow());
+        grant.setDepartment(department);
+        grant.setGrantedByUserId(java.util.UUID.randomUUID());
+        grant.setGrantedByUsername("an_admin");
+        grantRepository.saveAndFlush(grant);
+    }
+
     private String managerToken(String name, com.hotel.workload.staff.Department department) {
         String bearer = token(name, Role.MANAGER, true);
         new com.hotel.workload.security.ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder)
@@ -96,7 +108,7 @@ public class SupportAuthorizationTest {
                 mvc.perform(req(HttpMethod.POST, "/api/support/assignments", bearer, randomPlan()))
                         .andExpect(status().isConflict()).andExpect(jsonPath("$.problems").isNotEmpty()).andExpect(jsonPath("$.message").isNotEmpty());
             } else {
-                mvc.perform(req(HttpMethod.POST, "/api/support/assignments", bearer, randomPlan())).andExpect(status().isForbidden());
+                mvc.perform(req(HttpMethod.POST, "/api/support/assignments", bearer, randomPlan())).andExpect(status().isConflict()); // a Manager's invalid plan is validated, not refused by role
             }
             mvc.perform(req(HttpMethod.GET, "/api/support/assignments", bearer, null)).andExpect(status().isOk()).andExpect(jsonPath("$").isArray());
             mvc.perform(req(HttpMethod.GET, "/api/support/assignments?status=ACTIVE", bearer, null)).andExpect(status().isOk());
@@ -191,14 +203,15 @@ public class SupportAuthorizationTest {
                 .andExpect(jsonPath("$.donors[0].after.freeStaff").value(0));
         // A Manager of the receiving department gets the same verdicts, but never the donor department's figures (Step 2G-2)
         String overrideManager = managerToken("sup_ov_mgr", s.receiving);
+        grantTo("sup_ov_mgr", s.donor);
         mvc.perform(req(HttpMethod.POST, "/api/support/preview", overrideManager, plain))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.canOverrideReserve").value(false))
-                .andExpect(jsonPath("$.problems[0].code").value("DONOR_RESERVE")).andExpect(jsonPath("$.donors").isEmpty());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(false)).andExpect(jsonPath("$.canOverrideReserve").value(true))
+                .andExpect(jsonPath("$.problems[0].code").value("DONOR_RESERVE")).andExpect(jsonPath("$.donors").isNotEmpty());
         mvc.perform(req(HttpMethod.POST, "/api/support/preview", overrideManager, acked))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.valid").value(true)).andExpect(jsonPath("$.warnings[0].code").value("RESERVE_OVERRIDE"))
-                .andExpect(jsonPath("$.donors").isEmpty());
+                .andExpect(jsonPath("$.donors").isNotEmpty());
         // the plain confirmation is still refused; the acknowledged one by a Manager is accepted and reports the override
-        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", overrideManager, acked)).andExpect(status().isForbidden());   // a Manager cannot confirm (Step 2G-3)
+        mvc.perform(req(HttpMethod.POST, "/api/support/assignments", overrideManager, plain)).andExpect(status().isConflict());   // a Manager of both departments confirms under the same rules as an Admin
         mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_ov_adm2", Role.ADMIN, true), plain))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.problems[0].code").value("DONOR_RESERVE"));
         mvc.perform(req(HttpMethod.POST, "/api/support/assignments", token("sup_ov_adm3", Role.ADMIN, true), acked))

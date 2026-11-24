@@ -108,7 +108,7 @@ public class SecurityConfigEndpointCoverageTest {
         allow(A, "PUT", "/api/departments/{}");
         allow(A, "DELETE", "/api/departments/{}");
         // Cross-department support
-        allow(A, "POST", "/api/support/assignments");
+        allow(AM, "POST", "/api/support/assignments");
         allow(AM, "GET", "/api/support/options", "/api/support/assignments", "/api/support/cross-department-status");
         allow(AM, "POST", "/api/support/preview", "/api/support/assignments/{}/archive", "/api/support/assignments/{}/end");
         // Development-only probes (present because the tests do not run under the production profile)
