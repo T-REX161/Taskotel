@@ -341,7 +341,7 @@ public class CrossDepartmentSupportScenarioTest {
     // ── permissions ──────────────────────────────────────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Permissions: only the Admin confirms; the receiving Manager previews and ends; the donor and unrelated Managers see only what they should; Staff and anonymous are refused")
+    @DisplayName("Permissions: the Admin confirms anywhere, a Manager only between departments they manage; the receiving Manager previews and ends; the donor and unrelated Managers see only what they should; Staff and anonymous are refused")
     void adminAndManagerPermissions() throws Exception {
         String admin = token("scn_admin", Role.ADMIN);
         var s = fx.overloaded(2, 3);
@@ -355,7 +355,8 @@ public class CrossDepartmentSupportScenarioTest {
 
         // The receiving Manager can read options and preview, but cannot confirm: nothing is created
         call(HttpMethod.GET, "/api/support/options?receivingDepartment=" + s.receiving.getCode(), receivingManager, null, 200);
-        assertTrue(body(call(HttpMethod.POST, "/api/support/preview", receivingManager, onePlan, 200)).path("valid").asBoolean());
+        // ... but not with a lender from a department they do not manage
+        assertFalse(body(call(HttpMethod.POST, "/api/support/preview", receivingManager, onePlan, 200)).path("valid").asBoolean());
         call(HttpMethod.POST, "/api/support/assignments", receivingManager, onePlan, 403);
         call(HttpMethod.POST, "/api/support/assignments", donorManager, onePlan, 403);
         refresh();

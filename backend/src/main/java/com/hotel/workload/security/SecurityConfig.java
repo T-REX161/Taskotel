@@ -152,10 +152,9 @@ public class SecurityConfig {
         authz.requestMatchers(HttpMethod.PUT, "/api/departments/*").hasRole(ADMIN);
         authz.requestMatchers(HttpMethod.DELETE, "/api/departments/*").hasRole(ADMIN);
 
-        // ── Cross-department support: confirming a plan is Admin only (the service checks too); the rest is Admin and Manager ──
-        authz.requestMatchers(HttpMethod.POST, "/api/support/assignments").hasRole(ADMIN);
+        // ── Cross-department support: Admin and Manager; a Manager is limited to departments they manage (the service enforces it) ──
         allowGet(authz, new String[]{"/api/support/options", "/api/support/assignments", "/api/support/cross-department-status"}, ADMIN, MANAGER);
-        authz.requestMatchers(HttpMethod.POST, "/api/support/preview", "/api/support/assignments/*/archive",
+        authz.requestMatchers(HttpMethod.POST, "/api/support/assignments", "/api/support/preview", "/api/support/assignments/*/archive",
                 "/api/support/assignments/*/end").hasAnyRole(ADMIN, MANAGER);
 
         // ── Development-only authorization probes: not even mapped in production, and denied here as well ─────────────────────

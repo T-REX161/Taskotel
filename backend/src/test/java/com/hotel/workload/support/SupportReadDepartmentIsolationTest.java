@@ -12,6 +12,8 @@ import com.hotel.workload.staff.Department;
 import com.hotel.workload.staff.DepartmentRepository;
 import com.hotel.workload.staff.Staff;
 import com.hotel.workload.staff.StaffRepository;
+import com.hotel.workload.staff.ManagerViewGrant;
+import com.hotel.workload.staff.ManagerViewGrantRepository;
 import com.hotel.workload.task.Priority;
 import com.hotel.workload.task.Task;
 import com.hotel.workload.task.TaskRepository;
@@ -75,6 +77,7 @@ public class SupportReadDepartmentIsolationTest {
     @Autowired private SupportAssignmentRepository supportRepository;
     @Autowired private PasswordEncoder passwordEncoder;
     @Autowired private SupportAssignmentService supportService;
+    @Autowired private ManagerViewGrantRepository grantRepository;
     @MockitoSpyBean private CurrentUserScopeResolver scopeResolver;
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -237,25 +240,12 @@ public class SupportReadDepartmentIsolationTest {
     }
 
     @Test
-    @DisplayName("Manager: options only for their own receiving department; the donor department's figures and workload are omitted")
+    @DisplayName("Manager: options only for their own receiving department; a donor department they do not manage is not offered at all")
     void managerOptionsOwnDepartmentOnly() throws Exception {
         JsonNode own = body(options(s.receiving.getCode(), "sr_mr", "MANAGER"), 200);
         assertEquals(s.receiving.getCode(), own.get("receiving").get("code").asText());
         assertEquals(2, own.get("tasks").size(), "the department's own waiting tasks remain");
-        JsonNode donor = null;
-        for (JsonNode d : own.get("donors")) if (s.donor.getCode().equals(d.get("code").asText())) donor = d;
-        assertNotNull(donor, "who could help is still shown");
-        for (String field : List.of("freeStaff", "availableStaff", "waitingTasks", "maxLendable", "overrideLendable", "canLend", "note")) {
-            assertTrue(donor.get(field).isNull(), field + " is donor-department data");
-        }
-        assertEquals(4, donor.get("staff").size(), "the four free eligible people of the donor department");
-        for (JsonNode person : donor.get("staff")) {
-            assertFalse(person.get("staffId").isNull());
-            assertFalse(person.get("name").isNull());
-            assertTrue(person.get("activeTaskCount").isNull());
-            assertTrue(person.get("totalEstimatedDuration").isNull());
-            assertTrue(person.get("workloadStatus").isNull());
-        }
+        assertEquals(0, own.get("donors").size(), "an unmanaged lending department is not offered");
         // nothing about the unrelated departments or the other departments' tasks and people
         String text = mapper.writeValueAsString(own);
         for (String forbidden : List.of(x.getCode(), y.getCode(), "SECRET XY", "Secret Xavier", "D secret loan task")) assertFalse(text.contains(forbidden), forbidden);
@@ -276,6 +266,16 @@ public class SupportReadDepartmentIsolationTest {
         assertEquals(404, widened.getResponse().getStatus());
     }
 
+    /** The Admin granted this Manager an additional department: it is now one the Manager may lend from and into. */
+    private void grantTo(String managerUsername, Department department) {
+        ManagerViewGrant grant = new ManagerViewGrant();
+        grant.setManager(users.findByUsername(managerUsername).orElseThrow());
+        grant.setDepartment(department);
+        grant.setGrantedByUserId(UUID.randomUUID());
+        grant.setGrantedByUsername("an_admin");
+        grantRepository.saveAndFlush(grant);
+    }
+
     // ── preview ──────────────────────────────────────────────────────────────
 
     @Test
@@ -291,13 +291,14 @@ public class SupportReadDepartmentIsolationTest {
     @Test
     @DisplayName("Manager: preview for their own receiving department works and keeps the valid pairs and own impact, but shows no donor impact")
     void managerPreviewOwnDepartment() throws Exception {
+        grantTo("sr_mr", s.donor);
         Task waiting = s.tasks.get(0);
         JsonNode preview = body(preview(plan(s.receiving, donorHelper, waiting), "sr_mr", "MANAGER"), 200);
         assertTrue(preview.get("valid").asBoolean(), preview.toString());
         assertEquals(1, preview.get("items").size());
         assertEquals(donorHelper.getName(), preview.get("items").get(0).get("staffName").asText());
         assertEquals(s.receiving.getCode(), preview.get("receiving").get("code").asText());
-        assertEquals(0, preview.get("donors").size(), "no donor department impact figures");
+        assertEquals(1, preview.get("donors").size(), "impact figures for the managed donor department");
         assertFalse(preview.get("canOverrideReserve").asBoolean());
         assertFalse(preview.get("fingerprint").asText().isBlank(), "the stale-plan fingerprint is kept");
     }
@@ -335,20 +336,20 @@ public class SupportReadDepartmentIsolationTest {
         assertFalse(node.get("valid").asBoolean());
         Set<String> codes = new java.util.HashSet<>();
         for (JsonNode p : node.get("problems")) codes.add(p.get("code").asText());
-        assertTrue(codes.contains("TASK_NOT_FOUND") && codes.contains("STAFF_NOT_FOUND"), codes.toString());
+        assertTrue(codes.contains("TASK_NOT_FOUND") && (codes.contains("STAFF_NOT_FOUND") || codes.contains("DONOR_NOT_AUTHORIZED")), codes.toString());
         // the Admin still gets the full explanation
         String adminText = preview(plan, "sr_admin", "ADMIN").getResponse().getContentAsString();
         assertTrue(adminText.contains("SECRET XY") && adminText.contains("Secret Xavier"));
     }
 
     @Test
-    @DisplayName("Manager: the donor-reserve explanation carries no donor figures, while the Admin's still does")
+    @DisplayName("Manager: a donor department they do not manage is refused without donor figures or names, while the Admin's still gets the reserve explanation")
     void managerReserveProblemIsGeneric() throws Exception {
         var tight = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository).overloaded(2, 1);          // the donor has exactly one free helper, which it must keep in reserve
         new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).manager("sr_mr_tight", tight.receiving);
         Map<String, Object> plan = plan(tight.receiving, tight.donors.get(0), tight.tasks.get(0));
         JsonNode managerNode = body(preview(plan, "sr_mr_tight", "MANAGER"), 200);
-        assertEquals("DONOR_RESERVE", managerNode.get("problems").get(0).get("code").asText());
+        assertEquals("DONOR_NOT_AUTHORIZED", managerNode.get("problems").get(0).get("code").asText());
         String message = managerNode.get("problems").get(0).get("message").asText();
         assertFalse(message.contains(tight.donor.getName()), message);
         assertFalse(message.matches(".*\\d.*"), "no staffing figure: " + message);
@@ -550,6 +551,7 @@ public class SupportReadDepartmentIsolationTest {
     @Test
     @DisplayName("A Manager narrowed options carry the same receiving figures, tasks, donors and helpers as the Admin full ones (support loans included)")
     void narrowedOptionsMatchTheFullCalculation() throws Exception {
+        grantTo("sr_mr", s.donor);
         JsonNode admin = body(options(s.receiving.getCode(), "sr_admin", "ADMIN"), 200);
         JsonNode manager = body(options(s.receiving.getCode(), "sr_mr", "MANAGER"), 200);
         assertEquals(admin.get("receiving"), manager.get("receiving"), "severity, pressure counts and the receiving department workload figures");
@@ -575,6 +577,7 @@ public class SupportReadDepartmentIsolationTest {
     @Test
     @DisplayName("A Manager narrowed preview gives the same verdicts, items, own impact and stale-plan fingerprint as the Admin, for valid and blocked plans")
     void narrowedPreviewMatchesTheFullCalculation() throws Exception {
+        grantTo("sr_mr", s.donor);
         Map<String, Object> valid = plan(s.receiving, donorHelper, s.tasks.get(0));
         JsonNode admin = body(preview(valid, "sr_admin", "ADMIN"), 200);
         JsonNode manager = body(preview(valid, "sr_mr", "MANAGER"), 200);
@@ -599,8 +602,8 @@ public class SupportReadDepartmentIsolationTest {
         adminBlocked.get("problems").forEach(p -> adminCodes.add(p.get("code").asText()));
         managerBlocked.get("problems").forEach(p -> managerCodes.add(p.get("code").asText()));
         assertEquals(List.of("STAFF_BUSY", "TASK_ALREADY_ASSIGNED"), adminCodes, "the full calculation finds the busy person and the held task");
-        // The narrowed load reaches the same verdicts; a busy person is not a possible helper, so the Manager's response hides who they are
-        assertEquals(List.of("STAFF_NOT_FOUND", "TASK_ALREADY_ASSIGNED"), managerCodes);
+        // The narrowed load reaches the same verdicts (the busy person belongs to a managed department here)
+        assertEquals(adminCodes, managerCodes);
         assertEquals(adminBlocked.get("fingerprint"), managerBlocked.get("fingerprint"));
     }
 
@@ -609,6 +612,7 @@ public class SupportReadDepartmentIsolationTest {
     void narrowedReserveRuleMatches() throws Exception {
         var tight = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository).overloaded(2, 1);
         new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).manager("sr_mr_tight2", tight.receiving);
+        grantTo("sr_mr_tight2", tight.donor);
         Map<String, Object> plan = plan(tight.receiving, tight.donors.get(0), tight.tasks.get(0));
         JsonNode admin = body(preview(plan, "sr_admin", "ADMIN"), 200);
         JsonNode manager = body(preview(plan, "sr_mr_tight2", "MANAGER"), 200);
@@ -617,7 +621,7 @@ public class SupportReadDepartmentIsolationTest {
         assertEquals(admin.get("fingerprint"), manager.get("fingerprint"));
         JsonNode adminOptions = body(options(tight.receiving.getCode(), "sr_admin", "ADMIN"), 200);
         JsonNode managerOptions = body(options(tight.receiving.getCode(), "sr_mr_tight2", "MANAGER"), 200);
-        assertEquals(adminOptions.get("donors").size(), managerOptions.get("donors").size());
+        assertEquals(1, managerOptions.get("donors").size(), "only the managed donor is offered");
         assertEquals(adminOptions.get("receiving"), managerOptions.get("receiving"));
     }
 
@@ -626,6 +630,7 @@ public class SupportReadDepartmentIsolationTest {
     void narrowedLoadAppliesTheDonorWaitingWorkRule() throws Exception {
         var shared = new SupportTestFixture(users, staffRepository, taskRepository, assignmentRepository, departmentRepository, supportRepository).overloaded(2, 2);
         new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).manager("sr_mr_waiting", shared.receiving);
+        grantTo("sr_mr_waiting", shared.donor);
         // the donor has two free helpers but also two tasks of its own waiting for someone: lending one would leave it unable to cover them
         fx.task("donor own waiting 1", shared.donor, Priority.MEDIUM, 20, TaskStatus.PENDING);
         fx.task("donor own waiting 2", shared.donor, Priority.MEDIUM, 20, TaskStatus.PENDING);
@@ -641,6 +646,7 @@ public class SupportReadDepartmentIsolationTest {
     @Test
     @DisplayName("The narrowed load knows a task is held even when its status is still PENDING, like the full load")
     void narrowedLoadKnowsHeldTasks() throws Exception {
+        grantTo("sr_mr", s.donor);
         Task pendingButHeld = fx.task("R pending but held", s.receiving, Priority.MEDIUM, 15, TaskStatus.PENDING);
         Staff holder = staffRepository.findAll().stream().filter(p -> "Rhea Resident".equals(p.getName())).findFirst().orElseThrow();
         assign(pendingButHeld, holder);                       // an assignment exists although the task status is PENDING

@@ -92,8 +92,8 @@ describe('who may do what', () => {
     assert.deepEqual(supportPermissions('ADMIN'), { canView: true, canPlan: true, canConfirm: true, canEnd: true, canArchive: true });
   });
 
-  it('Manager may view, plan, end and archive, but never confirm', () => {
-    assert.deepEqual(supportPermissions('MANAGER'), { canView: true, canPlan: true, canConfirm: false, canEnd: true, canArchive: true });
+  it('Manager may view, plan, confirm (within departments they manage), end and archive', () => {
+    assert.deepEqual(supportPermissions('MANAGER'), { canView: true, canPlan: true, canConfirm: true, canEnd: true, canArchive: true });
   });
 
   it('Staff, an unknown role and no role are shown nothing', () => {
@@ -116,11 +116,11 @@ describe('confirmation controls', () => {
     assert.equal(supportReducer(reviewing, { type: 'CONFIRM_START' }).confirm.status, 'submitting');
   });
 
-  it('a Manager never reaches the confirm dialog, and is told why', () => {
+  it('a viewer without confirm permission never reaches the confirm dialog, and is told why', () => {
     const state = supportReducer(ready(managerOptions), { type: 'OPEN_REVIEW', canConfirm: false });
     assert.equal(state.confirm.status, 'idle');
     assert.equal(state.notice, CONFIRM_ADMIN_ONLY);
-    assert.match(CONFIRM_ADMIN_ONLY, /Only an Admin can confirm/);
+    assert.match(CONFIRM_ADMIN_ONLY, /do not have permission to confirm/);
     assert.equal(supportReducer(state, { type: 'CONFIRM_START' }).confirm.status, 'idle', 'nothing to submit');
   });
 

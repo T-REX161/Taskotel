@@ -33,6 +33,8 @@ import {
   reserveRiskRows,
   supportHistoryView,
   supportPermissions,
+  scopeOptionsToRole,
+  MANAGER_SCOPE_NOTICE,
   supportReducer,
 } from '../../utils/supportPlan';
 import SupportStageBadge from './support/SupportStageBadge';
@@ -124,7 +126,7 @@ function SupportPanelContent({ onChanged }) {
     if (!code) { setOptions({ status: 'idle', data: null, error: '' }); return; }
     setOptions((prev) => ({ ...prev, status: 'loading', error: '' }));
     try {
-      const data = await getSupportOptions(code);
+      const data = scopeOptionsToRole(await getSupportOptions(code), getUserRole());
       data.donors.forEach((donor) => donor.staff.forEach((s) => knownStaff.current.set(s.staffId, { name: s.name, homeName: donor.name, profileImageUrl: s.profileImageUrl || null })));
       if (mounted.current && id === requestCounters.current.options) setOptions({ status: 'ready', data, error: '' });
     } catch (err) {
@@ -397,10 +399,8 @@ function SupportPanelContent({ onChanged }) {
         <div className="min-w-0">
           <h2 className="text-base sm:text-lg font-bold text-gray-900">Cross-Department Support</h2>
           <p className="text-xs sm:text-sm text-gray-500 mt-0.5">Lend available staff to a department that is over its capacity or short of free staff, until a task is completed.</p>
-          {!permissions.canConfirm && (
-            <p className="text-xs text-gray-500 mt-1">
-              You can plan and preview support for the departments you manage and manage the support records that involve them. Only an Admin can confirm new support, and the staffing figures of departments you do not manage are not shown to your role.
-            </p>
+          {role === 'MANAGER' && (
+            <p className="text-xs text-gray-500 mt-1" data-testid="manager-scope-notice">{MANAGER_SCOPE_NOTICE}</p>
           )}
         </div>
         {refreshButton}

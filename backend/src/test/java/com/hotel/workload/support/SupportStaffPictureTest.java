@@ -44,6 +44,7 @@ public class SupportStaffPictureTest {
     @Autowired private DepartmentRepository departmentRepository;
     @Autowired private SupportAssignmentRepository supportRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private com.hotel.workload.staff.ManagerViewGrantRepository grantRepository;
 
     private SupportTestFixture fx;
     private SupportTestFixture.Scenario s;
@@ -59,6 +60,12 @@ public class SupportStaffPictureTest {
         account.setProfileImageUrl(PICTURE);
         users.saveAndFlush(account);
         new ScopeFixtures(users, staffRepository, departmentRepository, passwordEncoder).manager("spic_manager", s.receiving);
+        com.hotel.workload.staff.ManagerViewGrant grant = new com.hotel.workload.staff.ManagerViewGrant();
+        grant.setManager(users.findByUsername("spic_manager").orElseThrow());
+        grant.setDepartment(s.donor);
+        grant.setGrantedByUserId(java.util.UUID.randomUUID());
+        grant.setGrantedByUsername("an_admin");
+        grantRepository.saveAndFlush(grant);
         SupportTestFixture.signInAs("spic_admin", "ADMIN");
     }
 
@@ -81,7 +88,7 @@ public class SupportStaffPictureTest {
         SupportTestFixture.signInAs("spic_manager", "MANAGER");
         SupportDtos.Options manager = service.getOptions(s.receiving.getCode());
         assertEquals(PICTURE, offered(manager, pictured).profileImageUrl());
-        assertNull(offered(manager, pictured).activeTaskCount(), "the Manager's view is still redacted: no figures");
+        assertEquals(0, offered(manager, pictured).activeTaskCount(), "a managed donor's people carry the same figures an Admin sees");
     }
 
     @Test

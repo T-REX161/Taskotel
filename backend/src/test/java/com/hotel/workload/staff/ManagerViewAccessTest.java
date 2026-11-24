@@ -629,8 +629,8 @@ public class ManagerViewAccessTest {
         assertEquals(homeOptions, status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + GRANT, manager, null),
                 "support planning for a granted department is answered like for the primary one");
         assertEquals(404, status(HttpMethod.GET, "/api/support/options?receivingDepartment=" + OTHER, manager, null), "an ungranted department is not found");
-        assertEquals(403, status(HttpMethod.POST, "/api/support/assignments", manager, Map.of("receivingDepartment", GRANT, "items", List.of())),
-                "confirming support stays Admin-only");
+        assertEquals(400, status(HttpMethod.POST, "/api/support/assignments", manager, Map.of("receivingDepartment", GRANT, "items", List.of())),
+                "a Manager's confirmation passes the role check for a granted department and is then validated like any plan (an empty plan is a 400)");
         assertTrue(refused(status(HttpMethod.GET, "/api/users", manager, null)));
         assertTrue(refused(status(HttpMethod.GET, "/api/system-settings", manager, null)));
         assertEquals(403, status(HttpMethod.GET, viewUrl(managerUser) + "/history/page", manager, null), "the grant history stays Admin-only");
