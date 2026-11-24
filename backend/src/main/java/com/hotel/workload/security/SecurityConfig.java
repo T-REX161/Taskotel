@@ -127,6 +127,9 @@ public class SecurityConfig {
         authz.requestMatchers(HttpMethod.DELETE, "/api/staff/*").hasRole(ADMIN);
 
         // ── Tasks and assignments: everyone may read (the service limits each role to its own scope); Admin and Manager write ──
+        // Staff self-service claiming: the list of claimable tasks and the claim itself (the service re-checks the role, the department and the state)
+        allowGet(authz, new String[]{"/api/tasks/available"}, STAFF);
+        authz.requestMatchers(HttpMethod.POST, "/api/tasks/*/claim").hasRole(STAFF);
         allowGet(authz, new String[]{"/api/tasks", "/api/assignments"}, ADMIN, MANAGER, STAFF);
         authz.requestMatchers(HttpMethod.POST, "/api/tasks", "/api/assignments").hasAnyRole(ADMIN, MANAGER);
         authz.requestMatchers(HttpMethod.PUT, "/api/tasks/*", "/api/assignments/*").hasAnyRole(ADMIN, MANAGER);

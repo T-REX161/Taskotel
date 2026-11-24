@@ -82,16 +82,16 @@ const personTile = () => (r) => h('div', { className: 'flex items-center gap-3 m
 
 export function TasksPageSkeleton({ label = 'Loading tasks and assignments...' } = {}) {
   const td = 'py-5 px-3 align-middle';
-  return h(LoadingRegion, { label, className: 'space-y-6' },
+  return h(LoadingRegion, { label, className: 'space-y-4' },
     h(StatCardsSkeleton, {
       count: 5,
-      gridClassName: 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-6 w-full',
-      cardClassName: 'bg-white rounded-xl p-5 sm:p-6 shadow-sm border border-gray-100 flex items-center space-x-4',
-      iconClassName: 'h-12 w-12 rounded-lg shrink-0',
-      label: ['h-3 w-20', 'h-4 sm:h-5'],
-      value: ['h-5 w-10', 'h-7 sm:h-8'],
+      gridClassName: 'grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 w-full',
+      cardClassName: 'bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-100 flex items-center gap-3',
+      iconClassName: 'h-9 w-9 rounded-lg shrink-0',
+      label: ['h-3 w-20', 'h-4'],
+      value: ['h-5 w-10', 'h-7'],
     }),
-    h(FilterBarSkeleton, { className: 'flex flex-col md:flex-row items-center gap-3 w-full', fieldClassName: 'h-11 rounded-xl', fields: ['md:flex-1 md:min-w-0', 'md:w-44', 'md:w-44', 'md:w-48'] }),
+    h(FilterBarSkeleton, { className: 'grid grid-cols-1 sm:grid-cols-3 gap-2 lg:flex lg:items-center w-full', fieldClassName: 'h-10 rounded-lg', fields: ['sm:col-span-3 lg:flex-1 lg:min-w-0', 'lg:w-40', 'lg:w-40', 'lg:w-44'] }),
     h(TableSkeleton, {
       cardClassName: 'bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full',
       tableClassName: 'w-full text-left border-collapse table-fixed min-w-[960px]',

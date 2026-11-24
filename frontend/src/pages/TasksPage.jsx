@@ -8,6 +8,8 @@ import {
   getUserRole,
   updateTask,
   updateMyTaskStatus,
+  getAvailableTasks,
+  claimTask,
   deleteTask,
   createAssignment,
   reassignTask,
@@ -23,12 +25,14 @@ import TaskDetailsModal from '../components/tasks/TaskDetailsModal';
 import EditTaskModal from '../components/tasks/EditTaskModal';
 import AssignTaskModal from '../components/tasks/AssignTaskModal';
 import DeleteTaskModal from '../components/tasks/DeleteTaskModal';
+import AvailableTasksSection from '../components/tasks/AvailableTasksSection';
 import { filterEligibleStaff } from '../utils/staffFilter';
 import { staffStatusSuccessMessage } from '../utils/taskStatus';
+import { AVAILABLE_LOAD_ERROR, normalizeAvailable, performClaim } from '../utils/taskClaim';
 import { canChangeTaskDepartment } from '../utils/taskDepartment';
 import { assigneeMatchesSearch, groupAssignmentsByTask } from '../utils/assignmentUtils';
 import { assignmentSuccessMessage, buildAssignmentRequest, submittableStaffIds, toggleStaffSelection } from '../utils/staffSelection';
-import { STAFF_LOAD_ERROR_MESSAGE, createLatestRequest } from '../utils/loadState';
+import { STAFF_LOAD_ERROR_MESSAGE, createLatestRequest, isRedirectError } from '../utils/loadState';
 import { toastMotion, usePresence } from '../theme/presence';
 import LoadError from '../components/common/LoadError';
 import { TasksPageSkeleton } from '../components/common/PageSkeletons';
@@ -60,6 +64,15 @@ export default function TasksPage() {
   const isStaff = userRole === 'STAFF';
   const [statusBusyTaskId, setStatusBusyTaskId] = useState(null);
   const [statusError, setStatusError] = useState('');
+
+  // Staff self-service: the tasks of their department they may accept (Available Tasks), the claim in progress and the last failed claim
+  const [available, setAvailable] = useState({ canClaim: true, reason: '', tasks: [] });
+  const [isLoadingAvailable, setIsLoadingAvailable] = useState(isStaff);
+  const [availableError, setAvailableError] = useState('');
+  const [claimingTaskId, setClaimingTaskId] = useState(null);
+  const [claimNotice, setClaimNotice] = useState(null);
+  const [availableRequest] = useState(createLatestRequest);
+  const [activeTab, setActiveTab] = useState('mine'); // Staff: 'mine' (My Tasks) or 'available' (Available tasks to accept)
 
   // Filters state
   const [searchTerm, setSearchTerm] = useState('');
@@ -167,14 +180,51 @@ export default function TasksPage() {
     }
   };
 
+  // Only the newest request applies. A failure is an error with a Retry, never an empty list; a refresh after a claim keeps the list on screen.
+  const fetchAvailableTasks = async (showLoading = true) => {
+    const request = availableRequest.next();
+    if (showLoading) setIsLoadingAvailable(true);
+    setAvailableError('');
+    try {
+      const data = await getAvailableTasks();
+      if (!availableRequest.isCurrent(request)) return;
+      setAvailable(normalizeAvailable(data));
+    } catch (err) {
+      if (!availableRequest.isCurrent(request) || isRedirectError(err)) return;
+      setAvailableError(AVAILABLE_LOAD_ERROR);
+    } finally {
+      if (availableRequest.isCurrent(request)) setIsLoadingAvailable(false);
+    }
+  };
+
+  // Accept a task: success shows a confirmation and refreshes My Tasks and Available Tasks; losing the race (409) or any other failure
+  // shows the reason and refreshes the list so it matches the server
+  const handleClaim = async (task) => {
+    if (claimingTaskId) return;
+    setClaimingTaskId(task.id);
+    setClaimNotice(null);
+    try {
+      const outcome = await performClaim(task, {
+        claim: claimTask,
+        refresh: () => Promise.all([fetchTasksData(false), fetchAvailableTasks(false)]),
+      });
+      if (outcome.redirect) return;
+      if (outcome.ok) setSuccessBanner(outcome.message);
+      else setClaimNotice({ kind: outcome.kind, message: outcome.message });
+    } finally {
+      setClaimingTaskId(null);
+    }
+  };
+
   useEffect(() => {
     fetchTasksData();
+    if (isStaff) fetchAvailableTasks();
     if (canManageTasks) {
       fetchEligibleStaff();
       fetchWorkloadData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-runs only when permission changes; the fetch helpers are intentionally not triggers
-  }, [canManageTasks]);
+  }, [canManageTasks, isStaff]);
 
   // Auto-dismiss success notification
   useEffect(() => {
@@ -478,7 +528,9 @@ export default function TasksPage() {
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tasks</h1>
-        <p className="text-sm text-gray-500 mt-1">Create, manage and track hotel operational tasks.</p>
+        <p className="text-sm text-gray-500 mt-1">
+          {isStaff ? 'Accept available tasks and track the tasks assigned to you. The totals below count your own tasks.' : 'Create, manage and track hotel operational tasks.'}
+        </p>
       </div>
       {canManageTasks && (
         <button
@@ -495,7 +547,7 @@ export default function TasksPage() {
 
   if (isLoading) {
     return (
-      <div className="w-full space-y-6">
+      <div className="w-full space-y-4">
         {pageHeader}
         <TasksPageSkeleton label="Loading tasks and assignments..." />
       </div>
@@ -504,7 +556,7 @@ export default function TasksPage() {
 
   if (error) {
     return (
-      <div className="w-full space-y-6">
+      <div className="w-full space-y-4">
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
@@ -517,7 +569,7 @@ export default function TasksPage() {
   }
 
   return (
-    <div className="w-full space-y-6">
+    <div className="w-full space-y-4">
       {/* Top Header */}
       {pageHeader}
 
@@ -554,20 +606,67 @@ export default function TasksPage() {
       {/* Task Summary Metrics Cards */}
       <TaskSummaryCards tasks={tasks} />
 
-      {/* Single horizontal filter row beneath summary cards */}
-      <TaskFilters
-        searchTerm={searchTerm}
-        onSearchChange={setSearchTerm}
-        selectedStatus={selectedStatus}
-        onStatusChange={setSelectedStatus}
-        selectedPriority={selectedPriority}
-        onPriorityChange={setSelectedPriority}
-        selectedDepartment={selectedDepartment}
-        onDepartmentChange={setSelectedDepartment}
-      />
-
-      {/* Clean White Table Container */}
+      {/* One tasks card. Staff get two tabs in it: My Tasks (the table below) and Available (tasks they can accept). Both stay mounted, so
+          switching tabs never reloads anything; the toolbar belongs to the table, so it hides with it. */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden w-full">
+        {isStaff && (
+          <div role="tablist" aria-label="Task lists" className="flex items-center gap-1 px-3 pt-2 border-b border-gray-100">
+            {[
+              { id: 'mine', label: 'My Tasks', count: null },
+              { id: 'available', label: 'Available', count: available.tasks.length > 0 && !isLoadingAvailable && !availableError ? available.tasks.length : null },
+            ].map((tab) => {
+              const selected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  id={`tasks-tab-${tab.id}`}
+                  aria-selected={selected}
+                  aria-controls={`tasks-panel-${tab.id}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex items-center gap-2 px-3 py-2 -mb-px border-b-2 text-sm font-medium transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-t-md ${selected ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}
+                >
+                  {tab.label}
+                  {tab.count !== null && (
+                    <span data-testid={`tab-count-${tab.id}`} className="inline-flex items-center justify-center h-5 min-w-5 px-1.5 rounded-full bg-emerald-600 text-white text-[11px] font-semibold leading-none">{tab.count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {isStaff && (
+          <AvailableTasksSection
+            embedded
+            hidden={activeTab !== 'available'}
+            loading={isLoadingAvailable}
+            error={availableError}
+            canClaim={available.canClaim}
+            reason={available.reason}
+            tasks={available.tasks}
+            claimingId={claimingTaskId}
+            notice={claimNotice}
+            onClaim={handleClaim}
+            onRetry={() => fetchAvailableTasks(true)}
+            onDismissNotice={() => setClaimNotice(null)}
+          />
+        )}
+
+        <div role={isStaff ? 'tabpanel' : undefined} id="tasks-panel-mine" aria-labelledby={isStaff ? 'tasks-tab-mine' : undefined} hidden={isStaff && activeTab !== 'mine'}>
+        <div className="px-4 py-3 border-b border-gray-100">
+          <TaskFilters
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            selectedStatus={selectedStatus}
+            onStatusChange={setSelectedStatus}
+            selectedPriority={selectedPriority}
+            onPriorityChange={setSelectedPriority}
+            selectedDepartment={selectedDepartment}
+            onDepartmentChange={setSelectedDepartment}
+          />
+        </div>
         <TasksTable
           filteredTasks={paginatedTasks}
           totalTaskCount={tasks.length}
@@ -656,6 +755,7 @@ export default function TasksPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* ── MODALS ── */}

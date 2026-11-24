@@ -72,10 +72,20 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Task> findWaitingByDepartment(@Param("department") com.hotel.workload.staff.Department department, @Param("statuses") Collection<TaskStatus> statuses);
 
     /**
-     * The active tasks of these departments that someone already holds (at least one assignment). Used only to offer a helper a task of an
-     * overloaded department to join; limited by department in the query, so no other department's task is loaded.
+     * The tasks a Staff member of {@code department} may claim: that department's tasks in {@code status} (PENDING) that nobody holds. The
+     * department, the status and "no assignment row" are all in the query, so another department's task, a held task and a finished one are
+     * never loaded, and a task with no department never matches. Oldest first.
      */
-    @Query("SELECT t FROM Task t WHERE t.department IN :departments AND t.status IN :statuses AND EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t)")
+    @Query("SELECT t FROM Task t WHERE t.department = :department AND t.status = :status AND NOT EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t) ORDER BY t.createdAt ASC, t.id ASC")
+    List<Task> findClaimableByDepartment(@Param("department") com.hotel.workload.staff.Department department, @Param("status") TaskStatus status);
+
+    /**
+     * The active tasks of these departments that someone already holds (at least one assignment). Used only to offer a helper a task of an
+     * overloaded department to join; limited by department in the query, so no other department's task is loaded. A task a Staff member accepted
+     * themselves (Option A, see Assignment#isSelfClaimed) is never returned: it belongs to them alone, so no helper may join it.
+     */
+    @Query("SELECT t FROM Task t WHERE t.department IN :departments AND t.status IN :statuses AND EXISTS (SELECT a.id FROM Assignment a WHERE a.task = t) "
+            + "AND NOT EXISTS (SELECT s.id FROM Assignment s WHERE s.task = t AND s.selfClaimed = true)")
     List<Task> findHeldByDepartments(@Param("departments") Collection<com.hotel.workload.staff.Department> departments, @Param("statuses") Collection<TaskStatus> statuses);
 
     /**

@@ -94,6 +94,8 @@ public class SecurityConfigEndpointCoverageTest {
         allow(AM, "PUT", "/api/tasks/{}", "/api/assignments/{}");
         allow(AM, "DELETE", "/api/tasks/{}", "/api/assignments/{}");
         allow(Set.of("STAFF"), "PATCH", "/api/tasks/{}/status");
+        allow(Set.of("STAFF"), "GET", "/api/tasks/available");
+        allow(Set.of("STAFF"), "POST", "/api/tasks/{}/claim");
         // System settings
         allow(A, "GET", "/api/system-settings");
         allow(A, "PUT", "/api/system-settings");

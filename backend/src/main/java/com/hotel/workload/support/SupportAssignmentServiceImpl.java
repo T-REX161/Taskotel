@@ -328,11 +328,12 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
             }
         }
 
+        Set<UUID> selfClaimed = new HashSet<>(assignmentRepository.findSelfClaimedTaskIds(ACTIVE_STATUSES)); // exclusively their owner's: never offered for a helper
         for (Task task : taskRepository.findByStatusIn(ACTIVE_STATUSES)) {
             state.activeTasksById.put(task.getId(), task);
             Stats stats = task.getDepartment() == null ? null : state.byCode.get(task.getDepartment().getCode());
             if (stats != null && !state.assignedTasks.contains(task.getId())) stats.waiting.add(task);
-            else if (stats != null && WorkloadRecommendationEngine.canShare(task) && !supportByTask.containsKey(task.getId())) stats.shareable.add(task);
+            else if (stats != null && WorkloadRecommendationEngine.canShare(task) && !supportByTask.containsKey(task.getId()) && !selfClaimed.contains(task.getId())) stats.shareable.add(task);
         }
 
         Comparator<Staff> byName = Comparator.comparing((Staff s) -> String.valueOf(s.getName()).toLowerCase()).thenComparing(s -> String.valueOf(s.getId()));
@@ -677,6 +678,11 @@ public class SupportAssignmentServiceImpl implements SupportAssignmentService, S
         }
         boolean held = state.assignedTasks.contains(task.getId());
         if (!held && task.getStatus() == TaskStatus.PENDING) return true;
+        // Option A: a task a Staff member accepted themselves belongs to them alone, so no helper may be added to it
+        if (held && assignmentRepository.existsByTaskIdAndSelfClaimedTrue(task.getId())) {
+            resolved.problems.add(new Problem("TASK_SELF_CLAIMED", title + " was accepted by a staff member and belongs to them alone, so no helper can join it.", item.getStaffId(), task.getId()));
+            return false;
+        }
         // A task its own staff already hold may take ONE helper, but only while the department is at or above its capacity limit and the task has none
         if (held && WorkloadRecommendationEngine.canShare(task) && atRisk(receiving, state)
                 && supportRepository.findByTaskIdAndStatus(task.getId(), SupportStatus.ACTIVE).isEmpty()) {

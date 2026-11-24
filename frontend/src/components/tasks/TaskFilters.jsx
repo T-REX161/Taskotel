@@ -28,9 +28,9 @@ export default function TaskFilters({
 }) {
   const { departments } = useDepartments();
   return (
-    <div className="flex flex-col md:flex-row items-center gap-3 w-full">
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 lg:flex lg:items-center w-full">
       {/* 1. Search tasks input with search icon */}
-      <div className="relative flex-1 w-full min-w-0">
+      <div className="relative w-full min-w-0 sm:col-span-3 lg:flex-1">
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
           <SearchIcon className="w-[18px] h-[18px]" />
         </div>
@@ -39,16 +39,16 @@ export default function TaskFilters({
           value={searchTerm}
           onChange={(e) => onSearchChange && onSearchChange(e.target.value)}
           placeholder="Search by title, category, description..."
-          className="w-full h-11 pl-10 pr-3 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
+          className="w-full h-10 pl-10 pr-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
         />
       </div>
 
       {/* 2. Status dropdown */}
-      <div className="relative w-full md:w-44">
+      <div className="relative w-full lg:w-40">
         <select
           value={selectedStatus}
           onChange={(e) => onStatusChange && onStatusChange(e.target.value)}
-          className="w-full h-11 pl-4 pr-10 appearance-none bg-white border border-gray-200 rounded-xl text-sm text-gray-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
+          className="w-full h-10 pl-4 pr-10 appearance-none bg-white border border-gray-200 rounded-lg text-sm text-gray-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
         >
           <option value="">All Statuses</option>
           <option value="PENDING">Pending</option>
@@ -61,11 +61,11 @@ export default function TaskFilters({
       </div>
 
       {/* 3. Priority dropdown */}
-      <div className="relative w-full md:w-44">
+      <div className="relative w-full lg:w-40">
         <select
           value={selectedPriority}
           onChange={(e) => onPriorityChange && onPriorityChange(e.target.value)}
-          className="w-full h-11 pl-4 pr-10 appearance-none bg-white border border-gray-200 rounded-xl text-sm text-gray-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
+          className="w-full h-10 pl-4 pr-10 appearance-none bg-white border border-gray-200 rounded-lg text-sm text-gray-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
         >
           <option value="">All Priorities</option>
           <option value="LOW">Low</option>
@@ -77,11 +77,11 @@ export default function TaskFilters({
       </div>
 
       {/* 4. Department dropdown */}
-      <div className="relative w-full md:w-48">
+      <div className="relative w-full lg:w-44">
         <select
           value={selectedDepartment}
           onChange={(e) => onDepartmentChange && onDepartmentChange(e.target.value)}
-          className="w-full h-11 pl-4 pr-10 appearance-none bg-white border border-gray-200 rounded-xl text-sm text-gray-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
+          className="w-full h-10 pl-4 pr-10 appearance-none bg-white border border-gray-200 rounded-lg text-sm text-gray-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-colors"
         >
           <option value="">All Departments</option>
           <DepartmentOptions departments={departments} />
