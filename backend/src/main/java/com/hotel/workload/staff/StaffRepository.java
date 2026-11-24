@@ -38,6 +38,10 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     List<Staff> findByDepartmentInAndUserRole(@Param("departments") Collection<Department> departments,
                                               @Param("role") com.hotel.workload.security.Role role);
 
+    /** Every staff member whose login account has the given role, with the account loaded (Staff Management: role STAFF only). */
+    @Query("SELECT s FROM Staff s JOIN FETCH s.user u WHERE u.role = :role")
+    List<Staff> findAllByUserRole(@Param("role") com.hotel.workload.security.Role role);
+
     /** Locks these staff rows (in id order) until the transaction ends. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM Staff s WHERE s.id IN :ids ORDER BY s.id")
@@ -104,6 +108,10 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     long countByActiveFalse();
     long countByActiveTrueAndAvailability(Availability availability);
     long countByDepartmentAndActiveTrue(Department department);
+
+    /** Active STAFF-role accounts of a department: the department's staff figure (Manager and Admin records are not staff). */
+    @Query("SELECT COUNT(s) FROM Staff s WHERE s.department = :department AND s.active = true AND s.user.role = com.hotel.workload.security.Role.STAFF")
+    long countActiveStaffRoleInDepartment(@Param("department") Department department);
 
     /** Every staff member in the department, active or not (they all reference it). */
     long countByDepartment(Department department);

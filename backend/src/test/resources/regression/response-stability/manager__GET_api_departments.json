@@ -14,7 +14,7 @@
     "managed" : true,
     "name" : "RS_A name",
     "primary" : true,
-    "staffCount" : 4,
+    "staffCount" : 3,
     "status" : "Optimal",
     "supervisor" : "Not Assigned",
     "viewOnly" : false

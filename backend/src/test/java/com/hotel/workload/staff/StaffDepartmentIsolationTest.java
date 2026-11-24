@@ -122,7 +122,11 @@ public class StaffDepartmentIsolationTest {
     }
 
     private Set<String> listedUsernames(String username, String role) throws Exception {
-        MvcResult result = call(username, role, get("/api/staff"));
+        return listedUsernames(username, role, "/api/staff");
+    }
+
+    private Set<String> listedUsernames(String username, String role, String url) throws Exception {
+        MvcResult result = call(username, role, get(url));
         assertEquals(200, result.getResponse().getStatus());
         Set<String> names = new HashSet<>();
         for (JsonNode node : mapper.readTree(result.getResponse().getContentAsString())) {
@@ -162,10 +166,13 @@ public class StaffDepartmentIsolationTest {
     // ── 1. Admin: global ─────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("Admin lists staff of every department, including manager and admin records")
+    @DisplayName("Admin lists STAFF of every department; manager and admin records only through the explicit opt-in")
     public void adminListsEveryDepartment() throws Exception {
         Set<String> names = listedUsernames("iso_admin", "ADMIN");
-        assertTrue(names.containsAll(Set.of("iso_sa1", "iso_sa2", "iso_sb1", "iso_m1", "iso_m3", "iso_admin_record")), names.toString());
+        assertTrue(names.containsAll(Set.of("iso_sa1", "iso_sa2", "iso_sb1")), names.toString());
+        assertTrue(names.stream().noneMatch(n -> Set.of("iso_m1", "iso_m3", "iso_admin_record").contains(n)), "no manager or admin record: " + names);
+        Set<String> everything = listedUsernames("iso_admin", "ADMIN", "/api/staff?includePrivileged=true");
+        assertTrue(everything.containsAll(Set.of("iso_sa1", "iso_sa2", "iso_sb1", "iso_m1", "iso_m3", "iso_admin_record")), everything.toString());
     }
 
     @Test

@@ -133,7 +133,8 @@ public class DemoAccountsIntegrationTest {
     void adminSeesEverything() throws Exception {
         String token = tokenFor("admin");
         assertEquals(List.of("AC Maintenance", "Front Desk Assistance", "Room Cleaning", "Room Inspection"), field(api(token, "/api/tasks"), "title"));
-        assertEquals(4, api(token, "/api/staff").size(), "the three Staff and the Manager's record");
+        assertEquals(List.of("Amit", "Priya", "Rahul"), field(api(token, "/api/staff"), "name").stream().sorted().toList(), "Staff Management: STAFF accounts only");
+        assertEquals(4, api(token, "/api/staff?includePrivileged=true").size(), "the three Staff and the Manager's record, for the Users page");
         assertEquals(List.of("Amit", "Priya", "Rahul"), field(api(token, "/api/workload"), "staffName"));
         assertEquals(3, api(token, "/api/dashboard/summary").get("totalStaff").asInt());
         assertEquals(4, api(token, "/api/dashboard/summary").get("totalTasks").asInt());

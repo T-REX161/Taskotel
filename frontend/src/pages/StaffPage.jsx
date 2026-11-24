@@ -16,6 +16,7 @@ import {
   isActive,
   formatDepartment,
   sortStaffAlphabetically,
+  onlyStaffRole,
 } from '../components/staff/staffFormatters';
 import { matchesDepartmentFilter } from '../utils/staffDepartment';
 import StaffFilters from '../components/staff/StaffFilters';
@@ -84,7 +85,8 @@ export default function StaffPage() {
         });
       }
 
-      const mergedList = (staffData || []).map((staff) => {
+      // Safeguard only: the server returns STAFF-role accounts alone; Admin and Manager accounts never appear on this page
+      const mergedList = onlyStaffRole(staffData).map((staff) => {
         const wl = staff.id ? workloadMap.get(staff.id.toString()) : null;
         return {
           ...staff,

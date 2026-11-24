@@ -113,7 +113,7 @@ public class DepartmentVisibilityTest {
         assertEquals(1, beta.get("activeTasks").asLong());
         assertFalse(beta.get("status").isNull());
         assertEquals("Scope dvt_s_beta", beta.get("supervisor").asText());
-        assertEquals(2, department(result, ALPHA).get("staffCount").asLong(), "manager and staff of alpha are both counted, as before");
+        assertEquals(1, department(result, ALPHA).get("staffCount").asLong(), "only the STAFF account of alpha is counted: its Manager is not staff");
     }
 
     @Test
@@ -123,7 +123,7 @@ public class DepartmentVisibilityTest {
         assertEquals(200, result.getResponse().getStatus());
 
         JsonNode own = department(result, ALPHA);
-        assertEquals(2, own.get("staffCount").asLong());
+        assertEquals(1, own.get("staffCount").asLong(), "the Manager of the department is not counted as staff");
         assertFalse(own.get("status").isNull());
         assertFalse(own.get("supervisor").isNull());
 

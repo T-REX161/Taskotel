@@ -277,6 +277,22 @@ Verified by `StaffDepartmentIsolationTest` (19 tests), `StaffRemovalAuthorizatio
 
 Known limitation (not changed): `updateStaff` and `deactivateStaff` lock the staff row by id before the scope check (the existing lock-first pattern), so a Manager's request for an out-of-scope id takes a brief row lock before the 404. `activateStaff` takes no lock. Tasks and assignments, by contrast, use department-scoped locks (sections 10.5 and 11.1).
 
+### 8.1.1 Staff Management lists STAFF accounts only (IMPLEMENTED)
+
+The Staff Management page (`/staff`, `GET /api/staff`) shows accounts whose system role is STAFF, and nothing else. An ADMIN or MANAGER account has a linked Staff record (a Manager's primary department lives there, section 8.2) but is not a staff member, so that record never appears in the list, however the caller is scoped.
+
+| Rule | Behaviour |
+|---|---|
+| Default listing | STAFF-role accounts only, for every caller. The role is part of the database query (`StaffRepository.findAllByUserRole`, `findByDepartmentInAndUserRole`); pagination, search and the department, availability and status filters run on that list. |
+| Admin opt-in | `GET /api/staff?includePrivileged=true` also returns the Staff records linked to Manager and Admin accounts. Honoured for an Admin only; for a Manager it changes nothing (their query is already STAFF-only in their departments). Used by the Users page (Manager department linking, view, edit) and by the Admin-only department head picker, whose rule ("an existing active staff member") is unchanged. |
+| Frontend | `StaffPage` also drops any record whose role is not STAFF (`onlyStaffRole`). This is a safeguard; the server is the rule. |
+| Department staff figure | `staffCount` on `/api/departments` and `/api/workload/departments`, and the Departments page "Active Staff" total, count active STAFF-role accounts only (`countActiveStaffRoleInDepartment`). The department status ratio (active tasks per staff member) uses the same figure. Deleting a department is still refused while any Staff record, whatever its role, references it. |
+| Assignment | Unchanged: only STAFF accounts can be assigned a task or claim one. |
+| Cross-Department Support | Unchanged. Support reserve and lending calculations still count a department's free people as before (only lending is limited to STAFF accounts that can sign in). Whether Manager and Admin records should count toward that reserve is an open product question, not decided here. |
+| Data | No Staff record or role is deleted or changed to hide it. |
+
+Verified by `StaffManagementRoleOnlyTest`, `StaffRoleProtectionTest`, `StaffDepartmentIsolationTest`, `StaffServiceImplTest`, `DepartmentVisibilityTest`, `ManagerDepartmentsPageScopeTest` and the response-stability snapshots (backend), and `staffRoleOnly.test.js` (frontend).
+
 ### 8.2 Manager department assignment and audit history (IMPLEMENTED, Step 2H)
 
 Implemented in `staff/ManagerDepartmentServiceImpl.java`, `ManagerDepartmentController.java`, `ManagerDepartmentAuditRecorder.java`, `ManagerDepartmentChange.java` and `StaffTransferRules.java`; the screen is `ManagerDepartmentModal.jsx` on the Users page.
@@ -782,7 +798,7 @@ Role abbreviations: A = Admin, M = Manager, S = Staff. "Dept" = restricted to th
 | `GET /api/users` | A | ADMIN (explicit); `UserServiceImpl.getAllUsers` also requires Admin (Step 2I) | IMPLEMENTED | None. |
 | `PATCH /api/users/{id}/activate`, `/deactivate` | A | ADMIN (explicit); `UserAccountService` also requires Admin; the acting user comes from the security context (Step 2I) | IMPLEMENTED | None. |
 | `DELETE /api/users/{id}` | A; inactive STAFF/MANAGER only; never ADMIN | ADMIN (explicit); `UserAccountService.remove` also requires Admin (Step 2I) and refuses any Admin-role account with 409 (Step 2L) | IMPLEMENTED | None. `DELETE /api/staff/{id}` refuses an Admin-role account the same way. |
-| `GET /api/staff` | A all; M Dept | ADMIN, MANAGER (63) | IMPLEMENTED (Step 2B) | None for department isolation. Admin: all records; Manager: ordinary Staff of their own department (`findByDepartmentAndUserRole`); Staff 403; invalid Manager 403; no sign-in 401. |
+| `GET /api/staff` | A all; M Dept | ADMIN, MANAGER (63) | IMPLEMENTED (Step 2B) | None for department isolation. Since 8.1.1 the listing is STAFF-role accounts only for everyone; an Admin may add `?includePrivileged=true` for the Manager and Admin records (Users page, department head picker). Manager: ordinary Staff of their own department (`findByDepartmentAndUserRole`); Staff 403; invalid Manager 403; no sign-in 401. |
 | `GET /api/staff/username-availability` | A, M | ADMIN, MANAGER (63) | IMPLEMENTED | Keep. Since Step 2B the service also applies the staff-management scope: Staff and invalid Managers get 403. |
 | `POST /api/staff` | A any role (a Manager account must be given a department); M STAFF in own Dept only; a Manager who is not valid (Decision 17.3) creates nothing | ADMIN, MANAGER (63) | IMPLEMENTED (Step 2B) | None for department isolation. A Manager's staff always get the Manager's own department; another department is 403; an invalid Manager is 403. |
 | `PUT /api/staff/{id}` | A: any change, including transferring Staff between departments [17.1] and assigning or changing a Manager's department [17.2]; target department must exist and be active. M: own Dept only, and **no** department change at all. Email change via the verified flow. | ADMIN, MANAGER (63) | PARTIALLY IMPLEMENTED | Done (Step 2B): the Manager scope check (404 outside the department), no department change by a Manager (403), an invalid Manager denied (403). Done (Step 2H): an Admin edit that moves a Manager now writes the audit record [17.6] in the same transaction. Still open: route email change through verification. |

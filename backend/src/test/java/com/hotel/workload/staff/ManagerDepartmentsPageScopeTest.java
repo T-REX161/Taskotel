@@ -119,7 +119,7 @@ public class ManagerDepartmentsPageScopeTest {
         JsonNode card = body(result).get(0);
         assertTrue(card.get("managed").asBoolean());
         assertTrue(card.get("primary").asBoolean(), "the only department is the primary one");
-        assertEquals(3, card.get("staffCount").asLong(), "the Manager, one staff member and the staff member");
+        assertEquals(2, card.get("staffCount").asLong(), "two STAFF accounts; the Manager is not counted as staff");
         String json = result.getResponse().getContentAsString();
         for (Department hidden : List.of(g1, g2, other)) assertNoTrace(json, hidden);
         // not even the built-in departments appear
@@ -143,7 +143,7 @@ public class ManagerDepartmentsPageScopeTest {
         for (JsonNode card : body(result)) {
             assertEquals(HOME.equals(card.get("code").asText()), card.get("primary").asBoolean(), "only the primary department is marked primary: " + card.get("code"));
         }
-        assertEquals(3 + 1 + 1, staffTotal, "Active Staff covers only the authorized departments (home 3, grant 1 each, other 1 is NOT counted)");
+        assertEquals(2 + 1 + 1, staffTotal, "Active Staff covers only the authorized departments (home 2, grant 1 each, other 1 is NOT counted); Managers are not staff");
         assertNoTrace(result.getResponse().getContentAsString(), other);
         // The Workload page's department list is the same authorized set
         MvcResult workload = mockMvc.perform(get("/api/workload/departments").with(user("dps_manager").roles("MANAGER"))).andReturn();

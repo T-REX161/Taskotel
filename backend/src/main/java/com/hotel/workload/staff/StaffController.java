@@ -22,8 +22,9 @@ public class StaffController {
     }
 
     @GetMapping
-    public ResponseEntity<List<StaffDto>> getAllStaff() {
-        return ResponseEntity.ok(staffService.getAllStaff());
+    public ResponseEntity<List<StaffDto>> getAllStaff(
+            @org.springframework.web.bind.annotation.RequestParam(name = "includePrivileged", defaultValue = "false") boolean includePrivileged) {
+        return ResponseEntity.ok(staffService.getAllStaff(includePrivileged));
     }
 
     // Answers only whether the username is free; no account details are returned

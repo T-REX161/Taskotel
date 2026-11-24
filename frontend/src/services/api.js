@@ -410,10 +410,11 @@ export const removeProfilePicture = () => {
 };
 
 /**
- * Get the list of all staff members.
+ * Get the list of staff members: STAFF-role accounts only. The Users page (Admin) passes includePrivileged to also receive the
+ * Staff records linked to Manager and Admin accounts; the server ignores it for everyone else.
  */
-export const getStaff = async () => {
-  const staff = await apiFetch('/api/staff');
+export const getStaff = async ({ includePrivileged = false } = {}) => {
+  const staff = await apiFetch(includePrivileged ? '/api/staff?includePrivileged=true' : '/api/staff');
   registerDepartmentNames(staff);
   return staff;
 };

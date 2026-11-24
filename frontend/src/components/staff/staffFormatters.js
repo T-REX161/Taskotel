@@ -108,3 +108,12 @@ export function sortStaffAlphabetically(staffList) {
   return [...staffList].sort(compareStaffByName);
 }
 
+
+/**
+ * Staff Management lists STAFF-role accounts only. The server already enforces this; this keeps an Admin or Manager account (whose
+ * linked Staff record exists for other purposes) out of the list, its counts, filters and pages, even if one were ever returned.
+ * A record with a missing or unknown role is not trusted as staff.
+ */
+export function onlyStaffRole(staffList) {
+  return (Array.isArray(staffList) ? staffList : []).filter((staff) => staff && String(staff.role || '').toUpperCase() === 'STAFF');
+}
