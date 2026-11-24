@@ -102,7 +102,7 @@
     "iconKey" : "building",
     "id" : "<dept:RS_A>",
     "name" : "RS_A name",
-    "staffCount" : 4,
+    "staffCount" : 3,
     "status" : "Optimal",
     "supervisor" : "Not Assigned",
     "viewOnly" : false
@@ -117,8 +117,8 @@
     "iconKey" : "building",
     "id" : "<dept:RS_B>",
     "name" : "RS_B name",
-    "staffCount" : 2,
-    "status" : "Optimal",
+    "staffCount" : 1,
+    "status" : "Moderate",
     "supervisor" : "Not Assigned",
     "viewOnly" : false
   } ]

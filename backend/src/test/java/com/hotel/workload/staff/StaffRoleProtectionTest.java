@@ -171,7 +171,12 @@ public class StaffRoleProtectionTest {
 
     @Test
     public void adminListsEveryAccountKind() throws Exception {
-        String body = read("ADMIN", "/api/staff");
+        // Staff Management (the default listing) holds STAFF accounts only
+        String plain = read("ADMIN", "/api/staff");
+        assertTrue(plain.startsWith("200|") && plain.contains(PREFIX + "staff@hotel.test"));
+        assertTrue(!plain.contains(PREFIX + "admin@hotel.test") && !plain.contains(PREFIX + "manager@hotel.test"), "Staff Management lists STAFF only");
+        // Every account kind is available to an Admin through the explicit opt-in (the Users page)
+        String body = read("ADMIN", "/api/staff?includePrivileged=true");
         assertTrue(body.startsWith("200|"));
         for (String label : new String[] {"admin", "manager", "staff"}) {
             assertTrue(body.contains(PREFIX + label + "@hotel.test"), label + " record listed for an admin");

@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { CloseIcon } from '../icons/Icons';
 import PickerDropdown from './PickerDropdown';
 import DepartmentIcon from '../common/DepartmentIcon';
-import { createDepartment, updateDepartment, getStaff } from '../../services/api';
+import { createDepartment, updateDepartment, getStaff, getUserRole } from '../../services/api';
+import { normalizeRole } from '../../utils/accessPolicy';
 import { COLOR_KEYS, COLOR_STYLES, DEFAULT_COLOR_KEY, DEFAULT_ICON_KEY, ICON_KEYS } from '../../utils/departmentStyles';
 import { backdropMotion, dialogMotion, withExitTransition } from '../../theme/presence';
 import Spinner from '../common/Spinner';
@@ -89,7 +90,9 @@ function DepartmentFormModal({ isOpen, onClose, department = null, departments =
     if (!isOpen) return undefined;
     let cancelled = false;
     setIsLoadingStaff(true);
-    getStaff()
+    // Head candidates are not the Staff Management list: the head rule is any active staff record, so an Administrator (the only one who can
+    // edit a department) also gets the records linked to Manager and Admin accounts. The server ignores the option for anyone else.
+    getStaff({ includePrivileged: normalizeRole(getUserRole()) === 'ADMIN' })
       .then((list) => {
         if (!cancelled) setStaff(Array.isArray(list) ? list : []);
       })

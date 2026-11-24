@@ -175,14 +175,19 @@ public class StaffServiceImplTest {
     @Test
     @DisplayName("getAllStaff: an Admin's list loads every record; a Staff caller is refused before any repository is read")
     public void testGetAllStaff_AdminLoadsAllAndStaffIsRefused() {
+        when(staffRepository.findAllByUserRole(Role.STAFF)).thenReturn(List.of());
         when(staffRepository.findAll()).thenReturn(List.of());
         assertTrue(staffService.getAllStaff().isEmpty());
-        verify(staffRepository).findAll();
+        verify(staffRepository).findAllByUserRole(Role.STAFF);
+        verify(staffRepository, never()).findAll(); // STAFF-only by default
+        assertTrue(staffService.getAllStaff(true).isEmpty());
+        verify(staffRepository).findAll(); // the explicit Admin opt-in
 
         when(scopeResolver.resolve()).thenReturn(com.hotel.workload.security.DepartmentScope.own());
         ResponseStatusException ex = assertThrows(ResponseStatusException.class, () -> staffService.getAllStaff());
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
-        verify(staffRepository, times(1)).findAll(); // still only the Admin call
+        verify(staffRepository, times(1)).findAll(); // still only the Admin opt-in call
+        verify(staffRepository, times(1)).findAllByUserRole(Role.STAFF);
     }
 
     @Test

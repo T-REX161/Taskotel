@@ -215,7 +215,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     }
 
     private DepartmentDto toDto(Department department) {
-        long staffCount = staffRepository.countByDepartmentAndActiveTrue(department);
+        long staffCount = staffRepository.countActiveStaffRoleInDepartment(department); // STAFF accounts only: Managers/Admins are not staff capacity
         long activeTasks = taskRepository.countByDepartmentAndStatusIn(department, ACTIVE_STATUSES);
 
         String status;

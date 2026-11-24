@@ -48,27 +48,27 @@ public class DepartmentServiceImplTest {
         List<TaskStatus> activeStatuses = Arrays.asList(TaskStatus.PENDING, TaskStatus.ASSIGNED, TaskStatus.IN_PROGRESS);
 
         // HOUSEKEEPING: 10 staff, 15 tasks -> 1.5 ratio -> Optimal
-        when(staffRepository.countByDepartmentAndActiveTrue(TestDepartments.HOUSEKEEPING)).thenReturn(10L);
+        when(staffRepository.countActiveStaffRoleInDepartment(TestDepartments.HOUSEKEEPING)).thenReturn(10L);
         when(taskRepository.countByDepartmentAndStatusIn(TestDepartments.HOUSEKEEPING, activeStatuses)).thenReturn(15L);
 
         // FRONT_DESK: 0 staff, 5 tasks -> N/A (No Staff)
-        when(staffRepository.countByDepartmentAndActiveTrue(TestDepartments.FRONT_DESK)).thenReturn(0L);
+        when(staffRepository.countActiveStaffRoleInDepartment(TestDepartments.FRONT_DESK)).thenReturn(0L);
         when(taskRepository.countByDepartmentAndStatusIn(TestDepartments.FRONT_DESK, activeStatuses)).thenReturn(5L);
 
         // MAINTENANCE: 2 staff, 10 tasks -> 5.0 ratio -> High
-        when(staffRepository.countByDepartmentAndActiveTrue(TestDepartments.MAINTENANCE)).thenReturn(2L);
+        when(staffRepository.countActiveStaffRoleInDepartment(TestDepartments.MAINTENANCE)).thenReturn(2L);
         when(taskRepository.countByDepartmentAndStatusIn(TestDepartments.MAINTENANCE, activeStatuses)).thenReturn(10L);
 
         // ROOM_SERVICE: 5 staff, 15 tasks -> 3.0 ratio -> Moderate
-        when(staffRepository.countByDepartmentAndActiveTrue(TestDepartments.ROOM_SERVICE)).thenReturn(5L);
+        when(staffRepository.countActiveStaffRoleInDepartment(TestDepartments.ROOM_SERVICE)).thenReturn(5L);
         when(taskRepository.countByDepartmentAndStatusIn(TestDepartments.ROOM_SERVICE, activeStatuses)).thenReturn(15L);
 
         // FOOD_AND_BEVERAGE: 0 staff, 0 tasks -> N/A (No Staff)
-        when(staffRepository.countByDepartmentAndActiveTrue(TestDepartments.FOOD_AND_BEVERAGE)).thenReturn(0L);
+        when(staffRepository.countActiveStaffRoleInDepartment(TestDepartments.FOOD_AND_BEVERAGE)).thenReturn(0L);
         when(taskRepository.countByDepartmentAndStatusIn(TestDepartments.FOOD_AND_BEVERAGE, activeStatuses)).thenReturn(0L);
         
         // SECURITY: 10 staff, 0 tasks -> 0 ratio -> Optimal
-        when(staffRepository.countByDepartmentAndActiveTrue(TestDepartments.SECURITY)).thenReturn(10L);
+        when(staffRepository.countActiveStaffRoleInDepartment(TestDepartments.SECURITY)).thenReturn(10L);
         when(taskRepository.countByDepartmentAndStatusIn(TestDepartments.SECURITY, activeStatuses)).thenReturn(0L);
 
         when(departmentRepository.findAllByOrderByCreatedAtAscNameAsc()).thenReturn(TestDepartments.ALL);

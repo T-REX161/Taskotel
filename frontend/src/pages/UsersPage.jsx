@@ -122,7 +122,7 @@ export default function UsersPage() {
     try {
       const [userData, staffData, workloadData] = await Promise.all([
         getUsers(),
-        getStaff().catch((err) => (isRedirect(err) ? Promise.reject(err) : null)),
+        getStaff({ includePrivileged: true }).catch((err) => (isRedirect(err) ? Promise.reject(err) : null)),
         getWorkload().catch(() => []),
       ]);
       const workloadByStaffId = new Map(

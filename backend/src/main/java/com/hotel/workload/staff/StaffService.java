@@ -3,7 +3,14 @@ package com.hotel.workload.staff;
 import java.util.List;
 
 public interface StaffService {
+    /** The Staff Management listing: STAFF-role accounts only (never Admin or Manager accounts), within the caller's scope. */
     List<StaffDto> getAllStaff();
+
+    /**
+     * As {@link #getAllStaff()}; with {@code includePrivileged} an Administrator also gets the Staff records linked to Manager and Admin
+     * accounts (the Users page needs them to link a Manager's department). Ignored for everyone else.
+     */
+    List<StaffDto> getAllStaff(boolean includePrivileged);
     StaffDto createStaff(CreateStaffRequest request);
     boolean isUsernameAvailable(String username);
     StaffDto updateStaff(java.util.UUID id, UpdateStaffRequest request);

@@ -83,7 +83,7 @@ describe('UsersTable', () => {
 
 describe('data and actions', () => {
   it('loads real users and their staff records from the API; nothing is hardcoded', () => {
-    assert.ok(page.includes('getUsers(),') && page.includes('getStaff()'));
+    assert.ok(page.includes('getUsers(),') && page.includes('getStaff({ includePrivileged: true })'));
     assert.ok(!/@hotel\.com|'rahul'|'priya'/.test(page + table), 'No sample users');
   });
 
